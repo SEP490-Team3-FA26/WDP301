@@ -1,0 +1,63 @@
+# Dev environment overrides
+global:
+  environment: dev
+  domain: dev.wdp301.local
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: YOUR_DOCKERHUB_USERNAME/wdp301-frontend
+    tag: "latest"
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "300m"
+      memory: "256Mi"
+
+backend:
+  replicaCount: 1
+  image:
+    repository: YOUR_DOCKERHUB_USERNAME/wdp301-backend
+    tag: "latest"
+  env:
+    NODE_ENV: "development"
+    PORT: "4000"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    APP_VERSION: "dev"
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "300m"
+      memory: "256Mi"
+
+mongodb:
+  storage:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "300m"
+      memory: "256Mi"
+
+ingress:
+  hosts:
+    - host: dev.wdp301.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /health
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /
+          pathType: Prefix
+          serviceName: frontend-svc
+          servicePort: 3000

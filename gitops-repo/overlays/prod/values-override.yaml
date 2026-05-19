@@ -1,0 +1,70 @@
+# Production environment overrides
+global:
+  environment: prod
+  domain: wdp301.yourdomain.com
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: YOUR_DOCKERHUB_USERNAME/wdp301-frontend
+    tag: "latest"   # Jenkins will replace this with actual SHA tag
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+backend:
+  replicaCount: 2
+  image:
+    repository: YOUR_DOCKERHUB_USERNAME/wdp301-backend
+    tag: "latest"   # Jenkins will replace this with actual SHA tag
+  env:
+    NODE_ENV: "production"
+    PORT: "4000"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-prod"
+    APP_VERSION: "1.0.0"
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+mongodb:
+  storage:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: wdp301.yourdomain.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /health
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /
+          pathType: Prefix
+          serviceName: frontend-svc
+          servicePort: 3000
+  tls:
+    - secretName: wdp301-tls
+      hosts:
+        - wdp301.yourdomain.com

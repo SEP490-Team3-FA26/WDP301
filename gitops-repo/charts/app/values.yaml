@@ -1,0 +1,133 @@
+# ─────────────────────────────────────────────────────────────
+# Default values — overridden per environment in overlays/
+# ─────────────────────────────────────────────────────────────
+
+# Global settings
+global:
+  environment: dev
+  domain: wdp301.local
+  imagePullPolicy: Always
+
+# ─────────────────────────────────────────────────────────────
+# Frontend (Next.js)
+# ─────────────────────────────────────────────────────────────
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: YOUR_DOCKERHUB_USERNAME/wdp301-frontend
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  env:
+    NEXT_PUBLIC_API_URL: "http://backend-svc:4000"
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 20
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ─────────────────────────────────────────────────────────────
+# Backend (NestJS)
+# ─────────────────────────────────────────────────────────────
+backend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: YOUR_DOCKERHUB_USERNAME/wdp301-backend
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 4000
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  env:
+    NODE_ENV: "production"
+    PORT: "4000"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301"
+    APP_VERSION: "1.0.0"
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 4000
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 4000
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ─────────────────────────────────────────────────────────────
+# MongoDB
+# ─────────────────────────────────────────────────────────────
+mongodb:
+  enabled: true
+  image:
+    repository: mongo
+    tag: "7.0"
+  service:
+    port: 27017
+  storage:
+    size: 5Gi
+    storageClass: "local-path"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  auth:
+    enabled: false  # Enable with secrets in prod
+
+# ─────────────────────────────────────────────────────────────
+# Ingress
+# ─────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+  hosts:
+    - host: wdp301.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /health
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /
+          pathType: Prefix
+          serviceName: frontend-svc
+          servicePort: 3000
+  tls: []

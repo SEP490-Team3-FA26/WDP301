@@ -1,0 +1,5 @@
+aws_region   = "ap-southeast-1"
+project_name = "wdp301"
+environment  = "dev"
+instance_type = "t3.small"
+key_name     = "YOUR_KEY_PAIR_NAME"

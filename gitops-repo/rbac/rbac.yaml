@@ -1,0 +1,197 @@
+# ============================================================
+# RBAC — Kubernetes Role-Based Access Control
+# Enterprise-level simulation for WDP301
+#
+# Roles:
+#   dev-role      → read/write in dev namespace only
+#   ops-role      → full access cluster-wide
+#   readonly-role → read-only cluster-wide
+# ============================================================
+
+# ─────────────────────────────────────────────────────────────
+# NAMESPACES
+# ─────────────────────────────────────────────────────────────
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    team: developers
+    environment: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod
+  labels:
+    team: ops
+    environment: prod
+
+# ─────────────────────────────────────────────────────────────
+# ServiceAccounts (simulate users)
+# ─────────────────────────────────────────────────────────────
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dev-user
+  namespace: dev
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ops-user
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: readonly-user
+  namespace: default
+
+# ─────────────────────────────────────────────────────────────
+# ROLE: dev-role (Namespaced — dev namespace only)
+# Developers can manage deployments/pods but NOT prod
+# ─────────────────────────────────────────────────────────────
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dev-role
+  namespace: dev
+rules:
+  # Full control over application resources in dev
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "endpoints"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods/log", "pods/exec"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  # Cannot delete — requires ops approval
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-role-binding
+  namespace: dev
+subjects:
+  - kind: ServiceAccount
+    name: dev-user
+    namespace: dev
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: dev-role
+
+# ─────────────────────────────────────────────────────────────
+# CLUSTER ROLE: ops-role (Full access cluster-wide)
+# ─────────────────────────────────────────────────────────────
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ops-role
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ops-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: ops-user
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: ops-role
+
+# ─────────────────────────────────────────────────────────────
+# CLUSTER ROLE: readonly-role (Read-only, all namespaces)
+# ─────────────────────────────────────────────────────────────
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: readonly-role
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - endpoints
+      - configmaps
+      - namespaces
+      - nodes
+      - persistentvolumeclaims
+      - events
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: readonly-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: readonly-user
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: readonly-role
+
+# ─────────────────────────────────────────────────────────────
+# PROD PROTECTION: explicitly deny dev-user in prod namespace
+# (Kubernetes RBAC is whitelist-only — no prod Role = no access)
+# DevUser has NO RoleBinding in prod → access denied by default
+# ─────────────────────────────────────────────────────────────
+# Optional: Document explicit prod-only ops binding
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prod-ops-role
+  namespace: prod
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prod-ops-role-binding
+  namespace: prod
+subjects:
+  - kind: ServiceAccount
+    name: ops-user
+    namespace: kube-system
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: prod-ops-role

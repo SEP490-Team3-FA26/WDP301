@@ -1,0 +1,64 @@
+{{- if .Values.frontend.enabled }}
+---
+# ─────────────────────────────────────────────────────────────
+# Frontend Deployment
+# ─────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: frontend
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        version: {{ .Values.frontend.image.tag | quote }}
+    spec:
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.frontend.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.frontend.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.frontend.readinessProbe | nindent 12 }}
+---
+# ─────────────────────────────────────────────────────────────
+# Frontend Service
+# ─────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-svc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: frontend
+spec:
+  type: {{ .Values.frontend.service.type }}
+  selector:
+    app: frontend
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: 3000
+      protocol: TCP
+      name: http
+{{- end }}

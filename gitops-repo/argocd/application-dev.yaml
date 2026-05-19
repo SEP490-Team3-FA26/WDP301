@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────
+# ArgoCD Application — DEV environment
+# ─────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wdp301-dev
+  namespace: argocd
+  labels:
+    environment: dev
+    project: wdp301
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: devops-alerts
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/YOUR_ORG/gitops-repo.git
+    targetRevision: HEAD
+    path: charts/app
+    helm:
+      releaseName: wdp301-dev
+      valueFiles:
+        - ../../overlays/dev/values-override.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+
+  syncPolicy:
+    automated:
+      prune: true        # Remove resources deleted from Git
+      selfHeal: true     # Auto-correct any manual drift
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  revisionHistoryLimit: 5
