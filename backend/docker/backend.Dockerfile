@@ -6,7 +6,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY backend/package.json backend/package-lock.json* ./
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 # ============================================================
 # Stage 2: Builder
@@ -41,4 +41,4 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD wget -qO- http://localhost:4000/health || exit 1
 
-CMD ["node", "dist/main.js"]
+CMD ["npx", "concurrently", "node dist/apps/api-gateway/src/main.js", "node dist/apps/auth-service/src/main.js"]

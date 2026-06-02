@@ -1,9 +1,22 @@
 {
+  "name": "wdp301-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "infra:up": "npm run --prefix backend infra:up",
+    "infra:down": "npm run --prefix backend infra:down",
+    "dev:backend": "npm run --prefix backend dev:all",
+    "dev:frontend": "npm run --prefix frontend dev",
+    "dev": "npx concurrently -k -p \"[{name}]\" -n \"Backend,Frontend\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
     "pg": "^8.21.0"
   },
   "devDependencies": {
-    "@types/pg": "^8.20.0"
+    "@types/pg": "^8.20.0",
+    "concurrently": "^9.2.1"
   }
 }
+

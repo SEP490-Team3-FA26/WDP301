@@ -1,1 +1,14 @@
 node_modules/
+dist/
+.next/
+out/
+build/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+coverage/
+.temp/
+supabase/.temp/
+backend/supabase/.temp/

@@ -29,7 +29,7 @@ export class AuthGwController implements OnModuleInit {
   constructor(
     @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-  ) {}
+  ) { }
 
   /**
    * Đăng ký các Reply Topic để nhận phản hồi từ Auth Microservice qua Kafka

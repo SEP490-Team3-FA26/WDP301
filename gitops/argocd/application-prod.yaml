@@ -15,9 +15,9 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/YOUR_ORG/gitops-repo.git
-    targetRevision: HEAD
-    path: charts/app
+    repoURL: https://github.com/SUMMER2026SE/wdp301-rbl-project-wdp_se18d08_group-7.git
+    targetRevision: dummy-app
+    path: gitops/charts/app
     helm:
       releaseName: wdp301-prod
       valueFiles:

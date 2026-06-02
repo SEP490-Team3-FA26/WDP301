@@ -1,47 +1,26 @@
 # ============================================================
-# Stage 1: Dependencies
-# ============================================================
-FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
-
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --only=production
-
-# ============================================================
-# Stage 2: Builder
+# Stage 1: Builder
 # ============================================================
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY frontend/ .
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci
 
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
-
+COPY frontend/ ./
 RUN npm run build
 
 # ============================================================
-# Stage 3: Runner (Production)
+# Stage 2: Runner (Nginx)
 # ============================================================
-FROM node:20-alpine AS runner
-WORKDIR /app
+FROM nginx:alpine
 
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+# Copy built static files from Stage 1
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
+# Configure Nginx to listen on port 3000 instead of 80
+RUN sed -i 's/listen\(.*\)80;/listen 3000;/' /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["nginx", "-g", "daemon off;"]

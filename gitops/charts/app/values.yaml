@@ -6,7 +6,7 @@
 global:
   environment: dev
   domain: wdp301.local
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
 
 # ─────────────────────────────────────────────────────────────
 # Frontend (Next.js)
@@ -15,7 +15,7 @@ frontend:
   enabled: true
   replicaCount: 1
   image:
-    repository: YOUR_DOCKERHUB_USERNAME/wdp301-frontend
+    repository: wdp301-frontend
     tag: "latest"
   service:
     type: ClusterIP
@@ -51,7 +51,7 @@ backend:
   enabled: true
   replicaCount: 1
   image:
-    repository: YOUR_DOCKERHUB_USERNAME/wdp301-backend
+    repository: wdp301-backend
     tag: "latest"
   service:
     type: ClusterIP
@@ -68,6 +68,11 @@ backend:
     PORT: "4000"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301"
     APP_VERSION: "1.0.0"
+    DATABASE_URL: "postgresql://postgres.gtvziedskbpdycaqvmpp:pxLCZTiJL3dVxGD3@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
+    JWT_SECRET: "wdp301-super-secret-key-change-in-production"
+    JWT_EXPIRES_IN: "3600s"
+    KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
+    KAFKA_GROUP_ID: "wdp301-consumers"
   livenessProbe:
     httpGet:
       path: /health
@@ -95,7 +100,7 @@ mongodb:
     port: 27017
   storage:
     size: 5Gi
-    storageClass: "local-path"
+    storageClass: "standard"
   resources:
     requests:
       cpu: "100m"
