@@ -40,6 +40,15 @@ export class UserEntity {
   @Column({ type: 'boolean', default: true, name: 'is_active' })
   isActive: boolean;
 
+  @Column({ type: 'boolean', default: false, name: 'is_email_verified' })
+  isEmailVerified: boolean;
+
+  @Column({ type: 'varchar', length: 500, nullable: true, name: 'avatar_url' })
+  avatarUrl: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'google_id' })
+  googleId: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

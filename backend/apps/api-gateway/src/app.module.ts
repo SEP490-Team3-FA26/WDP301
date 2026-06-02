@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { AuthGwModule } from './auth/auth-gw.module';
+import { UserModule } from './user/user.module';
 
 /**
  * Root Module của API Gateway
@@ -25,8 +26,9 @@ import { AuthGwModule } from './auth/auth-gw.module';
       inject: [ConfigService],
     }),
 
-    // Auth Module (login, register, logout, profile)
+    // --- Các Modules nghiệp vụ của API Gateway ---
     AuthGwModule,
+    UserModule,
   ],
 })
 export class AppGatewayModule {}

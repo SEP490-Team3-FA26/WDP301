@@ -16,7 +16,12 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
+    "paths": {}
   },
-  "exclude": ["node_modules", "dist", "supabase"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "supabase"
+  ]
 }

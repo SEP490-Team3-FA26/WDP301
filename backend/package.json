@@ -7,11 +7,11 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\"",
+    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/apps/wdp301-backend/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -19,7 +19,8 @@
     "// --- MICROSERVICES COMMANDS ---": "",
     "start:gateway": "npx ts-node -r tsconfig-paths/register apps/api-gateway/src/main.ts",
     "start:auth": "npx ts-node -r tsconfig-paths/register apps/auth-service/src/main.ts",
-    "dev:all": "npx concurrently \"npm run start:gateway\" \"npm run start:auth\"",
+    "start:user": "npx ts-node -r tsconfig-paths/register apps/user-service/src/main.ts",
+    "dev:all": "npx concurrently \"npm run start:gateway\" \"npm run start:auth\" \"npm run start:user\"",
     "// --- INFRASTRUCTURE ---": "",
     "infra:up": "docker-compose up -d",
     "infra:down": "docker-compose down",
@@ -38,6 +39,7 @@
     "@nestjs/swagger": "^7.3.0",
     "@nestjs/terminus": "^10.2.3",
     "@nestjs/typeorm": "^10.0.2",
+    "@supabase/supabase-js": "^2.106.2",
     "bcryptjs": "^3.0.3",
     "cache-manager": "^5.2.2",
     "class-transformer": "^0.5.1",
@@ -47,7 +49,9 @@
     "ioredis": "^5.10.1",
     "kafkajs": "^2.2.4",
     "mongoose": "^8.2.3",
+    "nodemailer": "^8.0.10",
     "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.21.0",
     "reflect-metadata": "^0.2.0",
@@ -62,7 +66,10 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.12",
+    "@types/multer": "^2.1.0",
     "@types/node": "^20.11.30",
+    "@types/nodemailer": "^8.0.0",
+    "@types/passport-google-oauth20": "^2.0.17",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.20.0",
     "jest": "^29.7.0",
@@ -76,7 +83,7 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
@@ -84,7 +91,10 @@
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "coverageDirectory": "./coverage",
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/apps/"
+    ]
   }
 }

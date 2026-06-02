@@ -1,0 +1,29 @@
+{
+  "monorepo": true,
+  "root": "apps/wdp301-backend",
+  "sourceRoot": "apps/wdp301-backend/src",
+  "compilerOptions": {
+    "webpack": true,
+    "tsConfigPath": "apps/wdp301-backend/tsconfig.app.json"
+  },
+  "projects": {
+    "wdp301-backend": {
+      "type": "application",
+      "root": "apps/wdp301-backend",
+      "entryFile": "main",
+      "sourceRoot": "apps/wdp301-backend/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/wdp301-backend/tsconfig.app.json"
+      }
+    },
+    "user-service": {
+      "type": "application",
+      "root": "apps/user-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/user-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/user-service/tsconfig.app.json"
+      }
+    }
+  }
+}
