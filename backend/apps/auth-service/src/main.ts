@@ -1,6 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { getModelToken } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import * as bcrypt from 'bcryptjs';
 import { AuthServiceAppModule } from './app.module';
+import { User, UserRole } from './auth/user.schema';
 
 async function bootstrap() {
   /**
@@ -23,6 +27,31 @@ async function bootstrap() {
       },
     },
   );
+
+  // --- SEED DUMMY ACCOUNTS ---
+  const userModel = app.get<Model<User>>(getModelToken(User.name));
+  const dummyUsers = [
+    { email: 'admin@vinapharmacy.com', role: UserRole.ADMIN, fullName: 'Admin Hệ Thống' },
+    { email: 'director@vinapharmacy.com', role: UserRole.HEAD_BRANCH, fullName: 'Giám Đốc Chi Nhánh' },
+    { email: 'warehouse@vinapharmacy.com', role: UserRole.WAREHOUSE, fullName: 'Quản Lý Kho' },
+    { email: 'manager@vinapharmacy.com', role: UserRole.BRANCH, fullName: 'Quản Lý Cơ Sở' },
+    { email: 'pharmacist@vinapharmacy.com', role: UserRole.PHARMACIST, fullName: 'Dược Sĩ Bán Hàng' },
+  ];
+
+  const passwordHash = await bcrypt.hash('123456', 10);
+
+  for (const dummy of dummyUsers) {
+    const exists = await userModel.findOne({ email: dummy.email });
+    if (!exists) {
+      await userModel.create({
+        ...dummy,
+        passwordHash,
+        isEmailVerified: true,
+      });
+      console.log(`🌱 [Seed] Đã tạo tài khoản test: ${dummy.email} / Mật khẩu: 123456`);
+    }
+  }
+  // ---------------------------
 
   await app.listen();
   console.log('🚀 Auth Microservice đang lắng nghe Kafka trên localhost:9092');

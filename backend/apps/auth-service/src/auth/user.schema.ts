@@ -1,0 +1,39 @@
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+
+export enum UserRole {
+  ADMIN = 'admin',
+  HEAD_BRANCH = 'head_branch',
+  WAREHOUSE = 'warehouse',
+  BRANCH = 'branch',
+  PHARMACIST = 'pharmacist',
+}
+
+@Schema({ timestamps: true })
+export class User extends Document {
+  @Prop({ required: true, unique: true })
+  email: string;
+
+  @Prop({ required: true })
+  passwordHash: string;
+
+  @Prop({ required: true })
+  fullName: string;
+
+  @Prop({ type: String, enum: UserRole, default: UserRole.PHARMACIST })
+  role: UserRole;
+
+  @Prop({ default: true })
+  isActive: boolean;
+
+  @Prop({ default: false })
+  isEmailVerified: boolean;
+
+  @Prop()
+  avatarUrl?: string;
+
+  @Prop()
+  googleId?: string;
+}
+
+export const UserSchema = SchemaFactory.createForClass(User);

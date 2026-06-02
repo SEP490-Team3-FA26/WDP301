@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import { CacheModule } from '@nestjs/cache-manager';
 import { AuthGwModule } from './auth/auth-gw.module';
 import { UserModule } from './user/user.module';
@@ -12,6 +13,14 @@ import { UserModule } from './user/user.module';
   imports: [
     // Đọc biến môi trường toàn cục
     ConfigModule.forRoot({ isGlobal: true }),
+
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGODB_URI'),
+      }),
+      inject: [ConfigService],
+    }),
 
     // Redis Cache (Cache-Aside Strategy)
     CacheModule.registerAsync({

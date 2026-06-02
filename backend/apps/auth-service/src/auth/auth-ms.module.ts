@@ -1,17 +1,14 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { UserEntity } from './user.entity';
+import { User, UserSchema } from './user.schema';
 import { AuthService } from './auth.service';
 import { AuthMsController } from './auth-ms.controller';
 
 @Module({
   imports: [
-    // TypeORM: Đăng ký UserEntity để service có thể thao tác với bảng users
-    TypeOrmModule.forFeature([UserEntity]),
-
-    // JWT: Cấu hình module ký và xác thực token
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({

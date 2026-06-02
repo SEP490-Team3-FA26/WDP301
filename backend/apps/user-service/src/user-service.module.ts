@@ -1,28 +1,21 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserEntity } from '../../auth-service/src/auth/user.entity';
+import { MongooseModule } from '@nestjs/mongoose';
+import { User, UserSchema } from '../../auth-service/src/auth/user.schema';
 import { UserServiceController } from './user-service.controller';
 import { UserService } from './user-service.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forRootAsync({
+    MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        url: config.get<string>('DATABASE_URL'),
-        entities: [UserEntity],
-        synchronize: config.get<string>('NODE_ENV') !== 'production',
-        ssl: {
-          rejectUnauthorized: false,
-        },
-        logging: config.get<string>('NODE_ENV') === 'development',
+      useFactory: async (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGODB_URI'),
       }),
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([UserEntity]),
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
   ],
   controllers: [UserServiceController],
   providers: [UserService],
