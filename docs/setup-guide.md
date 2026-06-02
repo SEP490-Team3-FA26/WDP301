@@ -66,6 +66,8 @@ helm install my-prometheus prometheus-community/kube-prometheus-stack -n monitor
 **Bước 3: Thiết lập Port-forward (Mở kết nối ra localhost)**
 Mở mỗi lệnh dưới đây trên một tab Terminal riêng để duy trì kết nối:
 
+- **Frontend App**: `kubectl port-forward svc/frontend-svc -n wdp301 3000:3000`
+- **Backend API**: `kubectl port-forward svc/backend-svc -n wdp301 4000:4000`
 - **Kafka**: `kubectl port-forward svc/my-kafka -n kafka 9092:9092`
 - **Prometheus**: `kubectl port-forward svc/my-prometheus-kube-prometh-prometheus -n monitoring 9090:9090`
 - **ArgoCD**: `kubectl port-forward svc/argocd-server -n argocd 8080:443`
