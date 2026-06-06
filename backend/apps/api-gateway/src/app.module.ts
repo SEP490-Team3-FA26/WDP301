@@ -4,6 +4,11 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { CacheModule } from '@nestjs/cache-manager';
 import { AuthGwModule } from './auth/auth-gw.module';
 import { UserModule } from './user/user.module';
+import { MedicineModule } from './medicine/medicine.module';
+
+import { SupplierController } from './supplier.controller';
+import { PurchaseOrderController } from './purchase-order.controller';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 
 /**
  * Root Module của API Gateway
@@ -29,15 +34,34 @@ import { UserModule } from './user/user.module';
       useFactory: async (config: ConfigService) => ({
         store: 'memory', // Dùng memory store cho dev; thay bằng redis store cho production
         ttl: 3600,       // Mặc định TTL 1 giờ
-        // Để dùng Redis thực sự, cài thêm: npm install cache-manager-ioredis-yet
-        // và thêm: store: redisStore, host: config.get('REDIS_HOST'), port: config.get('REDIS_PORT')
       }),
       inject: [ConfigService],
     }),
 
+    ClientsModule.register([
+      {
+        name: 'SUPPLIER_SERVICE',
+        transport: Transport.KAFKA,
+        options: {
+          client: { clientId: 'api-gw-supplier-client', brokers: ['localhost:9092'] },
+          consumer: { groupId: 'api-gw-supplier-group' },
+        },
+      },
+      {
+        name: 'INVENTORY_SERVICE',
+        transport: Transport.KAFKA,
+        options: {
+          client: { clientId: 'api-gw-inventory-client', brokers: ['localhost:9092'] },
+          consumer: { groupId: 'api-gw-inventory-group' },
+        },
+      },
+    ]),
+
     // --- Các Modules nghiệp vụ của API Gateway ---
     AuthGwModule,
     UserModule,
+    MedicineModule,
   ],
+  controllers: [SupplierController, PurchaseOrderController],
 })
 export class AppGatewayModule {}

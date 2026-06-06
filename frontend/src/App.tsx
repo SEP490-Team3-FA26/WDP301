@@ -1,54 +1,118 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { DashboardLayout } from "./components/layout/DashboardLayout";
-import { AuthLayout } from "./components/layout/AuthLayout";
-import { Landing } from "./pages/Landing";
-import { Dashboard } from "./pages/Dashboard";
-import { Profile } from "./pages/Profile";
-import { Settings } from "./pages/Settings";
-import { Login } from "./pages/Login";
-import { Register } from "./pages/Register";
-import { ForgotPassword } from "./pages/ForgotPassword";
-import { ResetPassword } from "./pages/ResetPassword";
-import { Inventory } from "./pages/Inventory";
-import { InventoryHistory } from "./pages/InventoryHistory";
-import { Branches } from "./pages/Branches";
-import { Sales } from "./pages/Sales";
-import { Finance } from "./pages/Finance";
-import { Reports } from "./pages/Reports";
-import { AIInsights } from "./pages/AIInsights";
+
+// Layouts
+import { AuthLayout } from "./layouts/AuthLayout";
+import { AdminLayout } from "./layouts/AdminLayout";
+import { WarehouseLayout } from "./layouts/WarehouseLayout";
+import { BranchLayout } from "./layouts/BranchLayout";
+import { PharmacistLayout } from "./layouts/PharmacistLayout";
+
+// Auth Pages
+import { Landing } from "./pages/common/Landing";
+import { Login } from "./pages/auth/Login";
+import { Register } from "./pages/auth/Register";
+import { ForgotPassword } from "./pages/auth/ForgotPassword";
+import { ResetPassword } from "./pages/auth/ResetPassword";
+
+// Common Pages
+import { DashboardHome } from "./pages/common/Dashboard";
+import { Profile } from "./pages/common/Profile";
+import { Settings } from "./pages/common/Settings";
+import { AIInsights } from "./pages/common/AIInsights";
+
+// Master Data
+import { Products } from "./pages/master-data/Products";
+import { Suppliers } from "./pages/master-data/Suppliers";
+
+// Warehouse Pages
+import { Inventory } from "./pages/warehouse/Inventory";
+import { InventoryHistory } from "./pages/warehouse/InventoryHistory";
+import { PurchaseOrderCreate } from "./pages/warehouse/PurchaseOrderCreate";
+
+// Admin / Branch Pages
+import { Finance } from "./pages/admin/Finance";
+import { Reports } from "./pages/admin/Reports";
+import { Branches } from "./pages/admin/Branches";
+
+// Pharmacist / Branch Pages
+import { Sales } from "./pages/pharmacist/Sales";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public Routes */}
         <Route path="/" element={<Landing />} />
         
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<Dashboard />} />
+        {/* Auth Routes */}
+        <Route path="/auth" element={<AuthLayout />}>
+          <Route path="login" element={<Login />} />
+          <Route path="register" element={<Register />} />
+          <Route path="forgot-password" element={<ForgotPassword />} />
+          <Route path="reset-password" element={<ResetPassword />} />
+        </Route>
+
+        {/* Cũ (Redirect để tương thích trong trường hợp back lại) */}
+        <Route path="/login" element={<Navigate to="/auth/login" replace />} />
+        <Route path="/register" element={<Navigate to="/auth/register" replace />} />
+        <Route path="/forgot-password" element={<Navigate to="/auth/forgot-password" replace />} />
+        <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
+
+        {/* --- Admin Routes --- */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<DashboardHome />} />
           <Route path="branches" element={<Branches />} />
-          <Route path="inventory" element={<Inventory />} />
-          <Route path="inventory/import" element={<InventoryHistory type="import" />} />
-          <Route path="inventory/export" element={<InventoryHistory type="export" />} />
-          <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
           <Route path="finance" element={<Finance />} />
           <Route path="reports" element={<Reports />} />
           <Route path="ai-insights" element={<AIInsights />} />
-          <Route path="sales" element={<Sales />} />
           <Route path="profile" element={<Profile />} />
           <Route path="settings" element={<Settings />} />
+          
+          <Route path="inventory" element={<Inventory />} />
+          <Route path="inventory/import" element={<InventoryHistory type="import" />} />
+          <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
+          <Route path="inventory/export" element={<InventoryHistory type="export" />} />
+          <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
+
+          <Route path="master-data/products" element={<Products />} />
+          <Route path="master-data/suppliers" element={<Suppliers />} />
         </Route>
-        
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+
+        {/* --- Warehouse Routes --- */}
+        <Route path="/warehouse" element={<WarehouseLayout />}>
+          <Route index element={<DashboardHome />} />
+          <Route path="inventory" element={<Inventory />} />
+          <Route path="inventory/import" element={<InventoryHistory type="import" />} />
+          <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
+          <Route path="inventory/export" element={<InventoryHistory type="export" />} />
+          <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
+          <Route path="ai-insights" element={<AIInsights />} />
+          <Route path="profile" element={<Profile />} />
+          
+          <Route path="master-data/products" element={<Products />} />
+          <Route path="master-data/suppliers" element={<Suppliers />} />
         </Route>
-        
+
+        {/* --- Branch Routes --- */}
+        <Route path="/branch" element={<BranchLayout />}>
+          <Route index element={<DashboardHome />} />
+          <Route path="sales" element={<Sales />} />
+          <Route path="finance" element={<Finance />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="profile" element={<Profile />} />
+        </Route>
+
+        {/* --- Pharmacist Routes --- */}
+        <Route path="/pharmacist" element={<PharmacistLayout />}>
+          <Route index element={<DashboardHome />} />
+          <Route path="sales" element={<Sales />} />
+          <Route path="profile" element={<Profile />} />
+        </Route>
+
+        {/* Profile riêng lẻ cho user thường */}
+        <Route path="/profile" element={<Profile />} />
+
+        {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

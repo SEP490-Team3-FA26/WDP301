@@ -116,7 +116,6 @@ export function Register() {
         <button 
           type="submit"
           disabled={loading}
-          disabled={loading}
           className="w-full flex justify-center items-center gap-2 py-3 px-4 mt-6 border border-transparent rounded-xl shadow-md text-sm font-black text-white bg-[#0057cd] hover:bg-[#00419e] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0057cd] transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {loading ? 'Đang xử lý...' : 'Hoàn tất đăng ký'}

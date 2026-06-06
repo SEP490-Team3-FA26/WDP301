@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, Filter, ArrowDownToLine, ArrowUpFromLine, Trash2, Calendar, FileText, Plus, ChevronRight, X, Package, Building, CheckCircle2, DollarSign } from "lucide-react";
 
 interface InventoryHistoryProps {
@@ -7,10 +8,11 @@ interface InventoryHistoryProps {
 
 export function InventoryHistory({ type }: InventoryHistoryProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   const title = type === "import" ? "Lịch sử nhập kho" : type === "export" ? "Lịch sử xuất kho" : "Lịch sử xuất hủy";
   const desc = type === "import" ? "Quản lý các phiếu nhập hàng từ nhà cung cấp" : type === "export" ? "Quản lý các phiếu xuất kho, luân chuyển" : "Quản lý các phiếu hủy thuốc hỏng, hết hạn";
-  const btnLabel = type === "import" ? "Tạo phiếu nhập" : type === "export" ? "Tạo phiếu xuất" : "Tạo phiếu hủy";
+  const btnLabel = type === "import" ? "Tạo đơn nhập hàng" : type === "export" ? "Tạo phiếu xuất" : "Tạo phiếu hủy";
   
   const Icon = type === "import" ? ArrowDownToLine : type === "export" ? ArrowUpFromLine : Trash2;
   const theme = type === "import" ? "blue" : type === "export" ? "emerald" : "rose";
@@ -40,6 +42,14 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
 
   const records = mockData[type];
 
+  const handleCreate = () => {
+    if (type === "import") {
+      navigate("new");
+    } else {
+      setIsModalOpen(true);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-y-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -53,7 +63,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
           <p className="text-slate-500 mt-2 ml-13">{desc}</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleCreate}
           className={`px-5 py-2.5 font-bold rounded-xl shadow-sm flex items-center gap-2 transition-colors ${themeClasses[theme]}`}
         >
           <Plus size={18} />

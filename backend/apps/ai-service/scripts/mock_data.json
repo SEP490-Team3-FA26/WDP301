@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "name": "Coversyl 5mg (Hộp 30 viên)",
+    "active_ingredient": "Perindopril arginine",
+    "category": "Thuốc tim mạch, huyết áp",
+    "indications": "Điều trị tăng huyết áp vô căn, giảm biến cố tim mạch ở bệnh nhân đã có tiền sử nhồi máu cơ tim.",
+    "contraindications": "Phụ nữ có thai, người có tiền sử phù mạch.",
+    "default_dosage": "Uống 1 viên vào buổi sáng trước bữa ăn.",
+    "drug_interactions": "Tăng nguy cơ hạ huyết áp quá mức khi dùng chung với thuốc lợi tiểu.",
+    "side_effects": "Ho khan dai dẳng, chóng mặt do hạ huyết áp, nhức đầu."
+  },
+  {
+    "id": 2,
+    "name": "Panadol Extra (Hộp 15 vỉ x 8 viên)",
+    "active_ingredient": "Paracetamol, Caffeine",
+    "category": "Giảm đau, hạ sốt",
+    "indications": "Làm giảm đau nhẹ đến vừa như đau đầu, đau nửa đầu, đau lưng, đau răng, đau họng, đau bụng kinh.",
+    "contraindications": "Bệnh nhân suy gan nặng, người dị ứng với Paracetamol.",
+    "default_dosage": "Người lớn và trẻ em trên 12 tuổi: 1-2 viên mỗi 4-6 giờ. Tối đa 8 viên/ngày.",
+    "drug_interactions": "Tăng tác dụng của thuốc chống đông máu (Warfarin).",
+    "side_effects": "Dị ứng da, buồn nôn nhẹ."
+  }
+]

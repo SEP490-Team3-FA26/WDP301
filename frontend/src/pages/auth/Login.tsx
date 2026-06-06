@@ -47,17 +47,17 @@ export function Login() {
     switch (userRole) {
       case "admin":
       case "head_branch":
-        return "/dashboard";
+        return "/admin";
       case "warehouse":
-        return "/dashboard/inventory";
+        return "/warehouse";
       case "branch":
-        return "/dashboard/reports";
+        return "/branch";
       case "pharmacist":
-        return "/dashboard/sales";
+        return "/pharmacist";
       case "user":
         return "/profile";
       default:
-        return "/dashboard";
+        return "/admin";
     }
   };
 
@@ -73,10 +73,16 @@ export function Login() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        const text = await response.text();
+        data = text ? JSON.parse(text) : {};
+      } catch (err) {
+        throw new Error('Không thể kết nối đến máy chủ. Backend có thể đang khởi động...');
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Đăng nhập thất bại');
+        throw new Error(data.message || 'Đăng nhập thất bại (Máy chủ không phản hồi đúng định dạng).');
       }
 
       // Lưu JWT Token và Role

@@ -24,6 +24,24 @@
       "compilerOptions": {
         "tsConfigPath": "apps/user-service/tsconfig.app.json"
       }
+    },
+    "inventory-service": {
+      "type": "application",
+      "root": "apps/inventory-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/inventory-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/inventory-service/tsconfig.app.json"
+      }
+    },
+    "supplier-service": {
+      "type": "application",
+      "root": "apps/supplier-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/supplier-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/supplier-service/tsconfig.app.json"
+      }
     }
   }
 }

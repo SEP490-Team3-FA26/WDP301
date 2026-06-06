@@ -3,13 +3,13 @@ STT,Nhóm Module,Mã UC,Tên Chức Năng,QL Chi nhánh,NV Bán hàng,Thủ kho,
 2,Bán hàng,UC-02,Bán lẻ – áp dụng khuyến mãi / mã giảm giá,✓,✓,-,-,✓,Promotion & Pricing Service
 3,Bán hàng,UC-03,Bán lẻ – xác nhận thanh toán & in hóa đơn,✓,✓,-,-,✓,Payment & Billing Service
 4,Bán hàng,UC-04,Bán theo đơn thuốc – quét QR đơn điện tử,✓,✓,-,-,✓,Order Service
-5,Bán hàng,UC-05,Bán theo đơn thuốc – kiểm tra tương tác thuốc,✓,✓,-,-,✓,AI Clinical & Recommendation Service
+,,,,,,,,,
 6,Bán hàng,UC-06,Bán sỉ – lập hóa đơn sỉ & áp giá bậc thang,✓,✓,-,-,✓,Order Service
 7,Bán hàng,UC-07,Bán sỉ – quản lý hạn mức công nợ đại lý,✓,-,-,-,✓,Payment & Billing Service
 8,Bán hàng,UC-08,Hoàn trả – xử lý đổi / trả hàng,✓,✓,-,-,✓,Order Service
 9,Bán hàng,UC-09,Hoàn trả – hoàn tiền & cập nhật tồn kho,✓,✓,-,-,✓,Payment & Billing Service
 10,Bán hàng,UC-10,Tích điểm & quy đổi điểm khách hàng thân thiết,✓,✓,-,✓,✓,Loyalty Service
-11,Bán hàng,UC-11,Tạm giữ đơn hàng (Hold order) chờ dược sĩ xác nhận,✓,✓,-,-,✓,Order Service
+,,,,,,,,,
 12,Bán hàng,UC-12,Gửi hóa đơn điện tử qua email / Zalo OA,✓,✓,-,-,✓,Notification Service
 13,Kho thông minh,UC-13,Nhập kho – tạo phiếu nhập & chọn nhà cung cấp,✓,-,✓,-,✓,Warehouse Operation Service
 14,Kho thông minh,UC-14,Nhập kho – scan QR/Barcode bằng Mobile,✓,-,✓,-,✓,Warehouse Operation Service
@@ -21,17 +21,17 @@ STT,Nhóm Module,Mã UC,Tên Chức Năng,QL Chi nhánh,NV Bán hàng,Thủ kho,
 20,Kho thông minh,UC-20,Kiểm kê – lưu biên bản & điều chỉnh tồn kho,✓,-,✓,-,✓,Stocktaking Service
 21,Kho thông minh,UC-21,Chuyển kho – tạo phiếu điều chuyển giữa chi nhánh,✓,-,-,-,✓,Transfer & Logistics Service
 22,Kho thông minh,UC-22,Chuyển kho – xác nhận xuất / nhận hàng bằng QR,✓,-,✓,-,✓,Transfer & Logistics Service
-23,Kho thông minh,UC-23,Truy xuất nguồn gốc lô thuốc (Lot Tracking),✓,-,✓,-,✓,Inventory Service
+,,,,,,,,,
 24,Chuỗi Chi nhánh,UC-24,Quản lý chi nhánh – thêm / sửa / xóa chi nhánh,-,-,-,-,✓,Branch Management Service
 25,Chuỗi Chi nhánh,UC-25,Dashboard tổng – xem doanh thu & tồn kho toàn chuỗi,✓,-,-,-,✓,Analytics & Dashboard Service
 26,Chuỗi Chi nhánh,UC-26,So sánh hiệu suất kinh doanh giữa các chi nhánh,-,-,-,-,✓,Analytics & Dashboard Service
 27,Chuỗi Chi nhánh,UC-27,Phân bổ hạn mức nhập hàng cho từng chi nhánh,-,-,-,-,✓,Branch Management Service
 28,Chuỗi Chi nhánh,UC-28,Đồng bộ danh mục thuốc & giá bán toàn chuỗi,✓,-,-,-,✓,Branch Management Service
-29,Chuỗi Chi nhánh,UC-29,Gợi ý điều phối hàng tự động giữa chi nhánh,✓,-,-,-,✓,Branch Management Service
+,,,,,,,,,
 30,Chuỗi Chi nhánh,UC-30,Xem tồn kho thời gian thực của toàn chuỗi,✓,-,-,-,✓,Inventory Service
 31,Chuỗi Chi nhánh,UC-31,Thông báo realtime sự kiện quan trọng toàn chuỗi,✓,✓,✓,-,✓,Notification Service
 32,Tính năng AI,UC-32,Cảnh báo thuốc sắp hết hạn (phân cấp đỏ/vàng/xanh),✓,-,✓,-,✓,AI Inventory Alert Service
-33,Tính năng AI,UC-33,Đề xuất xử lý thuốc sắp hết hạn (giảm giá / trả NCC),✓,-,-,-,✓,AI Inventory Alert Service
+,,,,,,,,,
 34,Tính năng AI,UC-34,Dự báo nhu cầu nhập hàng theo kỳ (AI Forecast),✓,-,-,-,✓,AI Forecasting Service
 35,Tính năng AI,UC-35,Tự động tạo đơn đặt hàng từ kết quả dự báo,✓,-,-,-,✓,AI Forecasting Service
 36,Tính năng AI,UC-36,Gợi ý thuốc thay thế khi hết hàng (cùng hoạt chất),✓,✓,-,-,✓,AI Clinical & Recommendation Service
@@ -43,7 +43,7 @@ STT,Nhóm Module,Mã UC,Tên Chức Năng,QL Chi nhánh,NV Bán hàng,Thủ kho,
 42,Quản lý Thông tin,UC-42,Quản lý thuốc – liên kết mã QR/Barcode với SKU,✓,-,✓,-,✓,Product Catalog Service
 43,Quản lý Thông tin,UC-43,Quản lý hồ sơ khách hàng & lịch sử mua,✓,✓,-,✓,✓,Customer Service
 44,Quản lý Thông tin,UC-44,Khách hàng tự tra cứu lịch sử đơn hàng,-,-,-,✓,-,Customer Service
-45,Quản lý Thông tin,UC-45,Nhắc tái khám & thông báo đơn thuốc sắp hết,✓,-,-,✓,✓,Notification Service
+,,,,,,,,,
 46,Quản lý Thông tin,UC-46,Quản lý nhà cung cấp – thêm / sửa / đánh giá NCC,✓,-,-,-,✓,Supplier Service
 47,Quản lý Thông tin,UC-47,Quản lý chương trình khuyến mãi & giá theo nhóm,✓,-,-,-,✓,Promotion & Pricing Service
 48,Quản lý Thông tin,UC-48,Quản lý bảng giá bán lẻ / sỉ theo từng chi nhánh,✓,-,-,-,✓,Promotion & Pricing Service

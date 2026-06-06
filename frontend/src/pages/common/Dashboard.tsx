@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-export function Dashboard() {
+export function DashboardHome() {
   const [role, setRole] = useState("admin");
 
   useEffect(() => {

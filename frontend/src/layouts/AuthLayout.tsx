@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Outlet } from "react-router-dom";
-import { Logo } from "../ui/Logo";
+import { Logo } from "../components/ui/Logo";
 
 export function AuthLayout() {
   const [mousePos, setMousePos] = useState({ x: -1000, y: -1000 });
