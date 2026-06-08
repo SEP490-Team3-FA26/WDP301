@@ -18,8 +18,8 @@ FROM nginx:alpine
 # Copy built static files from Stage 1
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Configure Nginx to listen on port 3000 instead of 80
-RUN sed -i 's/listen\(.*\)80;/listen 3000;/' /etc/nginx/conf.d/default.conf
+# Copy custom Nginx configuration to proxy /api requests
+COPY backend/docker/nginx.frontend.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
 

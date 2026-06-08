@@ -17,4 +17,16 @@ export class InventoryServiceController {
       throw new RpcException(error.message || 'Lỗi hệ thống khi tạo đơn nhập');
     }
   }
+
+  @MessagePattern('inventory.grn.create')
+  async createGoodsReceiptNote(@Payload() data: any) {
+    try {
+      return await this.inventoryServiceService.createGoodsReceiptNote(data);
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tạo phiếu nhập kho');
+    }
+  }
 }

@@ -40,19 +40,12 @@ def main():
         # Strip pgbouncer query if present to avoid unsupported options in pg
         conn_str = DATABASE_URL.replace('?pgbouncer=true', '')
         conn = psycopg2.connect(conn_str)
-        cur = conn.cursor(cursor_factory=DictCursor)
-        cur.execute("SELECT * FROM public.medicines")
-        medicines = cur.fetchall()
-        cur.close()
-        conn.close()
+        # Using a named cursor creates a server-side cursor
+        cur = conn.cursor('medicines_index_cursor', cursor_factory=DictCursor)
+        cur.execute("SELECT name, active_ingredient, indications, contraindications, default_dosage, drug_interactions FROM public.medicines")
     except Exception as e:
         print(f"Database error: {e}")
         sys.exit(1)
-    
-    print(f"Found {len(medicines)} medicines.")
-    if not medicines:
-        print("No valid medicines to index.")
-        sys.exit(0)
         
     collection_name = "medical_knowledge"
     
@@ -65,38 +58,52 @@ def main():
         vectors_config=VectorParams(size=384, distance=Distance.COSINE)
     )
     
-    print("Indexing into Qdrant...")
+    print("Indexing into Qdrant in batches...")
     points = []
-    for item in medicines:
-        name = item.get("name") or ""
-        active_ingredient = item.get("active_ingredient") or ""
-        indications = item.get("indications") or ""
-        contraindications = item.get("contraindications") or ""
-        
-        text = f"{name} ({active_ingredient}). Chỉ định: {indications}. Chống chỉ định: {contraindications}."
-        vector = get_embedding(text)
-        points.append(PointStruct(
-            id=str(uuid.uuid4()),
-            vector=vector,
-            payload={
-                "name": name,
-                "active_ingredient": active_ingredient,
-                "indications": indications,
-                "default_dosage": item.get("default_dosage") or "",
-                "contraindications": contraindications,
-                "drug_interactions": item.get("drug_interactions") or ""
-            }
-        ))
-        
-        # Upsert in batches of 100
-        if len(points) >= 100:
-            qdrant.upsert(collection_name=collection_name, points=points)
-            points = []
+    total_indexed = 0
+    
+    while True:
+        rows = cur.fetchmany(100)
+        if not rows:
+            break
             
+        for item in rows:
+            name = item.get("name") or ""
+            active_ingredient = item.get("active_ingredient") or ""
+            indications = item.get("indications") or ""
+            contraindications = item.get("contraindications") or ""
+            
+            text = f"{name} ({active_ingredient}). Chỉ định: {indications}. Chống chỉ định: {contraindications}."
+            vector = get_embedding(text)
+            points.append(PointStruct(
+                id=str(uuid.uuid4()),
+                vector=vector,
+                payload={
+                    "name": name,
+                    "active_ingredient": active_ingredient,
+                    "indications": indications,
+                    "default_dosage": item.get("default_dosage") or "",
+                    "contraindications": contraindications,
+                    "drug_interactions": item.get("drug_interactions") or ""
+                }
+            ))
+            
+            # Upsert in batches of 100
+            if len(points) >= 100:
+                qdrant.upsert(collection_name=collection_name, points=points)
+                total_indexed += len(points)
+                if total_indexed % 1000 == 0:
+                    print(f"Indexed {total_indexed} medicines...")
+                points = []
+                
     if points:
         qdrant.upsert(collection_name=collection_name, points=points)
+        total_indexed += len(points)
         
-    print(f"Successfully indexed {len(medicines)} medical records into Qdrant!")
+    cur.close()
+    conn.close()
+    
+    print(f"Successfully indexed {total_indexed} medical records into Qdrant!")
 
 if __name__ == "__main__":
     main()

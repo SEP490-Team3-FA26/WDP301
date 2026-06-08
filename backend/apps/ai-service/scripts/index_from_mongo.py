@@ -50,15 +50,10 @@ def main():
         
         db = mongo_client[db_name]
         collection = db["medicines"]
-        medicines = list(collection.find({}))
+        cursor = collection.find({})
     except Exception as e:
         print(f"MongoDB connection or query error: {e}")
         sys.exit(1)
-        
-    print(f"Found {len(medicines)} medicines in MongoDB collection.")
-    if not medicines:
-        print("No valid medicines in MongoDB to index.")
-        sys.exit(0)
         
     collection_name = "medical_knowledge"
     
@@ -73,21 +68,84 @@ def main():
     
     print("Indexing MongoDB medicines into Qdrant in batches...")
     batch_size = 100
-    for i in range(0, len(medicines), batch_size):
-        batch = medicines[i:i + batch_size]
-        
-        # Prepare texts and metadata
+    batch = []
+    total_indexed = 0
+    
+    for item in cursor:
+        batch.append(item)
+        if len(batch) >= batch_size:
+            # Prepare texts and metadata
+            texts = []
+            batch_items = []
+            for batch_item in batch:
+                name = batch_item.get("name") or ""
+                details = batch_item.get("thong_tin_chi_tiet") or {}
+                active_ingredient = details.get("Thành phần") or details.get("active_ingredient") or ""
+                indications = batch_item.get("cong_dung") or batch_item.get("indications") or ""
+                default_dosage = batch_item.get("cach_dung") or batch_item.get("default_dosage") or ""
+                contraindications = batch_item.get("tac_dung_phu") or batch_item.get("luu_y") or batch_item.get("contraindications") or ""
+                
+                # Truncate descriptions for embedding text (saves full text in payload)
+                ind_short = (indications or "")[:400]
+                contra_short = (contraindications or "")[:400]
+                text = f"{name} ({active_ingredient}). Chỉ định: {ind_short}. Chống chỉ định: {contra_short}."
+                texts.append(f"query: {text}")
+                
+                price_raw = details.get("Giá bán") or details.get("price")
+                price = clean_price(price_raw)
+                category = batch_item.get("category") or details.get("Danh mục") or "Chưa phân loại"
+                image_url = batch_item.get("image") or batch_item.get("image_url") or ""
+                
+                batch_items.append({
+                    "mongo_id": str(batch_item.get("_id")),
+                    "name": name,
+                    "active_ingredient": active_ingredient,
+                    "indications": indications,
+                    "default_dosage": default_dosage,
+                    "contraindications": contraindications,
+                    "category": category,
+                    "drug_classification": batch_item.get("drug_classification") or "COMMON_SUPPLEMENT",
+                    "price": price,
+                    "image_url": image_url,
+                    "stock_quantity": batch_item.get("stock") or 100,
+                    "status": batch_item.get("status") or "In Stock",
+                    "expiry_date": batch_item.get("expiry_date") or "2026-12-31",
+                    "unit": batch_item.get("unit") or "Hộp"
+                })
+                
+            # Batch embed
+            if embedding_model:
+                embeddings_gen = embedding_model.embed(texts)
+                vectors = [[float(x) for x in emb] for emb in embeddings_gen]
+            else:
+                vectors = [[0.0] * 384] * len(batch)
+                
+            points = []
+            for idx, payload in enumerate(batch_items):
+                points.append(PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector=vectors[idx],
+                    payload=payload
+                ))
+                
+            qdrant.upsert(collection_name=collection_name, points=points)
+            total_indexed += len(batch)
+            if total_indexed % 1000 == 0:
+                print(f"Indexed {total_indexed} medicines...")
+            batch = []
+            
+    if batch:
+        # Prepare texts and metadata for remaining
         texts = []
         batch_items = []
-        for item in batch:
-            name = item.get("name") or ""
-            details = item.get("thong_tin_chi_tiet") or {}
+        for batch_item in batch:
+            name = batch_item.get("name") or ""
+            details = batch_item.get("thong_tin_chi_tiet") or {}
             active_ingredient = details.get("Thành phần") or details.get("active_ingredient") or ""
-            indications = item.get("cong_dung") or item.get("indications") or ""
-            default_dosage = item.get("cach_dung") or item.get("default_dosage") or ""
-            contraindications = item.get("tac_dung_phu") or item.get("luu_y") or item.get("contraindications") or ""
+            indications = batch_item.get("cong_dung") or batch_item.get("indications") or ""
+            default_dosage = batch_item.get("cach_dung") or batch_item.get("default_dosage") or ""
+            contraindications = batch_item.get("tac_dung_phu") or batch_item.get("luu_y") or batch_item.get("contraindications") or ""
             
-            # Truncate descriptions for embedding text (saves full text in payload)
             ind_short = (indications or "")[:400]
             contra_short = (contraindications or "")[:400]
             text = f"{name} ({active_ingredient}). Chỉ định: {ind_short}. Chống chỉ định: {contra_short}."
@@ -95,27 +153,26 @@ def main():
             
             price_raw = details.get("Giá bán") or details.get("price")
             price = clean_price(price_raw)
-            category = item.get("category") or details.get("Danh mục") or "Chưa phân loại"
-            image_url = item.get("image") or item.get("image_url") or ""
+            category = batch_item.get("category") or details.get("Danh mục") or "Chưa phân loại"
+            image_url = batch_item.get("image") or batch_item.get("image_url") or ""
             
             batch_items.append({
-                "mongo_id": str(item.get("_id")),
+                "mongo_id": str(batch_item.get("_id")),
                 "name": name,
                 "active_ingredient": active_ingredient,
                 "indications": indications,
                 "default_dosage": default_dosage,
                 "contraindications": contraindications,
                 "category": category,
-                "drug_classification": item.get("drug_classification") or "COMMON_SUPPLEMENT",
+                "drug_classification": batch_item.get("drug_classification") or "COMMON_SUPPLEMENT",
                 "price": price,
                 "image_url": image_url,
-                "stock_quantity": item.get("stock") or 100,
-                "status": item.get("status") or "In Stock",
-                "expiry_date": item.get("expiry_date") or "2026-12-31",
-                "unit": item.get("unit") or "Hộp"
+                "stock_quantity": batch_item.get("stock") or 100,
+                "status": batch_item.get("status") or "In Stock",
+                "expiry_date": batch_item.get("expiry_date") or "2026-12-31",
+                "unit": batch_item.get("unit") or "Hộp"
             })
             
-        # Batch embed
         if embedding_model:
             embeddings_gen = embedding_model.embed(texts)
             vectors = [[float(x) for x in emb] for emb in embeddings_gen]
@@ -131,9 +188,9 @@ def main():
             ))
             
         qdrant.upsert(collection_name=collection_name, points=points)
-        print(f"Indexed {min(i + batch_size, len(medicines))}/{len(medicines)} medicines...")
+        total_indexed += len(batch)
         
-    print(f"Successfully indexed {len(medicines)} MongoDB records into Qdrant!")
+    print(f"Successfully indexed {total_indexed} MongoDB records into Qdrant!")
 
 if __name__ == "__main__":
     main()

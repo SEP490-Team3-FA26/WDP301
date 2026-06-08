@@ -7,6 +7,8 @@ import { InventoryServiceService } from './inventory-service.service';
 import { ProductModule } from './product/product.module';
 import { PurchaseOrder, PurchaseOrderSchema } from './purchase-order.schema';
 import { MedicineSchema } from '../../api-gateway/src/medicine/medicine.schema';
+import { GoodsReceiptNote, GoodsReceiptNoteSchema } from './goods-receipt-note.schema';
+import { MedicineBatch, MedicineBatchSchema } from './medicine-batch.schema';
 
 @Module({
   imports: [
@@ -20,7 +22,9 @@ import { MedicineSchema } from '../../api-gateway/src/medicine/medicine.schema';
     }),
     MongooseModule.forFeature([
       { name: PurchaseOrder.name, schema: PurchaseOrderSchema },
-      { name: 'Medicine', schema: MedicineSchema }
+      { name: 'Medicine', schema: MedicineSchema },
+      { name: GoodsReceiptNote.name, schema: GoodsReceiptNoteSchema },
+      { name: MedicineBatch.name, schema: MedicineBatchSchema },
     ]),
     ClientsModule.register([
       {
@@ -29,7 +33,7 @@ import { MedicineSchema } from '../../api-gateway/src/medicine/medicine.schema';
         options: {
           client: {
             clientId: 'inventory-supplier-client',
-            brokers: ['localhost:9092'],
+            brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
           },
           consumer: {
             groupId: 'inventory-supplier-group',

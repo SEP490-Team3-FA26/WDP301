@@ -8,6 +8,7 @@ import { MedicineModule } from './medicine/medicine.module';
 
 import { SupplierController } from './supplier.controller';
 import { PurchaseOrderController } from './purchase-order.controller';
+import { GoodsReceiptController } from './goods-receipt.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 
 /**
@@ -43,7 +44,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
         name: 'SUPPLIER_SERVICE',
         transport: Transport.KAFKA,
         options: {
-          client: { clientId: 'api-gw-supplier-client', brokers: ['localhost:9092'] },
+          client: { clientId: 'api-gw-supplier-client', brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(',') },
           consumer: { groupId: 'api-gw-supplier-group' },
         },
       },
@@ -51,7 +52,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
         name: 'INVENTORY_SERVICE',
         transport: Transport.KAFKA,
         options: {
-          client: { clientId: 'api-gw-inventory-client', brokers: ['localhost:9092'] },
+          client: { clientId: 'api-gw-inventory-client', brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(',') },
           consumer: { groupId: 'api-gw-inventory-group' },
         },
       },
@@ -62,6 +63,6 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
     UserModule,
     MedicineModule,
   ],
-  controllers: [SupplierController, PurchaseOrderController],
+  controllers: [SupplierController, PurchaseOrderController, GoodsReceiptController],
 })
 export class AppGatewayModule {}

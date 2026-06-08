@@ -35,7 +35,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Inject, OnModuleInit, 
 import { ClientKafka } from '@nestjs/microservices';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { lastValueFrom } from 'rxjs';
+import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 
 @Controller('api/products')
 export class ProductController implements OnModuleInit {
@@ -48,9 +48,10 @@ export class ProductController implements OnModuleInit {
 
   // Đăng ký nhận phản hồi từ các topic Request-Response đồng bộ
   async onModuleInit() {
-    this.kafkaClient.subscribeToResponseOf('product.get.by.id');
-    this.kafkaClient.subscribeToResponseOf('product.get.all');
-    await this.kafkaClient.connect();
+    await subscribeToKafkaTopics(this.kafkaClient, [
+      'product.get.by.id',
+      'product.get.all',
+    ]);
   }
 
   // ==========================================
@@ -85,19 +86,13 @@ export class ProductController implements OnModuleInit {
     console.log(`❌ [Cache Miss] Lấy sản phẩm ${id} qua Kafka -> Database`);
   
     // 2. Gọi qua Kafka sang Microservice nếu cache miss
-    try {
-      const product = await lastValueFrom(
-        this.kafkaClient.send('product.get.by.id', id)
-      );
+    const product = await sendKafkaMessage(this.kafkaClient, 'product.get.by.id', id);
 
-      if (product) {
-        // 3. Set Cache ngược lại vào Redis để phục vụ lần sau
-        await this.cacheManager.set(cacheKey, product, this.CACHE_TTL);
-      }
-      return product;
-    } catch (error) {
-      throw error;
+    if (product) {
+      // 3. Set Cache ngược lại vào Redis để phục vụ lần sau
+      await this.cacheManager.set(cacheKey, product, this.CACHE_TTL);
     }
+    return product;
   }
 
   // ==========================================
@@ -106,7 +101,7 @@ export class ProductController implements OnModuleInit {
   @Get()
   async getAllProducts() {
     // Với danh sách động, nên query DB trực tiếp qua Kafka để đảm bảo chính xác phân trang/lọc
-    return lastValueFrom(this.kafkaClient.send('product.get.all', {}));
+    return await sendKafkaMessage(this.kafkaClient, 'product.get.all', {});
   }
 
   // ==========================================

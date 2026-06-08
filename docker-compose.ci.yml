@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: wdp301-jenkins
+    user: root # Allows Jenkins to install things inside the container and use docker socket
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      # Mounting docker socket to allow Jenkins to build docker images
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - wdp301-network
+
+networks:
+  # Connect to the main project's network
+  wdp301-network:
+    external: true
+
+volumes:
+  jenkins_data:

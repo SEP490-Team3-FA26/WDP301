@@ -1,7 +1,6 @@
 import { Controller, Get, Post, Body, Inject, OnModuleInit } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
-import { firstValueFrom } from 'rxjs';
-
+import { sendKafkaMessage, subscribeToKafkaTopics } from './common/kafka.helper';
 @Controller('api/suppliers')
 export class SupplierController implements OnModuleInit {
   constructor(
@@ -9,18 +8,19 @@ export class SupplierController implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    this.supplierClient.subscribeToResponseOf('supplier.get_all');
-    this.supplierClient.subscribeToResponseOf('supplier.create');
-    await this.supplierClient.connect();
+    await subscribeToKafkaTopics(this.supplierClient, [
+      'supplier.get_all',
+      'supplier.create',
+    ]);
   }
 
   @Get()
   async getAllSuppliers() {
-    return await firstValueFrom(this.supplierClient.send('supplier.get_all', {}));
+    return await sendKafkaMessage(this.supplierClient, 'supplier.get_all', {});
   }
 
   @Post()
   async createSupplier(@Body() data: any) {
-    return await firstValueFrom(this.supplierClient.send('supplier.create', data));
+    return await sendKafkaMessage(this.supplierClient, 'supplier.create', data);
   }
 }

@@ -38,7 +38,16 @@ spec:
           ports:
             - containerPort: 9092
             - containerPort: 29093
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2048Mi"
           env:
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xms256M -Xmx512M"
             - name: KAFKA_NODE_ID
               value: "1"
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
@@ -60,6 +69,19 @@ spec:
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
               value: 'CONTROLLER'
             - name: KAFKA_LOG_DIRS
-              value: '/tmp/kraft-combined-logs'
+              value: '/var/lib/kafka/data'
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "true"
             - name: CLUSTER_ID
               value: 'MkU3OEVBNTcwNTJENDM2Qk'
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi

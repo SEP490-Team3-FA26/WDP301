@@ -1,7 +1,6 @@
 import { Controller, Post, Body, Inject, OnModuleInit, HttpException, HttpStatus } from '@nestjs/common';
-import { ClientKafka, RpcException } from '@nestjs/microservices';
-import { firstValueFrom } from 'rxjs';
-
+import { ClientKafka } from '@nestjs/microservices';
+import { sendKafkaMessage, subscribeToKafkaTopics } from './common/kafka.helper';
 @Controller('api/purchase-orders')
 export class PurchaseOrderController implements OnModuleInit {
   constructor(
@@ -9,16 +8,11 @@ export class PurchaseOrderController implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    this.inventoryClient.subscribeToResponseOf('inventory.po.create');
-    await this.inventoryClient.connect();
+    await subscribeToKafkaTopics(this.inventoryClient, ['inventory.po.create']);
   }
 
   @Post()
   async createPurchaseOrder(@Body() data: any) {
-    try {
-      return await firstValueFrom(this.inventoryClient.send('inventory.po.create', data));
-    } catch (e) {
-      throw new HttpException(e.message || 'Lỗi hệ thống', HttpStatus.BAD_REQUEST);
-    }
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.create', data);
   }
 }

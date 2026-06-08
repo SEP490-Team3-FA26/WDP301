@@ -64,5 +64,23 @@ kubectl port-forward svc/backend-svc -n wdp301 4000:4000
 ```
 Bây giờ bạn có thể truy cập `http://localhost:3000` (Frontend) trên trình duyệt.
 
----
+
+**Lênệ xem dashboard K8S**
+```bash
+minikube dashboard
+```
+
+**Lệnh mở Argo CD**
+Để truy cập vào Argo CD, anh cần thực hiện 2 bước (mở cổng port-forward và lấy mật khẩu admin):
+
+Bước 1: Mở cổng (Port-forward) Argo CD Server Mở một tab Terminal mới và chạy lệnh sau để kéo trang quản trị Argo CD ra cổng 8443 máy thật:
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8443:443
+```
+Bước 2: Lấy mật khẩu đăng nhập (Username là admin) Chạy lệnh sau trên terminal để giải mã mật khẩu khởi tạo của Argo CD:
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+```
+
 **Khi làm việc xong:** Chạy `minikube stop` để giải phóng RAM.

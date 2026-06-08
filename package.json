@@ -8,7 +8,8 @@
     "infra:down": "npm run --prefix backend infra:down",
     "dev:backend": "npm run --prefix backend dev:all",
     "dev:frontend": "npm run --prefix frontend dev",
-    "dev": "npx concurrently -k -p \"[{name}]\" -n \"Backend,Frontend\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\""
+    "dev": "npx concurrently -k -p \"[{name}]\" -n \"Backend,Frontend\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "infra:k8s-logs": "bash scripts/k8s-logs.sh"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

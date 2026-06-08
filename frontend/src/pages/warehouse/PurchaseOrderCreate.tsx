@@ -11,7 +11,10 @@ export function PurchaseOrderCreate() {
   const [cart, setCart] = useState<any[]>([]);
   const [selectedMedicineId, setSelectedMedicineId] = useState<string>("");
   const [quantity, setQuantity] = useState<number>(1);
+  const [unitPrice, setUnitPrice] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     // Fetch Suppliers
@@ -37,33 +40,45 @@ export function PurchaseOrderCreate() {
     setErrorMsg(null);
     if (!selectedMedicineId) return;
 
-    const med = medicines.find(m => m._id === selectedMedicineId);
+    const med = medicines.find(m => m.id === selectedMedicineId);
     if (!med) return;
 
-    // Kiểm tra thẩm định pháp lý Thuốc
-    const isMedExpired = med.expiry_date && new Date(med.expiry_date) < new Date();
+    // Kiểm tra thẩm định pháp lý Thuốc (field 'expiry' từ API)
+    const isMedExpired = med.expiry && new Date(med.expiry) < new Date();
     if (isMedExpired) {
-      setErrorMsg(`Lỗi Thẩm Định: Số đăng ký của thuốc "${med.name}" đã hết hạn vào ngày ${new Date(med.expiry_date).toLocaleDateString()}. Không thể nhập hàng!`);
+      setErrorMsg(`Lỗi Thẩm Định: Số đăng ký của thuốc "${med.name}" đã hết hạn vào ngày ${new Date(med.expiry).toLocaleDateString()}. Không thể nhập hàng!`);
       return;
     }
 
-    // Nếu thuốc chưa có trong giỏ thì thêm vào
-    const existingIndex = cart.findIndex(item => item._id === med._id);
+    const finalPrice = unitPrice > 0 ? unitPrice : (med.price || 0);
+
+    // Nếu thuốc đã có trong giỏ thì cộng thêm số lượng
+    const existingIndex = cart.findIndex(item => item.id === med.id);
     if (existingIndex >= 0) {
       const newCart = [...cart];
       newCart[existingIndex].quantity += quantity;
       setCart(newCart);
     } else {
-      setCart([...cart, { ...med, quantity, unitPrice: med.price || 0 }]);
+      setCart([...cart, { ...med, quantity, unitPrice: finalPrice }]);
     }
     
     // Reset form chọn thuốc
     setSelectedMedicineId("");
     setQuantity(1);
+    setUnitPrice(0);
   };
 
   const handleRemoveItem = (id: string) => {
     setCart(cart.filter(item => item.id !== id));
+  };
+
+  // Khi chọn thuốc → tự động điền giá đề xuất
+  const handleMedicineSelect = (medId: string) => {
+    setSelectedMedicineId(medId);
+    setErrorMsg(null);
+    const med = medicines.find(m => m.id === medId);
+    if (med) setUnitPrice(med.price || 0);
+    else setUnitPrice(0);
   };
 
   const totalAmount = cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
@@ -152,14 +167,11 @@ export function PurchaseOrderCreate() {
                 <select 
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
                   value={selectedMedicineId}
-                  onChange={(e) => {
-                    setSelectedMedicineId(e.target.value);
-                    setErrorMsg(null);
-                  }}
+                  onChange={(e) => handleMedicineSelect(e.target.value)}
                 >
                   <option value="">-- Chọn Thuốc Cần Nhập --</option>
                   {medicines.map(m => (
-                    <option key={m._id} value={m._id}>{m.name}</option>
+                    <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>
               </div>
@@ -171,6 +183,21 @@ export function PurchaseOrderCreate() {
                   min="1"
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value))}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" 
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+                  Đơn giá nhập (đ)
+                  <span className="text-xs text-slate-400 font-normal ml-1">— tự điền từ giá tham khảo</span>
+                </label>
+                <input 
+                  type="number" 
+                  min="0"
+                  step="1000"
+                  value={unitPrice}
+                  onChange={(e) => setUnitPrice(Number(e.target.value))}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" 
                 />
               </div>
@@ -222,14 +249,14 @@ export function PurchaseOrderCreate() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {cart.map((item, index) => (
+                    {cart.map((item) => (
                       <motion.tr 
                         key={item.id}
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         className="hover:bg-slate-50/50 transition-colors"
                       >
-                        <td className="px-5 py-3 font-semibold text-slate-500">{item.id}</td>
+                        <td className="px-5 py-3 font-mono text-xs text-slate-400 max-w-[80px] truncate" title={item.id}>{item.id?.slice(-6)}</td>
                         <td className="px-5 py-3 font-bold text-slate-800">{item.name}</td>
                         <td className="px-5 py-3 text-right">{item.unitPrice.toLocaleString('vi-VN')}đ</td>
                         <td className="px-5 py-3 text-center font-bold text-[#0057cd]">{item.quantity}</td>
@@ -269,34 +296,64 @@ export function PurchaseOrderCreate() {
 
               <button 
                 onClick={async () => {
+                  setIsSubmitting(true);
+                  setErrorMsg(null);
                   try {
                     const res = await fetch('/api/purchase-orders', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         supplierId: selectedSupplierId,
-                        items: cart.map(i => ({ medicineId: i._id, quantity: i.quantity, unitPrice: i.unitPrice }))
+                        items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice }))
                       })
                     });
+                    const resData = await res.json();
                     if (res.ok) {
-                      alert('Tạo đơn nhập hàng thành công!');
-                      navigate(-1);
+                      setSubmitSuccess(true);
+                      setTimeout(() => navigate(-1), 1800);
                     } else {
-                      const data = await res.json();
-                      alert('Lỗi: ' + data.message);
+                      // Hiển thị thông báo lỗi từ backend (GDP hết hạn, thuốc hết hạn, v.v)
+                      setErrorMsg(resData?.message || resData?.error || 'Lỗi không xác định từ máy chủ');
                     }
                   } catch (e) {
-                    alert('Lỗi hệ thống');
+                    setErrorMsg('Lỗi kết nối. Vui lòng kiểm tra máy chủ đang chạy.');
+                  } finally {
+                    setIsSubmitting(false);
                   }
                 }}
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || isSubmitting || isGdpExpired}
                 className={`w-full py-3.5 font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm
-                  ${cart.length > 0 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
+                  ${cart.length > 0 && !isSubmitting && !isGdpExpired
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
                 `}
               >
-                <CheckCircle2 size={20} />
-                Xác Nhận & Tạo Đơn
+                {isSubmitting ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    Đang xử lý...
+                  </>
+                ) : submitSuccess ? (
+                  <><CheckCircle2 size={20} /> Tạo đơn thành công! Đang chuyển hướng...</>
+                ) : (
+                  <><CheckCircle2 size={20} /> Xác Nhập & Tạo Đơn</>
+                )}
               </button>
+
+              {/* Khu vực hiển thị lỗi từ backend (GDP hết hạn, thuốc hết hạn...) */}
+              {errorMsg && !submitSuccess && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 flex items-start gap-3 bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-sm font-semibold"
+                >
+                  <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{errorMsg}</span>
+                </motion.div>
+              )}
             </div>
           </div>
         </div>

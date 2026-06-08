@@ -18,6 +18,7 @@ import { ClientKafka } from '@nestjs/microservices';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { lastValueFrom } from 'rxjs';
+import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -41,13 +42,14 @@ export class AuthGwController implements OnModuleInit {
    * NestJS Kafka Request-Response cần đăng ký reply topic trước khi kết nối
    */
   async onModuleInit() {
-    this.kafkaClient.subscribeToResponseOf('auth.login');
-    this.kafkaClient.subscribeToResponseOf('auth.register');
-    this.kafkaClient.subscribeToResponseOf('auth.validate.token');
-    this.kafkaClient.subscribeToResponseOf('auth.get.user.by.id');
-    this.kafkaClient.subscribeToResponseOf('auth.forgot.password');
-    this.kafkaClient.subscribeToResponseOf('auth.reset.password');
-    await this.kafkaClient.connect();
+    await subscribeToKafkaTopics(this.kafkaClient, [
+      'auth.login',
+      'auth.register',
+      'auth.validate.token',
+      'auth.get.user.by.id',
+      'auth.forgot.password',
+      'auth.reset.password',
+    ]);
     console.log('✅ [API Gateway] Đã kết nối tới Kafka và đăng ký Reply Topics');
   }
 
@@ -63,16 +65,7 @@ export class AuthGwController implements OnModuleInit {
     console.log(`📤 [API Gateway] Gửi yêu cầu đăng ký tới Kafka: ${dto.email}`);
 
     // Gửi qua Kafka -> Auth Microservice và chờ kết quả
-    const result: any = await lastValueFrom(
-      this.kafkaClient.send('auth.register', JSON.stringify(dto)),
-    );
-
-    // Nếu auth-service trả về lỗi, ném HttpException cho client
-    if (result?.error) {
-      throw new HttpException(result.message, result.statusCode || 400);
-    }
-
-    return result;
+    return await sendKafkaMessage(this.kafkaClient, 'auth.register', JSON.stringify(dto));
   }
 
   // ============================================================
@@ -83,11 +76,7 @@ export class AuthGwController implements OnModuleInit {
   @ApiOperation({ summary: 'Yêu cầu mã xác nhận qua email để đổi mật khẩu' })
   @ApiResponse({ status: 200, description: 'Đã gửi mã xác nhận' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
-    const result: any = await lastValueFrom(
-      this.kafkaClient.send('auth.forgot.password', JSON.stringify(dto)),
-    );
-    if (result?.error) throw new HttpException(result.message, result.statusCode || 400);
-    return result;
+    return await sendKafkaMessage(this.kafkaClient, 'auth.forgot.password', JSON.stringify(dto));
   }
 
   // ============================================================
@@ -98,11 +87,7 @@ export class AuthGwController implements OnModuleInit {
   @ApiOperation({ summary: 'Đặt lại mật khẩu mới bằng mã OTP' })
   @ApiResponse({ status: 200, description: 'Đổi mật khẩu thành công' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
-    const result: any = await lastValueFrom(
-      this.kafkaClient.send('auth.reset.password', JSON.stringify(dto)),
-    );
-    if (result?.error) throw new HttpException(result.message, result.statusCode || 400);
-    return result;
+    return await sendKafkaMessage(this.kafkaClient, 'auth.reset.password', JSON.stringify(dto));
   }
 
   // =========================================================================
@@ -154,14 +139,7 @@ export class AuthGwController implements OnModuleInit {
     console.log(`📤 [API Gateway] Gửi yêu cầu đăng nhập tới Kafka: ${dto.email}`);
 
     // Cache Miss -> Gửi qua Kafka -> Auth Microservice để xác thực
-    const result: any = await lastValueFrom(
-      this.kafkaClient.send('auth.login', JSON.stringify(dto)),
-    );
-
-    // Nếu auth-service trả về lỗi
-    if (result?.error) {
-      throw new HttpException(result.message, result.statusCode || 401);
-    }
+    const result = await sendKafkaMessage(this.kafkaClient, 'auth.login', JSON.stringify(dto));
 
     // Lưu kết quả vào Redis (TTL 1 giờ) để lần sau đăng nhập nhanh hơn
     await this.cacheManager.set(cacheKey, result, this.CACHE_TTL);
@@ -212,13 +190,7 @@ export class AuthGwController implements OnModuleInit {
     }
 
     // Lấy từ Auth Microservice qua Kafka
-    const profile: any = await lastValueFrom(
-      this.kafkaClient.send('auth.get.user.by.id', userId),
-    );
-
-    if (profile?.error) {
-      throw new HttpException(profile.message, profile.statusCode || 404);
-    }
+    const profile = await sendKafkaMessage(this.kafkaClient, 'auth.get.user.by.id', userId);
 
     // Lưu vào cache
     await this.cacheManager.set(cacheKey, profile, this.CACHE_TTL);

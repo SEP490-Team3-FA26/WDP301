@@ -1,0 +1,62 @@
+{{- if .Values.gateway.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: backend-gateway
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.gateway.replicaCount }}
+  selector:
+    matchLabels:
+      app: backend-gateway
+  template:
+    metadata:
+      labels:
+        app: backend-gateway
+        version: {{ .Values.gateway.image.tag | quote }}
+    spec:
+      containers:
+        - name: backend-gateway
+          image: "{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["npm", "run", "start:gateway"]
+          ports:
+            - name: http
+              containerPort: 4000
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: backend-secret
+          env:
+            {{- range $key, $value := .Values.gateway.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.gateway.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.gateway.readinessProbe | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-svc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: backend-gateway
+spec:
+  type: {{ .Values.gateway.service.type }}
+  selector:
+    app: backend-gateway
+  ports:
+    - port: {{ .Values.gateway.service.port }}
+      targetPort: 4000
+      protocol: TCP
+      name: http
+{{- end }}

@@ -1,0 +1,37 @@
+{{- if .Values.auth.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-auth
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: backend-auth
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.auth.replicaCount }}
+  selector:
+    matchLabels:
+      app: backend-auth
+  template:
+    metadata:
+      labels:
+        app: backend-auth
+        version: {{ .Values.auth.image.tag | quote }}
+    spec:
+      containers:
+        - name: backend-auth
+          image: "{{ .Values.auth.image.repository }}:{{ .Values.auth.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["npm", "run", "start:auth"]
+          envFrom:
+            - secretRef:
+                name: backend-secret
+          env:
+            {{- range $key, $value := .Values.auth.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.auth.resources | nindent 12 }}
+{{- end }}
