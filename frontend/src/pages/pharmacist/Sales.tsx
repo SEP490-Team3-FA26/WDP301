@@ -60,12 +60,32 @@ export function Sales() {
 // 💊 PRESCRIPTION VIEW (BÁN THEO ĐƠN)
 // ==========================================
 function PrescriptionView() {
+  const [prescriptionMode, setPrescriptionMode] = useState<"QR" | "MANUAL">("QR");
   const [prescriptionCode, setPrescriptionCode] = useState("RX-99281-HAN");
-  const [prescription, setPrescription] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
   
+  // Patient & Doctor state (For manual entry & e-Rx)
+  const [patientName, setPatientName] = useState("");
+  const [patientAge, setPatientAge] = useState("");
+  const [patientGender, setPatientGender] = useState("Nam");
+  const [patientPhone, setPatientPhone] = useState("");
+  
+  const [doctorName, setDoctorName] = useState("");
+  const [doctorSpecialty, setDoctorSpecialty] = useState("");
+  const [hospitalName, setHospitalName] = useState("");
+  const [hospitalCode, setHospitalCode] = useState("");
+
+  // Cart state for prescription items
+  const [prescriptionItems, setPrescriptionItems] = useState<any[]>([]);
+
+  // Search medicines state (direct inline search)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+
+  // DB Prescriptions for selection
+  const [dbPrescriptions, setDbPrescriptions] = useState<any[]>([]);
+
   // Checkout States
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [remarks, setRemarks] = useState("");
@@ -77,27 +97,90 @@ function PrescriptionView() {
   const [isScanning, setIsScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState("");
 
-  // Tự động load đơn đầu tiên để demo cho đẹp
+  // Load prescriptions from DB
+  const fetchDbPrescriptions = async () => {
+    try {
+      const res = await fetch("/api/prescriptions");
+      if (res.ok) {
+        const data = await res.json();
+        setDbPrescriptions(data || []);
+      }
+    } catch (err) {
+      console.error("Lỗi lấy danh sách đơn thuốc:", err);
+    }
+  };
+
   useEffect(() => {
-    fetchPrescription("RX-99281-HAN");
+    fetchDbPrescriptions();
   }, []);
+
+  // Search query debounce for direct medicine search
+  useEffect(() => {
+    if (!searchQuery) {
+      setSearchResults([]);
+      return;
+    }
+    const delay = setTimeout(() => {
+      searchMedicines(searchQuery);
+    }, 300);
+    return () => clearTimeout(delay);
+  }, [searchQuery]);
+
+  const searchMedicines = async (query: string) => {
+    try {
+      const res = await fetch(`/api/medicines?limit=10&search=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (res.ok) {
+        setSearchResults(data.data || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Tự động load đơn điện tử đầu tiên để demo cho đẹp
+  useEffect(() => {
+    if (prescriptionMode === "QR") {
+      fetchPrescription("RX-99281-HAN");
+    } else {
+      // Clear forms for manual prescription
+      setPatientName("");
+      setPatientAge("");
+      setPatientGender("Nam");
+      setPatientPhone("");
+      setDoctorName("");
+      setDoctorSpecialty("");
+      setHospitalName("");
+      setHospitalCode("");
+      setPrescriptionItems([]);
+      setPrescriptionCode("");
+    }
+  }, [prescriptionMode]);
 
   const fetchPrescription = async (code: string) => {
     if (!code) return;
     setLoading(true);
     setError("");
-    setSuccessMsg("");
     try {
       const res = await fetch(`/api/prescriptions/${code}`);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || "Không tìm thấy đơn thuốc điện tử.");
       }
-      setPrescription(data);
+      // Populate fields from fetched prescription
+      setPatientName(data.patientName);
+      setPatientAge(data.patientAge.toString());
+      setPatientGender(data.patientGender);
+      setPatientPhone(data.patientPhone);
+      setDoctorName(data.doctorName);
+      setDoctorSpecialty(data.doctorSpecialty);
+      setHospitalName(data.hospitalName);
+      setHospitalCode(data.hospitalCode);
+      setPrescriptionItems(data.items);
       setPrescriptionCode(code);
     } catch (err: any) {
       setError(err.message || "Lỗi kết nối máy chủ");
-      setPrescription(null);
+      setPrescriptionItems([]);
     } finally {
       setLoading(false);
     }
@@ -109,25 +192,78 @@ function PrescriptionView() {
     setTimeout(() => {
       setIsScanning(false);
       setShowQRModal(false);
+      setPrescriptionMode("QR");
       fetchPrescription(code);
     }, 1500);
   };
 
+  const handleAddMedicineDirect = (med: any) => {
+    const existing = prescriptionItems.find(it => it.medicineId === med.id);
+    if (existing) {
+      if (existing.quantity >= med.stock) {
+        alert("Đã vượt quá số lượng tồn kho khả dụng của thuốc!");
+        return;
+      }
+      setPrescriptionItems(prescriptionItems.map(it => 
+        it.medicineId === med.id 
+          ? { ...it, quantity: it.quantity + 1 } 
+          : it
+      ));
+    } else {
+      if (med.stock <= 0) {
+        alert("Thuốc này đã hết hàng khả dụng trong kho!");
+        return;
+      }
+      setPrescriptionItems([...prescriptionItems, {
+        medicineId: med.id,
+        name: med.name,
+        active_ingredient: med.active_ingredient,
+        price: med.price,
+        quantity: 1,
+        dosage: "Ngày uống 2 lần, mỗi lần 1 viên sau ăn.",
+        unit: med.unit,
+        stock: med.stock,
+        expiry: med.expiry,
+        status: "In Stock"
+      }]);
+    }
+
+    // Reset search
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
   const handleCheckout = async () => {
-    if (!prescription) return;
+    if (prescriptionItems.length === 0) {
+      setError("Vui lòng thêm ít nhất một loại thuốc vào đơn kê.");
+      return;
+    }
+    if (!patientName || !doctorName) {
+      setError("Vui lòng điền tên bệnh nhân và tên bác sĩ kê đơn.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
+      const code = prescriptionMode === "QR" && prescriptionCode ? prescriptionCode : `PRX-HAND-${Math.floor(10000 + Math.random() * 90000)}`;
       const payload = {
-        prescriptionCode: prescription.prescriptionCode,
+        prescriptionCode: code,
         type: "PRESCRIPTION",
-        items: prescription.items.map((it: any) => ({
+        isManualPrescription: prescriptionMode === "MANUAL",
+        items: prescriptionItems.map((it: any) => ({
           medicineId: it.medicineId,
-          quantity: it.quantity
+          quantity: it.quantity,
+          dosage: it.dosage || "Ngày uống 2 lần, mỗi lần 1 viên sau ăn."
         })),
         paymentMethod,
-        patientName: prescription.patientName,
-        patientPhone: prescription.patientPhone,
+        patientName,
+        patientPhone,
+        patientAge: patientAge ? Number(patientAge) : 30,
+        patientGender,
+        doctorName,
+        doctorSpecialty,
+        hospitalName,
+        hospitalCode,
         soldBy: "Dược sĩ Trần Thị A"
       };
 
@@ -143,8 +279,18 @@ function PrescriptionView() {
 
       setInvoiceData(result);
       setShowInvoiceModal(true);
-      setPrescription(null); // Clear form sau khi bán
+      
+      // Clear forms
+      setPrescriptionItems([]);
+      setPatientName("");
+      setPatientAge("");
+      setPatientPhone("");
+      setDoctorName("");
+      setDoctorSpecialty("");
+      setHospitalName("");
+      setHospitalCode("");
       setPrescriptionCode("");
+      fetchDbPrescriptions();
     } catch (err: any) {
       setError(err.message || "Lỗi thanh toán");
     } finally {
@@ -153,18 +299,18 @@ function PrescriptionView() {
   };
 
   // Tính toán tiền đơn thuốc
-  const subtotal = prescription?.items?.reduce((sum: number, it: any) => sum + (it.price * it.quantity), 0) || 0;
+  const subtotal = prescriptionItems.reduce((sum: number, it: any) => sum + (it.price * it.quantity), 0);
   const vipDiscount = Math.round(subtotal * 0.05); // 5% discount
   const vat = Math.round((subtotal - vipDiscount) * 0.08); // 8% VAT
   const total = subtotal - vipDiscount + vat;
 
-  // Kiểm tra tương tác thuốc nguy hiểm (Ví dụ: Clopidogrel + Omeprazole)
-  const hasClopidogrel = prescription?.items?.some((it: any) => it.active_ingredient.toLowerCase().includes("clopidogrel") || it.name.toLowerCase().includes("plavix"));
-  const hasOmeprazole = prescription?.items?.some((it: any) => it.active_ingredient.toLowerCase().includes("omeprazole") || it.name.toLowerCase().includes("losec") || it.name.toLowerCase().includes("ecosip"));
+  // Kiểm tra tương tác thuốc nguy hiểm (Clopidogrel + Omeprazole)
+  const hasClopidogrel = prescriptionItems.some((it: any) => it.active_ingredient.toLowerCase().includes("clopidogrel") || it.name.toLowerCase().includes("plavix") || it.name.toLowerCase().includes("platarex"));
+  const hasOmeprazole = prescriptionItems.some((it: any) => it.active_ingredient.toLowerCase().includes("omeprazole") || it.name.toLowerCase().includes("losec") || it.name.toLowerCase().includes("ecosip"));
   const drugInteractionWarning = hasClopidogrel && hasOmeprazole;
 
   // Kiểm tra có sản phẩm nào cận HSD hoặc hết hàng
-  const hasNearExpiry = prescription?.items?.some((it: any) => {
+  const hasNearExpiry = prescriptionItems.some((it: any) => {
     if (!it.expiry) return false;
     const diffTime = new Date(it.expiry).getTime() - new Date().getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -176,35 +322,177 @@ function PrescriptionView() {
       {/* Cột trái: Chi tiết đơn & Giỏ hàng */}
       <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-6 pb-6">
         
-        {/* Thanh tìm kiếm đơn thuốc & Quét QR */}
-        <div className="bg-white rounded-[16px] border border-slate-200 p-5 shadow-sm flex flex-col md:flex-row items-center gap-4 shrink-0">
-          <div className="flex-1 relative w-full">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-              <FileText size={18} />
+        {/* Toggle Mode: Nhập tay hay Quét QR */}
+        <div className="bg-white p-3 rounded-2xl border border-slate-200 flex gap-2 shadow-sm shrink-0">
+          <button
+            onClick={() => setPrescriptionMode("QR")}
+            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all uppercase flex items-center justify-center gap-2 ${
+              prescriptionMode === "QR"
+                ? "bg-[#0057cd] text-white shadow-md"
+                : "bg-transparent text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <QrCode size={18} /> Bán qua đơn điện tử (Quét QR)
+          </button>
+          <button
+            onClick={() => setPrescriptionMode("MANUAL")}
+            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all uppercase flex items-center justify-center gap-2 ${
+              prescriptionMode === "MANUAL"
+                ? "bg-[#0057cd] text-white shadow-md"
+                : "bg-transparent text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <FileText size={18} /> Nhập đơn tay (Đơn giấy thuốc kê toa)
+          </button>
+        </div>
+
+        {/* Cột điều khiển Đơn điện tử QR */}
+        {prescriptionMode === "QR" && (
+          <div className="bg-white rounded-[16px] border border-slate-200 p-5 shadow-sm flex flex-col lg:flex-row items-end gap-4 shrink-0">
+            <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wide">Chọn đơn từ database (Thử nghiệm)</label>
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      fetchPrescription(e.target.value);
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                >
+                  <option value="">-- Click chọn đơn từ database --</option>
+                  {dbPrescriptions.map((p) => (
+                    <option key={p.id} value={p.prescriptionCode}>
+                      {p.prescriptionCode} - {p.patientName} ({p.status === "FILLED" ? "Đã bán" : "Chờ bán"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wide">Nhập mã đơn thuốc điện tử</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                    <FileText size={18} />
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Mã đơn (Ví dụ: RX-99281-HAN)..."
+                    value={prescriptionCode}
+                    onChange={(e) => setPrescriptionCode(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && fetchPrescription(prescriptionCode)}
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" 
+                  />
+                </div>
+              </div>
             </div>
-            <input 
-              type="text" 
-              placeholder="Nhập mã đơn thuốc điện tử (Ví dụ: RX-99281-HAN)..."
-              value={prescriptionCode}
-              onChange={(e) => setPrescriptionCode(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && fetchPrescription(prescriptionCode)}
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" 
-            />
+            <div className="flex gap-3 w-full lg:w-auto shrink-0">
+              <button 
+                onClick={() => fetchPrescription(prescriptionCode)}
+                disabled={loading}
+                className="flex-1 lg:flex-none px-6 py-3 bg-[#0057cd] hover:bg-[#00419e] text-white font-bold rounded-[12px] shadow-sm transition-colors"
+              >
+                {loading ? "Đang tải..." : "Tra cứu"}
+              </button>
+              <button 
+                onClick={() => setShowQRModal(true)}
+                className="flex-1 lg:flex-none px-5 py-3 border-2 border-[#b1c5ff] text-[#0057cd] font-bold rounded-[12px] hover:bg-[#f2f3ff] transition-all flex items-center justify-center gap-2"
+              >
+                <QrCode size={18} /> Quét mã QR
+              </button>
+            </div>
           </div>
-          <div className="flex gap-3 w-full md:w-auto shrink-0">
-            <button 
-              onClick={() => fetchPrescription(prescriptionCode)}
-              disabled={loading}
-              className="flex-1 md:flex-none px-6 py-3 bg-[#0057cd] hover:bg-[#00419e] text-white font-bold rounded-[12px] shadow-sm transition-colors"
-            >
-              {loading ? "Đang tải..." : "Tra cứu"}
-            </button>
-            <button 
-              onClick={() => setShowQRModal(true)}
-              className="flex-1 md:flex-none px-5 py-3 border-2 border-[#b1c5ff] text-[#0057cd] font-bold rounded-[12px] hover:bg-[#f2f3ff] transition-all flex items-center justify-center gap-2"
-            >
-              <QrCode size={18} /> Quét mã QR
-            </button>
+        )}
+
+        {/* Thông tin Đơn thuốc & Người kê toa (Luôn hiển thị và có thể chỉnh sửa) */}
+        <div className="bg-white rounded-[16px] border border-slate-200 p-6 shadow-sm flex flex-col gap-5 shrink-0">
+          <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-2">
+            <Stethoscope size={18} className="text-[#0057cd]" /> Thông tin bệnh nhân & bác sĩ kê đơn
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Tên bệnh nhân *</label>
+              <input 
+                type="text" 
+                value={patientName} 
+                onChange={(e) => setPatientName(e.target.value)}
+                placeholder="Nguyễn Văn A" 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Tuổi</label>
+              <input 
+                type="number" 
+                value={patientAge} 
+                onChange={(e) => setPatientAge(e.target.value)}
+                placeholder="30" 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Giới tính</label>
+              <select 
+                value={patientGender} 
+                onChange={(e) => setPatientGender(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
+              >
+                <option>Nam</option>
+                <option>Nữ</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Số điện thoại</label>
+              <input 
+                type="text" 
+                value={patientPhone} 
+                onChange={(e) => setPatientPhone(e.target.value)}
+                placeholder="09xx xxx xxx" 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Bác sĩ kê đơn *</label>
+              <input 
+                type="text" 
+                value={doctorName} 
+                onChange={(e) => setDoctorName(e.target.value)}
+                placeholder="BS. Lê Văn B" 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Chuyên khoa</label>
+              <input 
+                type="text" 
+                value={doctorSpecialty} 
+                onChange={(e) => setDoctorSpecialty(e.target.value)}
+                placeholder="Nội khoa" 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Bệnh viện / Phòng khám</label>
+              <input 
+                type="text" 
+                value={hospitalName} 
+                onChange={(e) => setHospitalName(e.target.value)}
+                placeholder="Bệnh viện Bạch Mai" 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Mã cơ sở y tế</label>
+              <input 
+                type="text" 
+                value={hospitalCode} 
+                onChange={(e) => setHospitalCode(e.target.value)}
+                placeholder="BM-1029" 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+              />
+            </div>
           </div>
         </div>
 
@@ -215,67 +503,50 @@ function PrescriptionView() {
           </div>
         )}
 
-        {/* Nếu chưa quét đơn */}
-        {!prescription && !loading && (
-          <div className="bg-white rounded-[24px] border-2 border-dashed border-slate-200 flex-1 min-h-[300px] flex flex-col items-center justify-center p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-[#f2f3ff] flex items-center justify-center text-[#0057cd] mb-4 border border-[#b1c5ff] animate-pulse">
-              <QrCode size={32} />
+        {/* Tìm kiếm và thêm thuốc trực tiếp (Inline Search Bar) */}
+        <div className="bg-white rounded-[16px] border border-slate-200 p-5 shadow-sm flex flex-col gap-3 shrink-0">
+          <label className="block text-xs font-black text-slate-700 uppercase tracking-wide">
+            Tìm thuốc kê đơn từ kho và thêm trực tiếp
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+              <SearchIcon size={18} />
             </div>
-            <h3 className="text-[18px] font-bold text-slate-800">Chưa có đơn thuốc nào được chọn</h3>
-            <p className="text-slate-500 text-sm max-w-sm mt-2">
-              Vui lòng nhập mã đơn thuốc ở trên hoặc nhấn **Quét mã QR** để mô phỏng quét đơn thuốc điện tử từ bệnh viện.
-            </p>
+            <input 
+              type="text" 
+              placeholder="Nhập tên thuốc, hoạt chất hoặc mã thuốc để tìm..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" 
+            />
+
+            {/* Dropdown kết quả tìm kiếm */}
+            {searchResults.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl border border-slate-200 shadow-xl max-h-60 overflow-y-auto z-40 divide-y divide-slate-100">
+                {searchResults.map((med) => (
+                  <button 
+                    key={med.id}
+                    onClick={() => handleAddMedicineDirect(med)}
+                    className="w-full p-4 text-left hover:bg-slate-50 transition-colors flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-bold text-slate-900 text-sm">{med.name}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{med.category} | Hoạt chất: {med.active_ingredient || "N/A"}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-[#0057cd] text-sm">{med.price.toLocaleString()}₫</div>
+                      <div className="text-xs text-slate-500 mt-0.5 font-semibold">Tồn kho: {med.stock} {med.unit}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
-        {/* Thông tin đơn thuốc đang chọn */}
-        {prescription && (
+        {/* Bảng danh sách thuốc kê đơn */}
+        {prescriptionItems.length > 0 ? (
           <>
-            {/* Thẻ thông tin đơn */}
-            <div className="bg-white rounded-[16px] border border-slate-200 p-6 shadow-sm shrink-0">
-              <div className="flex flex-wrap items-start justify-between gap-4 mb-5 border-b border-slate-100 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-[#f2f3ff] text-[#0057cd] rounded-xl border border-blue-50">
-                    <Stethoscope size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-[17px] font-black text-slate-900 leading-tight">Đơn thuốc: {prescription.prescriptionCode}</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">Nguồn: Đơn thuốc quốc gia điện tử (e-Prescription)</p>
-                  </div>
-                </div>
-                <div>
-                  {prescription.status === "FILLED" ? (
-                    <span className="px-3.5 py-1 bg-red-100 text-red-800 border border-red-200 rounded-full text-xs font-bold uppercase tracking-wider">
-                      Đã bán / Filled
-                    </span>
-                  ) : (
-                    <span className="px-3.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full text-xs font-bold uppercase tracking-wider">
-                      Chờ thanh toán / Pending
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="border-l-2 border-[#b1c5ff] pl-4">
-                  <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-widest">Bệnh nhân / Patient</div>
-                  <div className="font-bold text-[15px] text-slate-900">{prescription.patientName}</div>
-                  <div className="text-[12px] text-slate-500 mt-0.5">
-                    {prescription.patientGender}, {prescription.patientAge} tuổi | {prescription.patientPhone}
-                  </div>
-                </div>
-                <div className="border-l-2 border-[#b1c5ff] pl-4">
-                  <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-widest">Bác sĩ / Doctor</div>
-                  <div className="font-bold text-[15px] text-slate-900">{prescription.doctorName}</div>
-                  <div className="text-[12px] text-slate-500 mt-0.5">Khoa: {prescription.doctorSpecialty}</div>
-                </div>
-                <div className="border-l-2 border-[#b1c5ff] pl-4">
-                  <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-widest">Nơi kê đơn / Hospital</div>
-                  <div className="font-bold text-[15px] text-slate-900">{prescription.hospitalName}</div>
-                  <div className="text-[12px] text-slate-500 mt-0.5">Mã BV: {prescription.hospitalCode}</div>
-                </div>
-              </div>
-            </div>
-
             {/* Cảnh báo tương tác thuốc nguy hiểm */}
             {drugInteractionWarning && (
               <div className="bg-[#ffdad6] border border-[#93000a] rounded-[16px] p-5 shadow-sm flex items-start gap-4 animate-bounce">
@@ -293,11 +564,11 @@ function PrescriptionView() {
               </div>
             )}
 
-            {/* Danh mục thuốc kê trong đơn */}
+            {/* Danh mục thuốc kê đơn */}
             <div className="bg-white rounded-[16px] border border-slate-200 shadow-sm overflow-hidden flex-1 flex flex-col min-h-[300px]">
               <div className="px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b border-slate-100">
                 <h2 className="text-[16px] font-black text-slate-900 tracking-tight flex items-center gap-2">
-                  <ShoppingCart size={18} className="text-[#0057cd]" /> Danh mục thuốc cấp phát
+                  <ShoppingCart size={18} className="text-[#0057cd]" /> Danh mục thuốc kê đơn
                 </h2>
                 {hasNearExpiry && (
                   <span className="px-3 py-1 bg-amber-50 text-[#a63b00] border border-amber-200 rounded-lg text-[11px] font-bold uppercase tracking-wider animate-pulse flex items-center gap-1.5">
@@ -312,15 +583,16 @@ function PrescriptionView() {
                     <tr>
                       <th className="px-6 py-4">Tên thuốc / Item</th>
                       <th className="px-6 py-4">Hoạt chất / Ingredient</th>
-                      <th className="px-6 py-4">Liều dùng / Dosage</th>
+                      <th className="px-6 py-4">Liều dùng / Dosage (Sửa trực tiếp)</th>
                       <th className="px-4 py-4 text-center">Yêu cầu</th>
                       <th className="px-4 py-4 text-center">Tồn kho</th>
                       <th className="px-6 py-4 text-right">Đơn giá</th>
                       <th className="px-6 py-4 text-right">Thành tiền</th>
+                      <th className="px-4 py-4 text-center">Xóa</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {prescription.items.map((it: any) => {
+                    {prescriptionItems.map((it: any) => {
                       const isOutOfStock = it.stock < it.quantity;
                       
                       // Kiểm tra xem HSD của lô xuất kho sắp tới có cận hạn hay không (< 180 ngày)
@@ -347,13 +619,61 @@ function PrescriptionView() {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-slate-500 text-[13px]">{it.active_ingredient}</td>
-                          <td className="px-6 py-4 text-slate-600 italic text-[12px]">{it.dosage}</td>
-                          <td className="px-4 py-4 text-center font-bold text-slate-900 text-[15px]">{it.quantity}</td>
+                          <td className="px-6 py-4">
+                            <input 
+                              type="text" 
+                              value={it.dosage}
+                              onChange={(e) => {
+                                setPrescriptionItems(prescriptionItems.map(p => 
+                                  p.medicineId === it.medicineId 
+                                    ? { ...p, dosage: e.target.value } 
+                                    : p
+                                ));
+                              }}
+                              placeholder="Ví dụ: Ngày uống 2 lần, mỗi lần 1 viên..."
+                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+                            />
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button 
+                                onClick={() => {
+                                  if (it.quantity > 1) {
+                                    setPrescriptionItems(prescriptionItems.map(p => p.medicineId === it.medicineId ? { ...p, quantity: p.quantity - 1 } : p));
+                                  }
+                                }}
+                                className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100"
+                              >
+                                <Minus size={12} />
+                              </button>
+                              <span className="font-bold text-slate-900 text-[14px] w-6 text-center">{it.quantity}</span>
+                              <button 
+                                onClick={() => {
+                                  if (it.quantity < it.stock) {
+                                    setPrescriptionItems(prescriptionItems.map(p => p.medicineId === it.medicineId ? { ...p, quantity: p.quantity + 1 } : p));
+                                  } else {
+                                    alert("Vượt quá tồn kho khả dụng!");
+                                  }
+                                }}
+                                className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          </td>
                           <td className={`px-4 py-4 text-center font-bold text-[14px] ${isOutOfStock ? "text-red-600 bg-red-50" : "text-emerald-700"}`}>
                             {it.stock}
                           </td>
                           <td className="px-6 py-4 text-right font-medium text-slate-600">{it.price.toLocaleString()}₫</td>
                           <td className="px-6 py-4 text-right font-bold text-slate-900">{(it.price * it.quantity).toLocaleString()}₫</td>
+                          <td className="px-4 py-4 text-center">
+                            <button 
+                              onClick={() => setPrescriptionItems(prescriptionItems.filter(p => p.medicineId !== it.medicineId))}
+                              className="text-red-500 hover:text-red-800"
+                            >
+                              <XCircle size={18} />
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -362,6 +682,16 @@ function PrescriptionView() {
               </div>
             </div>
           </>
+        ) : (
+          <div className="bg-white rounded-[24px] border-2 border-dashed border-slate-200 flex-1 min-h-[300px] flex flex-col items-center justify-center p-8 text-center">
+            <div className="w-16 h-16 rounded-full bg-[#f2f3ff] flex items-center justify-center text-[#0057cd] mb-4 border border-[#b1c5ff]">
+              <FileText size={32} />
+            </div>
+            <h3 className="text-[18px] font-bold text-slate-800">Đơn thuốc chưa có thuốc kê</h3>
+            <p className="text-slate-500 text-sm max-w-sm mt-2">
+              Vui lòng gõ tìm kiếm thuốc ở thanh tìm kiếm phía trên để thêm trực tiếp vào danh sách đơn thuốc kê.
+            </p>
+          </div>
         )}
       </div>
 
@@ -452,7 +782,7 @@ function PrescriptionView() {
         <div className="flex flex-col gap-3 mt-auto">
           <button 
             onClick={handleCheckout}
-            disabled={!prescription || prescription.status === "FILLED" || loading}
+            disabled={prescriptionItems.length === 0 || loading}
             className="w-full bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-[16px] py-4.5 shadow-sm transition-all flex flex-col items-center justify-center gap-1 group relative overflow-hidden"
           >
             <div className="flex items-center gap-2.5 font-black text-[16px] uppercase tracking-wide">
@@ -462,7 +792,7 @@ function PrescriptionView() {
             <div className="text-[10px] opacity-75 font-semibold">Tự động xuất kho theo FIFO</div>
           </button>
           <button 
-            onClick={() => { setPrescription(null); setPrescriptionCode(""); }}
+            onClick={() => { setPrescriptionItems([]); setPatientName(""); setDoctorName(""); setPrescriptionCode(""); }}
             className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-[16px] py-3.5 shadow-sm transition-colors flex items-center justify-center gap-2 font-bold text-[14px]"
           >
             <XCircle size={18} /> Hủy bỏ đơn đang chọn
@@ -471,7 +801,7 @@ function PrescriptionView() {
       </div>
 
       {/* =======================================
-       * 🔍 MODAL QUÉT QR ĐIỆN TỬ GIẢ LẬP
+       * 🔎 MODAL QUÉT QR ĐIỆN TỬ GIẢ LẬP
        * ======================================= */}
       {showQRModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -623,10 +953,22 @@ function PrescriptionView() {
                       <span className="font-bold">{invoiceData.data.prescriptionCode}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
+                  <div className="flex justify-between flex-wrap gap-x-4">
                     <span>Khách hàng:</span>
                     <span>{invoiceData.data.patientName || "Khách lẻ"}</span>
                   </div>
+                  {doctorName && (
+                    <div className="flex justify-between flex-wrap gap-x-4">
+                      <span>Bác sĩ kê đơn:</span>
+                      <span>{doctorName}</span>
+                    </div>
+                  )}
+                  {hospitalName && (
+                    <div className="flex justify-between flex-wrap gap-x-4">
+                      <span>Nơi kê đơn:</span>
+                      <span>{hospitalName}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Danh sách thuốc thực xuất & lô hàng allocated */}

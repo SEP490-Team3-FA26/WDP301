@@ -241,6 +241,26 @@ export class InventoryServiceService {
     };
   }
 
+  async listPrescriptions() {
+    this.logger.log('Listing all prescriptions from database');
+    const prescriptions = await this.prescriptionModel.find().sort({ createdAt: -1 }).exec();
+    return prescriptions.map(p => ({
+      id: p._id.toString(),
+      prescriptionCode: p.prescriptionCode,
+      patientName: p.patientName,
+      patientAge: p.patientAge,
+      patientGender: p.patientGender,
+      patientPhone: p.patientPhone,
+      doctorName: p.doctorName,
+      doctorSpecialty: p.doctorSpecialty,
+      hospitalName: p.hospitalName,
+      hospitalCode: p.hospitalCode,
+      items: p.items,
+      status: p.status,
+      createdAt: (p as any).createdAt
+    }));
+  }
+
   async createSalesOrder(data: any) {
     this.logger.log(`Creating Sales Order. Type: ${data.type}`);
 
@@ -251,7 +271,29 @@ export class InventoryServiceService {
       }
       prescription = await this.prescriptionModel.findOne({ prescriptionCode: data.prescriptionCode }).exec();
       if (!prescription) {
-        throw new RpcException({ message: `Không tìm thấy đơn thuốc: ${data.prescriptionCode}` });
+        // Automatically save prescription if it is a manual paper prescription or flag is manual
+        if (data.isManualPrescription || data.prescriptionCode.startsWith('PRX-HAND-')) {
+          prescription = new this.prescriptionModel({
+            prescriptionCode: data.prescriptionCode,
+            patientName: data.patientName || 'Khách hàng kê đơn',
+            patientAge: data.patientAge ? Number(data.patientAge) : 30,
+            patientGender: data.patientGender || 'Nam',
+            patientPhone: data.patientPhone || '',
+            doctorName: data.doctorName || 'Bác sĩ kê đơn',
+            doctorSpecialty: data.doctorSpecialty || 'Đa khoa',
+            hospitalName: data.hospitalName || 'Bệnh viện',
+            hospitalCode: data.hospitalCode || 'BV-01',
+            items: data.items.map((it: any) => ({
+              medicineId: it.medicineId,
+              quantity: it.quantity,
+              dosage: it.dosage || 'Ngày uống 2 lần, mỗi lần 1 viên sau ăn'
+            })),
+            status: 'PENDING'
+          });
+          await prescription.save();
+        } else {
+          throw new RpcException({ message: `Không tìm thấy đơn thuốc: ${data.prescriptionCode}` });
+        }
       }
       if (prescription.status === 'FILLED') {
         throw new RpcException({ message: 'Đơn thuốc điện tử này đã được bán hoàn tất trước đó' });

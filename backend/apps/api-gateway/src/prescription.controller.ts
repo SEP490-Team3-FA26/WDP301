@@ -11,7 +11,13 @@ export class PrescriptionController implements OnModuleInit {
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
       'inventory.prescription.get',
+      'inventory.prescription.list',
     ]);
+  }
+
+  @Get()
+  async listPrescriptions() {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.list', {});
   }
 
   @Get(':code')
