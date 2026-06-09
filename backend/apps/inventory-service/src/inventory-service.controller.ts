@@ -67,6 +67,16 @@ export class InventoryServiceController {
     }
   }
 
+  @MessagePattern('inventory.prescription.list')
+  async listPrescriptions() {
+    try {
+      return await this.inventoryServiceService.listPrescriptions();
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách đơn thuốc');
+    }
+  }
+
   @MessagePattern('inventory.sale.create')
   async createSalesOrder(@Payload() data: any) {
     try {
