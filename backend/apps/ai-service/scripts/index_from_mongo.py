@@ -9,11 +9,37 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-try:
-    from fastembed import TextEmbedding
-    embedding_model = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-except:
-    embedding_model = None
+import httpx
+
+load_dotenv()
+
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+
+def get_embeddings_cohere(texts: list[str]) -> list[list[float]]:
+    if not COHERE_API_KEY:
+        print("Warning: COHERE_API_KEY is not configured in env.")
+        return [[0.0] * 384] * len(texts)
+    try:
+        response = httpx.post(
+            "https://api.cohere.com/v2/embed",
+            headers={
+                "Authorization": f"Bearer {COHERE_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "texts": texts,
+                "model": "embed-multilingual-light-v3.0",
+                "input_type": "search_document",
+                "embedding_types": ["float"]
+            },
+            timeout=30.0
+        )
+        response.raise_for_status()
+        data = response.json()
+        return [[float(x) for x in emb] for emb in data["embeddings"]["float"]]
+    except Exception as e:
+        print(f"Error calling Cohere API: {e}")
+        return [[0.0] * 384] * len(texts)
 
 def clean_price(price_raw):
     if not price_raw:
@@ -114,11 +140,7 @@ def main():
                 })
                 
             # Batch embed
-            if embedding_model:
-                embeddings_gen = embedding_model.embed(texts)
-                vectors = [[float(x) for x in emb] for emb in embeddings_gen]
-            else:
-                vectors = [[0.0] * 384] * len(batch)
+            vectors = get_embeddings_cohere(texts)
                 
             points = []
             for idx, payload in enumerate(batch_items):
@@ -173,11 +195,7 @@ def main():
                 "unit": batch_item.get("unit") or "Hộp"
             })
             
-        if embedding_model:
-            embeddings_gen = embedding_model.embed(texts)
-            vectors = [[float(x) for x in emb] for emb in embeddings_gen]
-        else:
-            vectors = [[0.0] * 384] * len(batch)
+        vectors = get_embeddings_cohere(texts)
             
         points = []
         for idx, payload in enumerate(batch_items):

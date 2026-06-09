@@ -1,34 +1,46 @@
 import os
 from qdrant_client import QdrantClient
-from fastembed import TextEmbedding
+import httpx
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+
 try:
     # Use synchronous client for simple retrieve
     qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
 except:
     qdrant = None
 
-# Tải mô hình đa ngôn ngữ siêu nhẹ chạy Local (không tốn API)
-try:
-    embedding_model = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-except Exception as e:
-    print(f"Warning: Could not load embedding model: {e}")
-    embedding_model = None
-
-import asyncio
-from functools import lru_cache
-
-@lru_cache(maxsize=1000)
-def get_embedding_sync(text: str) -> list[float]:
-    if not embedding_model:
-        return [0.0] * 384
-    # e5 models require 'query: ' prefix for search queries, but for simplicity we just embed
-    embeddings = list(embedding_model.embed([f"query: {text}"]))
-    return [float(x) for x in embeddings[0]]
-
 async def get_embedding(text: str) -> list[float]:
-    return await asyncio.to_thread(get_embedding_sync, text)
+    """
+    Tạo embedding bằng Cohere API (model: embed-multilingual-light-v3.0, size: 384)
+    """
+    if not COHERE_API_KEY:
+        print("Warning: COHERE_API_KEY is not configured in env.")
+        return [0.0] * 384
+        
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.cohere.com/v2/embed",
+                headers={
+                    "Authorization": f"Bearer {COHERE_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "texts": [text],
+                    "model": "embed-multilingual-light-v3.0",
+                    "input_type": "search_query",
+                    "embedding_types": ["float"]
+                },
+                timeout=10.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            return [float(x) for x in data["embeddings"]["float"][0]]
+    except Exception as e:
+        print(f"Error calling Cohere API: {e}")
+        return [0.0] * 384
 
 async def retrieve_medical_context(query: str, top_k: int = 3) -> str:
     """
