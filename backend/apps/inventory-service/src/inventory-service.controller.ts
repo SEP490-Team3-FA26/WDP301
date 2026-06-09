@@ -29,4 +29,31 @@ export class InventoryServiceController {
       throw new RpcException(error.message || 'Lỗi hệ thống khi tạo phiếu nhập kho');
     }
   }
+
+  @MessagePattern('inventory.po.list')
+  async listPurchaseOrders(@Payload() query: any) {
+    try {
+      return await this.inventoryServiceService.listPurchaseOrders(query);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách đơn nhập');
+    }
+  }
+
+  @MessagePattern('inventory.po.get_by_id')
+  async getPurchaseOrderById(@Payload() data: { id: string }) {
+    try {
+      return await this.inventoryServiceService.getPurchaseOrderById(data.id);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy chi tiết đơn nhập');
+    }
+  }
+
+  @MessagePattern('inventory.grn.list')
+  async listGoodsReceiptNotes() {
+    try {
+      return await this.inventoryServiceService.listGoodsReceiptNotes();
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách phiếu nhập kho');
+    }
+  }
 }

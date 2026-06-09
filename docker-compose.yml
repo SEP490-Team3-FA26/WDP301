@@ -46,6 +46,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - KAFKA_BROKERS=kafka:29092
+      - TS_NODE_TRANSPILE_ONLY=true
     command: sh -c "npm install && npm run dev:all"
     depends_on:
       - redis

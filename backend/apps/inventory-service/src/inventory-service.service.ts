@@ -96,6 +96,11 @@ export class InventoryServiceService {
         throw new RpcException({ message: `Sản phẩm ${item.medicineId} không có trong đơn đặt hàng` });
       }
 
+      // Kiểm tra nếu số lượng thực nhận lớn hơn số lượng đặt hàng
+      if (item.quantity > poItem.quantity) {
+        throw new RpcException({ message: `Số lượng thực nhận (${item.quantity}) không được vượt quá số lượng đặt hàng (${poItem.quantity})` });
+      }
+
       totalAmount += item.quantity * item.unitPrice;
 
       // Cập nhật hoặc tạo mới MedicineBatch
@@ -144,5 +149,21 @@ export class InventoryServiceService {
       message: 'Tạo phiếu nhập kho thành công, đã cập nhật số lô và tồn kho',
       data: grn
     };
+  }
+
+  async listPurchaseOrders(query: any = {}) {
+    const filter: any = {};
+    if (query.status) {
+      filter.status = query.status;
+    }
+    return this.poModel.find(filter).sort({ createdAt: -1 }).exec();
+  }
+
+  async getPurchaseOrderById(id: string) {
+    return this.poModel.findById(id).exec();
+  }
+
+  async listGoodsReceiptNotes() {
+    return this.grnModel.find().sort({ createdAt: -1 }).exec();
   }
 }
