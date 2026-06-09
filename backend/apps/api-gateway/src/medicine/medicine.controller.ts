@@ -151,17 +151,38 @@ export class MedicineController {
         if (category) aiServiceUrl += `&category=${encodeURIComponent(category)}`;
         if (classification) aiServiceUrl += `&classification=${encodeURIComponent(classification)}`;
         
-        const response = await fetch(aiServiceUrl);
-        if (!response.ok) {
-          throw new HttpException(
-            'Failed to fetch from AI Service',
-            HttpStatus.BAD_GATEWAY,
-          );
+        let aiData = [];
+        let aiTotal = 0;
+        let fetchSuccess = false;
+
+        try {
+          const response = await fetch(aiServiceUrl);
+          if (response.ok) {
+            const resJson = await response.json();
+            aiData = resJson.data || [];
+            aiTotal = resJson.total || aiData.length;
+            fetchSuccess = true;
+          }
+        } catch (err) {
+          console.warn('AI Service connection failed, falling back to database regex search:', err.message);
         }
-        
-        const resJson = await response.json();
-        const aiData = resJson.data || [];
-        const aiTotal = resJson.total || aiData.length;
+
+        if (!fetchSuccess) {
+          const filterQuery: any = {};
+          if (category) filterQuery.category = category;
+          if (classification) filterQuery.drug_classification = classification;
+          filterQuery.$or = [
+            { name: { $regex: search, $options: 'i' } },
+            { active_ingredient: { $regex: search, $options: 'i' } }
+          ];
+
+          const [fallbackData, fallbackTotal] = await Promise.all([
+            this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).exec(),
+            this.medicineModel.countDocuments(filterQuery).exec(),
+          ]);
+          aiData = fallbackData;
+          aiTotal = fallbackTotal;
+        }
 
         // Truy vấn lô hàng cho các kết quả từ AI Service
         const aiMedIds = aiData.map((med: any) => (med._id || med.id).toString());
