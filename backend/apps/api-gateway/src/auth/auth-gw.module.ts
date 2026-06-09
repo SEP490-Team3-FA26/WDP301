@@ -33,10 +33,13 @@ import { GoogleStrategy } from './strategies/google.strategy';
             client: {
               clientId: 'api-gateway',
               brokers: (config.get<string>('KAFKA_BROKERS', 'localhost:9092')).split(','),
+              connectionTimeout: 10000,
+              retry: { initialRetryTime: 1000, retries: 10 },
             },
             consumer: {
               groupId: 'api-gateway-group',
             },
+            producer: { allowAutoTopicCreation: true },
           },
         }),
         inject: [ConfigService],

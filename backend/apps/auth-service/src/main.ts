@@ -19,6 +19,8 @@ async function bootstrap() {
         client: {
           clientId: 'auth-service',
           brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+          connectionTimeout: 10000,
+          retry: { initialRetryTime: 1000, retries: 10 },
         },
         consumer: {
           // Consumer Group ID — tất cả các pod cùng group sẽ chia nhau xử lý message

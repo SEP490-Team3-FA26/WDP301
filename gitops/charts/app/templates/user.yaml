@@ -23,7 +23,6 @@ spec:
         - name: backend-user
           image: "{{ .Values.user.image.repository }}:{{ .Values.user.image.tag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          command: ["npm", "run", "start:user"]
           envFrom:
             - secretRef:
                 name: backend-secret

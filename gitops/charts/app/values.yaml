@@ -22,27 +22,29 @@ frontend:
     port: 3000
   resources:
     requests:
-      cpu: "100m"
-      memory: "128Mi"
+      cpu: "50m"
+      memory: "64Mi"
     limits:
-      cpu: "500m"
-      memory: "512Mi"
+      cpu: "200m"
+      memory: "256Mi"
   env:
     NEXT_PUBLIC_API_URL: "http://backend-svc:4000"
   livenessProbe:
     httpGet:
       path: /
       port: 3000
-    initialDelaySeconds: 20
-    periodSeconds: 15
-    failureThreshold: 3
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    failureThreshold: 5
+    timeoutSeconds: 5
   readinessProbe:
     httpGet:
       path: /
       port: 3000
-    initialDelaySeconds: 10
-    periodSeconds: 10
-    failureThreshold: 3
+    initialDelaySeconds: 15
+    periodSeconds: 15
+    failureThreshold: 5
+    timeoutSeconds: 5
 
 # ─────────────────────────────────────────────────────────────
 # Microservices (Split Backend)
@@ -59,10 +61,10 @@ gateway:
   resources:
     requests:
       cpu: "100m"
-      memory: "256Mi"
+      memory: "200Mi"
     limits:
-      cpu: "1000m"
-      memory: "1024Mi"
+      cpu: "800m"
+      memory: "512Mi"
   env:
     NODE_ENV: "production"
     PORT: "4000"
@@ -70,20 +72,23 @@ gateway:
     KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
     KAFKA_GROUP_ID: "wdp301-consumers"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
   livenessProbe:
     httpGet:
       path: /health
       port: 4000
-    initialDelaySeconds: 120
-    periodSeconds: 15
+    initialDelaySeconds: 90
+    periodSeconds: 30
     failureThreshold: 5
+    timeoutSeconds: 5
   readinessProbe:
     httpGet:
       path: /health
       port: 4000
     initialDelaySeconds: 60
-    periodSeconds: 10
+    periodSeconds: 15
     failureThreshold: 5
+    timeoutSeconds: 5
 
 auth:
   enabled: true
@@ -93,17 +98,18 @@ auth:
     tag: "latest"
   resources:
     requests:
-      cpu: "50m"
-      memory: "256Mi"
+      cpu: "100m"
+      memory: "128Mi"
     limits:
-      cpu: "500m"
-      memory: "1024Mi"
+      cpu: "600m"
+      memory: "512Mi"
   env:
     NODE_ENV: "production"
     APP_VERSION: "1.0.0"
     KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
     KAFKA_GROUP_ID: "wdp301-consumers"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
 
 user:
   enabled: true
@@ -113,17 +119,18 @@ user:
     tag: "latest"
   resources:
     requests:
-      cpu: "50m"
-      memory: "256Mi"
+      cpu: "100m"
+      memory: "128Mi"
     limits:
-      cpu: "500m"
-      memory: "1024Mi"
+      cpu: "600m"
+      memory: "512Mi"
   env:
     NODE_ENV: "production"
     APP_VERSION: "1.0.0"
     KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
     KAFKA_GROUP_ID: "wdp301-consumers"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
 
 inventory:
   enabled: true
@@ -133,17 +140,18 @@ inventory:
     tag: "latest"
   resources:
     requests:
-      cpu: "50m"
-      memory: "256Mi"
+      cpu: "100m"
+      memory: "128Mi"
     limits:
-      cpu: "500m"
-      memory: "1024Mi"
+      cpu: "600m"
+      memory: "512Mi"
   env:
     NODE_ENV: "production"
     APP_VERSION: "1.0.0"
     KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
     KAFKA_GROUP_ID: "wdp301-consumers"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
 
 supplier:
   enabled: true
@@ -153,17 +161,18 @@ supplier:
     tag: "latest"
   resources:
     requests:
-      cpu: "50m"
-      memory: "256Mi"
+      cpu: "100m"
+      memory: "128Mi"
     limits:
-      cpu: "500m"
-      memory: "1024Mi"
+      cpu: "600m"
+      memory: "512Mi"
   env:
     NODE_ENV: "production"
     APP_VERSION: "1.0.0"
     KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
     KAFKA_GROUP_ID: "wdp301-consumers"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
 
 # ─────────────────────────────────────────────────────────────
 # MongoDB
@@ -180,11 +189,11 @@ mongodb:
     storageClass: "standard"
   resources:
     requests:
-      cpu: "200m"
-      memory: "512Mi"
+      cpu: "100m"
+      memory: "256Mi"
     limits:
-      cpu: "1000m"
-      memory: "1536Mi"
+      cpu: "500m"
+      memory: "768Mi"
   auth:
     enabled: false  # Enable with secrets in prod
 

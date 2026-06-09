@@ -11,7 +11,7 @@ import { HttpException } from '@nestjs/common';
  * @param client The ClientKafka instance
  * @param topics Array of topic names
  */
-export async function subscribeToKafkaTopics(client: ClientKafka, topics: string[], retries = 5, delay = 3000) {
+export async function subscribeToKafkaTopics(client: ClientKafka, topics: string[], retries = 20, delay = 3000) {
   for (const topic of topics) {
     client.subscribeToResponseOf(topic);
   }
@@ -19,9 +19,14 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
     try {
       await client.connect();
       return;
-    } catch (error) {
-      if (i === retries - 1) throw error;
-      console.warn(`⚠️ Kafka client failed to connect/subscribe to: ${topics.join(', ')}. Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+    } catch (error: any) {
+      const isRetriable = error?.retriable === true || error?.type === 'UNKNOWN_TOPIC_OR_PARTITION';
+      const isLastAttempt = i === retries - 1;
+      if (isLastAttempt) {
+        console.error(`❌ Kafka client failed to connect to topics: ${topics.join(', ')} after ${retries} attempts.`, error);
+        throw error;
+      }
+      // Đã loại bỏ console.warn để giảm log trong quá trình retry
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }

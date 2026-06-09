@@ -34,10 +34,13 @@ import { MedicineBatch, MedicineBatchSchema } from './medicine-batch.schema';
           client: {
             clientId: 'inventory-supplier-client',
             brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+            connectionTimeout: 10000,
+            retry: { initialRetryTime: 1000, retries: 10 },
           },
           consumer: {
             groupId: 'inventory-supplier-group',
           },
+          producer: { allowAutoTopicCreation: true },
         },
       },
     ]),

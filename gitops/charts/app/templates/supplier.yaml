@@ -23,7 +23,6 @@ spec:
         - name: backend-supplier
           image: "{{ .Values.supplier.image.repository }}:{{ .Values.supplier.image.tag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          command: ["npm", "run", "start:supplier"]
           envFrom:
             - secretRef:
                 name: backend-secret

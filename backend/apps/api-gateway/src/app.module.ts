@@ -44,16 +44,28 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
         name: 'SUPPLIER_SERVICE',
         transport: Transport.KAFKA,
         options: {
-          client: { clientId: 'api-gw-supplier-client', brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(',') },
+          client: {
+            clientId: 'api-gw-supplier-client',
+            brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+            connectionTimeout: 10000,
+            retry: { initialRetryTime: 1000, retries: 10 },
+          },
           consumer: { groupId: 'api-gw-supplier-group' },
+          producer: { allowAutoTopicCreation: true },
         },
       },
       {
         name: 'INVENTORY_SERVICE',
         transport: Transport.KAFKA,
         options: {
-          client: { clientId: 'api-gw-inventory-client', brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(',') },
+          client: {
+            clientId: 'api-gw-inventory-client',
+            brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+            connectionTimeout: 10000,
+            retry: { initialRetryTime: 1000, retries: 10 },
+          },
           consumer: { groupId: 'api-gw-inventory-group' },
+          producer: { allowAutoTopicCreation: true },
         },
       },
     ]),

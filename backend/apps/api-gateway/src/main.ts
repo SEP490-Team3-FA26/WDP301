@@ -2,9 +2,13 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppGatewayModule } from './app.module';
+import { Request, Response } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppGatewayModule);
+  process.env.KAFKAJS_NO_PARTITIONER_WARNING = '1';
+  const app = await NestFactory.create(AppGatewayModule, {
+    logger: ['error', 'warn', 'log'], // Chỉ log error, warn, log (tắt verbose, debug)
+  });
 
   // Global Validation Pipe — tự động validate DTO bằng class-validator
   app.useGlobalPipes(
@@ -15,10 +19,23 @@ async function bootstrap() {
     }),
   );
 
-  // CORS — Cho phép Frontend gọi API
+  // CORS — Cho phép Frontend gọi API (wildcard trong K8s)
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
-    credentials: true,
+    origin: process.env.FRONTEND_URL || '*',
+    credentials: false,
+  });
+
+  // ─── Health Check Endpoint ───────────────────────────────────
+  // Kubernetes liveness & readiness probe cần endpoint này trả 200
+  // Nếu thiếu → probe trả 404 → K8s kill pod liên tục → CPU spike 98%
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.get('/health', (_req: Request, res: Response) => {
+    res.status(200).json({
+      status: 'ok',
+      service: 'api-gateway',
+      version: process.env.APP_VERSION || '1.0.0',
+      timestamp: new Date().toISOString(),
+    });
   });
 
   // Swagger API Documentation

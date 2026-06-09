@@ -29,6 +29,13 @@ services:
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
       KAFKA_LOG4J_LOGGERS: 'org.apache.kafka.image.loader.MetadataLoader=WARN'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     networks:
       - wdp301-network
 
@@ -49,8 +56,10 @@ services:
       - TS_NODE_TRANSPILE_ONLY=true
     command: sh -c "npm install && npm run dev:all"
     depends_on:
-      - redis
-      - kafka
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - wdp301-network
 
