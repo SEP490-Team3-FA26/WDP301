@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
 from services.stt_service import transcribe_audio
-from services.llm_service import generate_prescription
+from services.llm_service import generate_prescription, check_drug_interactions
 from services.rag_service import retrieve_medical_context, get_embedding, qdrant
 from services.db_service import validate_drugs_in_inventory
 import time
@@ -179,5 +179,27 @@ async def get_medicines_ai(
             
     except Exception as e:
         print("ERROR IN medicines API:")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+from pydantic import BaseModel
+
+class InteractionRequest(BaseModel):
+    medicines: list[str]
+
+@router.post("/api/ai/interactions")
+async def check_interactions(req: InteractionRequest):
+    try:
+        # Get context from Qdrant by querying each medicine
+        context_parts = []
+        for medicine in req.medicines:
+            context = await retrieve_medical_context(medicine, top_k=1)
+            if context:
+                context_parts.append(context)
+        
+        full_context = "\n\n".join(context_parts)
+        result = await check_drug_interactions(req.medicines, full_context)
+        return result
+    except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

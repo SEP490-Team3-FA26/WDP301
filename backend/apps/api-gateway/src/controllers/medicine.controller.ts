@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseInterceptors, Param, Body, Patch, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Get, Post, Query, UseInterceptors, Param, Body, Patch, Inject, OnModuleInit, HttpException, HttpStatus } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
@@ -65,5 +65,31 @@ export class MedicineController implements OnModuleInit {
       category,
       classification,
     });
+  }
+
+  @Post('check-interaction')
+  @ApiOperation({ summary: 'Kiểm tra tương tác giữa các loại thuốc (AI-driven)' })
+  async checkInteraction(@Body('medicines') medicines: string[]) {
+    if (!medicines || medicines.length < 2) {
+      throw new HttpException('Cần ít nhất 2 loại thuốc để kiểm tra tương tác', HttpStatus.BAD_REQUEST);
+    }
+    
+    try {
+      const response = await fetch('http://ai-service:8000/api/ai/interactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ medicines }),
+      });
+
+      if (!response.ok) {
+        throw new HttpException('Failed to check interactions from AI Service', HttpStatus.BAD_GATEWAY);
+      }
+
+      return await response.json();
+    } catch (error) {
+      throw new HttpException(error.message || 'Lỗi khi gọi AI Service', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 }

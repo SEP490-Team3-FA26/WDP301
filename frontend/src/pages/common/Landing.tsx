@@ -115,6 +115,10 @@ export function Landing() {
           </div>
           
           <div className="flex items-center gap-4">
+            <Link to="/interactions" className="font-bold text-sm text-[#0d6efd] hover:text-[#0a58ca] transition-colors">
+              Tra cứu Tương tác (AI)
+            </Link>
+            <span className="hidden sm:block w-px h-5 bg-slate-200"></span>
             <a href="#features" className="hidden sm:block font-bold text-sm text-slate-500 hover:text-[#0d6efd] transition-colors">
               Giải pháp
             </a>

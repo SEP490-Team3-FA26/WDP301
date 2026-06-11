@@ -36,6 +36,7 @@ import { Branches } from "./pages/admin/Branches";
 
 // Pharmacist / Branch Pages
 import { Sales } from "./pages/pharmacist/Sales";
+import { DrugInteractions } from "./pages/pharmacist/DrugInteractions";
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
+        <Route path="/interactions" element={<DrugInteractions />} />
         
         {/* Auth Routes */}
         <Route path="/auth" element={<AuthLayout />}>

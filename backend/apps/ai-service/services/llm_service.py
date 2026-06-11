@@ -58,3 +58,52 @@ async def generate_prescription(transcript: str, context: str) -> dict:
         return json.loads(content)
     except json.JSONDecodeError:
         return {"error": "Lỗi phân tích JSON từ LLM", "raw_content": content}
+
+INTERACTION_SYSTEM_PROMPT = """Bạn là Dược sĩ lâm sàng AI chuyên nghiệp.
+Nhiệm vụ của bạn là phân tích tương tác giữa các loại thuốc dựa trên CƠ SỞ DỮ LIỆU được cung cấp.
+
+--- CƠ SỞ DỮ LIỆU THUỐC ---
+{rag_context}
+--------------------------
+Danh sách các thuốc được yêu cầu kiểm tra: {medicines_list}
+
+BẮT BUỘC TRẢ VỀ JSON HỢP LỆ THEO SCHEMA SAU (KHÔNG GIẢI THÍCH THÊM):
+{
+  "has_interactions": true,
+  "severity": "Cao | Trung bình | Thấp | An toàn",
+  "interactions": [
+    {
+      "drug_a": "Tên thuốc 1",
+      "drug_b": "Tên thuốc 2",
+      "description": "Mô tả tương tác và hậu quả",
+      "recommendation": "Khuyến nghị xử lý (VD: Giãn cách giờ uống, đổi thuốc)"
+    }
+  ],
+  "general_advice": "Lời khuyên tổng quát cho Dược sĩ"
+}"""
+
+async def check_drug_interactions(medicines_list: list[str], context: str) -> dict:
+    """
+    Tạo báo cáo tương tác thuốc JSON dựa trên danh sách thuốc và context từ RAG
+    """
+    system_prompt = INTERACTION_SYSTEM_PROMPT.replace(
+        "{rag_context}", context or "Không có dữ liệu ngữ cảnh."
+    ).replace(
+        "{medicines_list}", ", ".join(medicines_list)
+    )
+    
+    response = await client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Hãy phân tích tương tác giữa các loại thuốc trên."}
+        ],
+        temperature=0.1,
+        response_format={"type": "json_object"}
+    )
+    
+    content = response.choices[0].message.content
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return {"error": "Lỗi phân tích JSON từ LLM", "raw_content": content}
