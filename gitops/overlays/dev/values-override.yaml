@@ -5,27 +5,61 @@ global:
 
 frontend:
   replicaCount: 1
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "10Mi"
 
 gateway:
   env:
     NODE_ENV: "development"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "10Mi"
+
 auth:
   env:
     NODE_ENV: "development"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "10Mi"
+
 user:
   env:
     NODE_ENV: "development"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "10Mi"
+
 inventory:
   env:
     NODE_ENV: "development"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "10Mi"
+
 supplier:
   env:
     NODE_ENV: "development"
     MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "10Mi"
+
+mongodb:
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "10Mi"
 
 ingress:
   hosts:

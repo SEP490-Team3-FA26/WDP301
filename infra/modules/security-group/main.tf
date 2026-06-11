@@ -1,12 +1,15 @@
 variable "name"        { type = string }
 variable "environment" { type = string }
-variable "tags"        { type = map(string); default = {} }
+variable "tags" {
+  type    = map(string)
+  default = {}
+}
 
 data "aws_vpc" "default" { default = true }
 
 resource "aws_security_group" "this" {
   name        = var.name
-  description = "Security group for ${var.name} — WDP301"
+  description = "Security group for ${var.name} - WDP301"
   vpc_id      = data.aws_vpc.default.id
 
   # SSH — restrict to your IP in production!

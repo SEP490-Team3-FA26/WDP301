@@ -9,7 +9,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { Pool } from 'pg';
 import { User, UserRole } from './user.schema';
 import { VerificationToken, TokenType } from './verification-token.schema';
 import { LoginDto } from './dto/login.dto';
@@ -18,50 +17,18 @@ import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class AuthService {
-  private pgPool: Pool;
-
   constructor(
     @InjectModel(User.name)
     private readonly userModel: Model<User>,
     @InjectModel(VerificationToken.name)
     private readonly tokenModel: Model<VerificationToken>,
     private readonly jwtService: JwtService,
-  ) {
-    this.pgPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }, // Cho Supabase
-    });
-    this.initPostgresTable();
-  }
-
-  private async initPostgresTable() {
-    const query = `
-      CREATE TABLE IF NOT EXISTS public.users (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        full_name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        role VARCHAR(50) DEFAULT 'user',
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-      ALTER TABLE public.users ENABLE ROW LEVEL SECURITY; 
-    `;
-    try {    // để ở đây là ENABLE ROW LEVEL SECURITY là quyền hạn cao nhất cảu PostgressTable
-      await this.pgPool.query(query);
-      console.log('✅ [Postgres] Đã kiểm tra/tạo bảng users thành công');
-    } catch (err) {
-      console.error('❌ [Postgres] Lỗi tạo bảng:', err);
-    }
-  }
+  ) {}
 
   // ============================================================
   // ĐĂNG KÝ - Tạo tài khoản mới
   // ============================================================
   async register(dto: RegisterDto): Promise<{ message: string; userId: string }> {
-    if (dto.role === 'user') {
-      return this.registerToPostgres(dto);
-    }
-
     const existing = await this.userModel.findOne({ email: dto.email });
     if (existing) {
       throw new ConflictException(`Email "${dto.email}" đã được đăng ký!`);
@@ -83,59 +50,14 @@ export class AuthService {
     };
   }
 
-  private async registerToPostgres(dto: RegisterDto): Promise<{ message: string; userId: string }> {
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-    try {
-      const result = await this.pgPool.query(
-        'INSERT INTO public.users (full_name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id',
-        [dto.fullName, dto.email, passwordHash, 'user']
-      );
-      return {
-        message: 'Đăng ký tài khoản khách hàng thành công!',
-        userId: result.rows[0].id,
-      };
-    } catch (err: any) {
-      if (err.code === '23505') { // PostgreSQL Unique Violation
-        throw new ConflictException(`Email "${dto.email}" đã được đăng ký!`);
-      }
-      throw new InternalServerErrorException('Lỗi khi lưu dữ liệu vào PostgreSQL');
-    }
-  }
-
   // ============================================================
   // ĐĂNG NHẬP - Xác thực và cấp JWT Token
-
   // ============================================================
   async login(dto: LoginDto): Promise<{
     access_token: string;
     user: { id: string; email: string; fullName: string; role: string };
   }> {
-    let userFromDb: any = null;
-    let isPostgres = false;
-
-    // 1. Tìm trong MongoDB trước
-    const mongoUser = await this.userModel.findOne({ email: dto.email });
-    if (mongoUser) {
-      userFromDb = {
-        id: mongoUser._id.toString(),
-        email: mongoUser.email,
-        passwordHash: mongoUser.passwordHash,
-        role: mongoUser.role,
-        fullName: mongoUser.fullName,
-        isActive: mongoUser.isActive,
-      };
-    } else {
-      // 2. Nếu không có, tìm trong Postgres
-      const pgResult = await this.pgPool.query(
-        'SELECT id, email, password_hash as "passwordHash", role, full_name as "fullName" FROM public.users WHERE email = $1',
-        [dto.email]
-      );
-      if (pgResult.rows.length > 0) {
-        userFromDb = pgResult.rows[0];
-        userFromDb.isActive = true; // Giả định user postgres luôn active
-        isPostgres = true;
-      }
-    }
+    const userFromDb = await this.userModel.findOne({ email: dto.email });
 
     if (!userFromDb) {
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác!');
@@ -151,7 +73,7 @@ export class AuthService {
     }
 
     const payload = {
-      sub: userFromDb.id,
+      sub: userFromDb._id.toString(),
       email: userFromDb.email,
       role: userFromDb.role,
       fullName: userFromDb.fullName,
@@ -162,7 +84,7 @@ export class AuthService {
     return {
       access_token,
       user: {
-        id: userFromDb.id,
+        id: userFromDb._id.toString(),
         email: userFromDb.email,
         fullName: userFromDb.fullName,
         role: userFromDb.role,
@@ -178,56 +100,29 @@ export class AuthService {
     user: { id: string; email: string; fullName: string; role: string };
   }> {
     const { email, fullName } = profile;
-    let userFromDb: any = null;
-    let isPostgres = false;
 
-    // 1. Tìm trong MongoDB trước
-    const mongoUser = await this.userModel.findOne({ email });
-    if (mongoUser) {
-      userFromDb = {
-        id: mongoUser._id.toString(),
-        email: mongoUser.email,
-        role: mongoUser.role,
-        fullName: mongoUser.fullName,
-        isActive: mongoUser.isActive,
-      };
-    } else {
-      // 2. Tìm trong Postgres
-      const pgResult = await this.pgPool.query(
-        'SELECT id, email, role, full_name as "fullName" FROM public.users WHERE email = $1',
-        [email]
-      );
-      if (pgResult.rows.length > 0) {
-        userFromDb = pgResult.rows[0];
-        userFromDb.isActive = true;
-        isPostgres = true;
-      }
-    }
+    let userFromDb = await this.userModel.findOne({ email });
 
-    // 3. Nếu chưa tồn tại, tự động đăng ký mới vào Postgres
+    // Nếu chưa tồn tại, tự động đăng ký mới vào MongoDB
     if (!userFromDb) {
       const passwordHash = await bcrypt.hash(Math.random().toString(36).slice(-10), 12); // Random password cho Google users
-      const insertResult = await this.pgPool.query(
-        'INSERT INTO public.users (full_name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id',
-        [fullName, email, passwordHash, 'user']
-      );
-      
-      userFromDb = {
-        id: insertResult.rows[0].id,
-        email,
+      userFromDb = new this.userModel({
         fullName,
-        role: 'user',
+        email,
+        passwordHash,
+        role: UserRole.USER,
         isActive: true,
-      };
+      });
+      await userFromDb.save();
     }
 
     if (!userFromDb.isActive) {
       throw new UnauthorizedException('Tài khoản đã bị vô hiệu hóa!');
     }
 
-    // 4. Cấp JWT Token
+    // Cấp JWT Token
     const payload = {
-      sub: userFromDb.id,
+      sub: userFromDb._id.toString(),
       email: userFromDb.email,
       role: userFromDb.role,
       fullName: userFromDb.fullName,
@@ -238,7 +133,7 @@ export class AuthService {
     return {
       access_token,
       user: {
-        id: userFromDb.id,
+        id: userFromDb._id.toString(),
         email: userFromDb.email,
         fullName: userFromDb.fullName,
         role: userFromDb.role,
@@ -263,17 +158,7 @@ export class AuthService {
   // QUÊN MẬT KHẨU - Gửi mã xác nhận qua Email
   // ============================================================
   async generateAndSendResetToken(email: string): Promise<{ message: string }> {
-    let userExists = false;
-
-    const pgResult = await this.pgPool.query('SELECT id FROM public.users WHERE email = $1', [email]);
-    if (pgResult.rows.length > 0) {
-      userExists = true;
-    } else {
-      const mongoUser = await this.userModel.findOne({ email });
-      if (mongoUser) {
-        userExists = true;
-      }
-    }
+    const userExists = await this.userModel.findOne({ email });
 
     if (!userExists) {
       throw new NotFoundException(`Không tìm thấy tài khoản với email ${email}`);
@@ -305,32 +190,40 @@ export class AuthService {
         });
 
         await transporter.sendMail({
-          from: `"VinaPharmacy" <${process.env.SMTP_USER}>`,
+          from: `"ABC Pharmacy" <${process.env.SMTP_USER}>`,
           to: email,
           subject: 'Mã xác nhận khôi phục mật khẩu',
           html: `
-            <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #eaeaea; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-              <div style="background-color: #0057cd; padding: 24px; text-align: center;">
-                <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 0.5px;">VinaPharmacy</h1>
-              </div>
-              <div style="padding: 40px 30px;">
-                <h2 style="color: #1e293b; font-size: 20px; margin-top: 0; margin-bottom: 20px;">Xác nhận khôi phục mật khẩu</h2>
-                <p style="color: #475569; font-size: 15px; line-height: 1.6; margin-bottom: 30px;">
-                  Xin chào,<br><br>
-                  Chúng tôi vừa nhận được yêu cầu khôi phục mật khẩu cho tài khoản của bạn tại <strong>VinaPharmacy</strong>. Vui lòng sử dụng mã xác nhận (OTP) dưới đây để thiết lập lại mật khẩu:
-                </p>
-                <div style="text-align: center; margin-bottom: 30px;">
-                  <span style="display: inline-block; letter-spacing: 8px; color: #0057cd; font-size: 36px; font-weight: 900; padding: 16px 32px; background-color: #f0f8ff; border: 2px dashed #0057cd; border-radius: 12px;">${otp}</span>
+            <div style="background-color: #f8fafc; padding: 40px 20px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+              <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);">
+                <div style="background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); padding: 32px 24px; text-align: center;">
+                  <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">VinaPharmacy</h1>
                 </div>
-                <p style="color: #64748b; font-size: 14px; text-align: center; margin-bottom: 30px;">
-                  ⏳ Mã xác nhận này sẽ tự động hết hạn sau <strong>5 phút</strong>.
-                </p>
-                <hr style="border: none; border-top: 1px solid #e2e8f0; margin-bottom: 20px;">
-                <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0; text-align: center;">
-                  Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email. Tài khoản của bạn vẫn được bảo mật an toàn.<br><br>
-                  Trân trọng,<br>
-                  <strong>Đội ngũ VinaPharmacy</strong>
-                </p>
+                <div style="padding: 40px 32px;">
+                  <h2 style="color: #0f172a; font-size: 22px; font-weight: 700; margin-top: 0; margin-bottom: 16px; text-align: center;">Khôi phục mật khẩu</h2>
+                  <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 32px; text-align: center;">
+                    Xin chào!<br>
+                    Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn. Đây là mã xác nhận (OTP) của bạn:
+                  </p>
+                  <div style="text-align: center; margin-bottom: 32px;">
+                    <div style="display: inline-block; padding: 4px; border-radius: 16px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);">
+                      <span style="display: block; letter-spacing: 8px; color: #1e40af; font-size: 40px; font-weight: 900; padding: 16px 32px; background-color: #ffffff; border-radius: 12px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                        ${otp}
+                      </span>
+                    </div>
+                  </div>
+                  <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; margin-bottom: 32px;">
+                    <p style="color: #b45309; font-size: 14px; margin: 0; text-align: center;">
+                      <span style="margin-right: 4px; font-size: 16px;">⏳</span> Mã xác nhận sẽ hết hạn sau <strong>5 phút</strong>.
+                    </p>
+                  </div>
+                  <hr style="border: none; border-top: 1px solid #e2e8f0; margin-bottom: 24px;">
+                  <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
+                    Nếu bạn không yêu cầu đổi mật khẩu, hãy bỏ qua email này.<br>Tài khoản của bạn vẫn an toàn.<br><br>
+                    Trân trọng,<br>
+                    <strong style="color: #0f172a;">Đội ngũ VinaPharmacy</strong>
+                  </p>
+                </div>
               </div>
             </div>
           `,
@@ -339,7 +232,7 @@ export class AuthService {
       } else {
         console.warn(`⚠️ [MOCK EMAIL] Gửi email đến ${email}. Mã OTP: ${otp}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ [Email Error] Lỗi gửi mail: ${error.message}`);
     }
 
@@ -367,21 +260,12 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
 
-    const pgResult = await this.pgPool.query('SELECT id FROM public.users WHERE email = $1', [email]);
-    
-    if (pgResult.rows.length > 0) {
-      await this.pgPool.query(
-        'UPDATE public.users SET password_hash = $1 WHERE email = $2',
-        [passwordHash, email]
-      );
-    } else {
-      const mongoUser = await this.userModel.findOne({ email });
-      if (!mongoUser) {
-        throw new NotFoundException('Không tìm thấy tài khoản để đổi mật khẩu');
-      }
-      mongoUser.passwordHash = passwordHash;
-      await mongoUser.save();
+    const mongoUser = await this.userModel.findOne({ email });
+    if (!mongoUser) {
+      throw new NotFoundException('Không tìm thấy tài khoản để đổi mật khẩu');
     }
+    mongoUser.passwordHash = passwordHash;
+    await mongoUser.save();
 
     resetToken.isUsed = true;
     await resetToken.save();
