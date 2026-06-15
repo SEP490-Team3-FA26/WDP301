@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Building2, AlertTriangle, Search, Plus, Trash2, CheckCircle2, ShieldAlert, PackagePlus } from "lucide-react";
+import { ArrowLeft, Building2, AlertTriangle, Search, Plus, Trash2, CheckCircle2, ShieldAlert, PackagePlus, ClipboardList } from "lucide-react";
 import { motion } from "motion/react";
 
 export function PurchaseOrderCreate() {
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state as { prefilledMedicineId?: string } | null;
+  const state = location.state as { prefilledMedicineId?: string, prefillPrItems?: any[] } | null;
 
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
@@ -18,6 +18,8 @@ export function PurchaseOrderCreate() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [approvedPrs, setApprovedPrs] = useState<any[]>([]);
+  const [selectedPrId, setSelectedPrId] = useState<string>("");
 
   useEffect(() => {
     // Fetch Suppliers
@@ -27,9 +29,18 @@ export function PurchaseOrderCreate() {
       .catch(err => console.error(err));
 
     // Fetch Medicines
-    fetch('/api/medicines?limit=100') // Getting top 100 for dropdown
+    fetch('/api/medicines?limit=10000') // Getting all for dropdown and prefill matching
       .then(res => res.json())
       .then(data => setMedicines(data.data || data))
+      .catch(err => console.error(err));
+
+    // Fetch Approved PRs
+    fetch('/api/purchase-requisitions?status=APPROVED')
+      .then(res => res.json())
+      .then(data => {
+        const list = data.value || data || [];
+        setApprovedPrs(list.filter((pr: any) => !pr.linkedPoId));
+      })
       .catch(err => console.error(err));
   }, []);
 
@@ -45,12 +56,115 @@ export function PurchaseOrderCreate() {
           setSelectedSupplierId(med.supplierId);
         }
       }
+    } else if (state?.prefillPrItems && medicines.length > 0 && cart.length === 0) {
+      const itemMap = new Map();
+      state.prefillPrItems.forEach(item => {
+        if (!item || !item.medicineId) return;
+        if (itemMap.has(item.medicineId)) {
+          const existing = itemMap.get(item.medicineId);
+          if (existing) {
+            existing.quantity += item.requestedQuantity || item.quantity || 0;
+            if (item.prId) {
+              existing.prIds = [...(existing.prIds || []), item.prId];
+            }
+          }
+        } else {
+          itemMap.set(item.medicineId, {
+            ...item,
+            quantity: item.requestedQuantity || item.quantity || 0,
+            prIds: item.prId ? [item.prId] : []
+          });
+        }
+      });
+
+      const newCart: any[] = [];
+      itemMap.forEach((item, medicineId) => {
+        const med = medicines.find(m => m.id === medicineId || m._id === medicineId);
+        if (med) {
+          newCart.push({
+            ...med,
+            id: med.id || med._id,
+            quantity: item.quantity,
+            unitPrice: med.price || 0,
+            prId: item.prId,
+            prIds: item.prIds || []
+          });
+        }
+      });
+
+      if (newCart.length > 0) {
+        setCart(newCart);
+        if (newCart[0].supplierId && !selectedSupplierId) {
+          setSelectedSupplierId(newCart[0].supplierId);
+        }
+      }
     }
-  }, [state, medicines]);
+  }, [state, medicines, cart.length]);
+
+  const handlePrSelect = (prId: string) => {
+    setSelectedPrId(prId);
+    if (!prId) {
+      setCart([]);
+      setSelectedSupplierId("");
+      return;
+    }
+
+    const selectedPr = approvedPrs.find(pr => pr._id === prId);
+    if (!selectedPr) return;
+
+    const prItems = (selectedPr.items || []).map((item: any) => ({
+      medicineId: item.medicineId,
+      medicineName: item.medicineName,
+      requestedQuantity: item.requestedQuantity || item.quantity || 0,
+      unit: item.unit || "Hộp",
+      prId: selectedPr._id,
+      prCode: selectedPr.prCode,
+    }));
+
+    const itemMap = new Map();
+    prItems.forEach(item => {
+      if (!item || !item.medicineId) return;
+      if (itemMap.has(item.medicineId)) {
+        const existing = itemMap.get(item.medicineId);
+        if (existing) {
+          existing.quantity += item.requestedQuantity || 0;
+          existing.prIds = [...(existing.prIds || []), item.prId];
+        }
+      } else {
+        itemMap.set(item.medicineId, {
+          ...item,
+          quantity: item.requestedQuantity,
+          prIds: [item.prId]
+        });
+      }
+    });
+
+    const newCart: any[] = [];
+    itemMap.forEach((item, medId) => {
+      const med = medicines.find(m => m.id === medId || m._id === medId);
+      if (med) {
+        newCart.push({
+          ...med,
+          id: med.id || med._id,
+          quantity: item.quantity,
+          unitPrice: med.price || 0,
+          prId: item.prId,
+          prIds: item.prIds || []
+        });
+      }
+    });
+
+    if (newCart.length > 0) {
+      setCart(newCart);
+      if (newCart[0].supplierId) {
+        setSelectedSupplierId(newCart[0].supplierId);
+      }
+    }
+  };
 
   // Lấy thông tin NCC đang chọn
   const supplier = suppliers.find(s => s._id === selectedSupplierId);
-  
+
   // Kiểm tra hạn GDP
   const isGdpExpired = supplier ? new Date(supplier.gdp_expiry_date) < new Date() : false;
 
@@ -79,7 +193,7 @@ export function PurchaseOrderCreate() {
     } else {
       setCart([...cart, { ...med, quantity, unitPrice: finalPrice }]);
     }
-    
+
     // Reset form chọn thuốc
     setSelectedMedicineId("");
     setQuantity(1);
@@ -105,7 +219,7 @@ export function PurchaseOrderCreate() {
     <div className="flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-y-auto">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <button 
+        <button
           onClick={() => navigate(-1)}
           className="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
         >
@@ -117,25 +231,65 @@ export function PurchaseOrderCreate() {
         </div>
       </div>
 
+      {/* Selector for Approved PRs */}
+      {approvedPrs.length > 0 && (
+        <div className="mb-6 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+          <h2 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <ClipboardList size={18} className="text-emerald-600" />
+            Nhập nhanh từ Yêu cầu thuốc (PR) đã duyệt
+          </h2>
+          <div className="flex flex-col sm:flex-row gap-3 items-end">
+            <div className="flex-1">
+              <label className="text-sm font-semibold text-slate-700 block mb-1.5">Chọn phiếu yêu cầu (PR)</label>
+              <select
+                value={selectedPrId}
+                onChange={(e) => handlePrSelect(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+              >
+                <option value="">-- Chọn phiếu PR để tự động điền đơn --</option>
+                {approvedPrs.map(pr => (
+                  <option key={pr._id} value={pr._id}>
+                    {pr.prCode} ({pr.branchName}) - {pr.items?.length || 0} sản phẩm
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedPrId && (
+              <button
+                onClick={() => {
+                  setSelectedPrId("");
+                  setCart([]);
+                  setSelectedSupplierId("");
+                }}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-colors cursor-pointer"
+              >
+                Xóa điền tự động
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* CỘT TRÁI: THÔNG TIN NCC & THÊM THUỐC */}
         <div className="lg:col-span-1 flex flex-col gap-6">
-          
+
           {/* Box Chọn Nhà Cung Cấp */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
               <Building2 size={18} className="text-[#0057cd]" />
               1. Chọn Nhà Cung Cấp
             </h2>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-semibold text-slate-700 block mb-1.5">Nhà cung cấp</label>
-                <select 
+                <select
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
                   value={selectedSupplierId}
                   onChange={(e) => setSelectedSupplierId(e.target.value)}
                 >
+
                   <option value="">-- Chọn Nhà cung cấp --</option>
                   {suppliers.map(s => (
                     <option key={s._id} value={s._id}>{s.name}</option>
@@ -145,8 +299,8 @@ export function PurchaseOrderCreate() {
 
               {/* Thông tin thẩm định NCC */}
               {supplier && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -10 }} 
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`p-4 rounded-xl border ${isGdpExpired ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}
                 >
@@ -161,8 +315,8 @@ export function PurchaseOrderCreate() {
                         {isGdpExpired ? 'LỖI THẨM ĐỊNH PHÁP LÝ' : 'Hồ sơ pháp lý hợp lệ'}
                       </h3>
                       <p className={`text-xs mt-1 leading-relaxed ${isGdpExpired ? 'text-rose-700' : 'text-emerald-700'}`}>
-                        {isGdpExpired 
-                          ? `Giấy chứng nhận GDP của "${supplier.name}" đã hết hạn vào ngày ${new Date(supplier.gdp_expiry_date).toLocaleDateString()}. Yêu cầu bộ phận R&D gia hạn hồ sơ trước khi nhập hàng!` 
+                        {isGdpExpired
+                          ? `Giấy chứng nhận GDP của "${supplier.name}" đã hết hạn vào ngày ${new Date(supplier.gdp_expiry_date).toLocaleDateString()}. Yêu cầu bộ phận R&D gia hạn hồ sơ trước khi nhập hàng!`
                           : `Giấy chứng nhận GDP còn hạn đến ${new Date(supplier.gdp_expiry_date).toLocaleDateString()}. Đủ điều kiện tạo đơn.`}
                       </p>
                     </div>
@@ -182,7 +336,7 @@ export function PurchaseOrderCreate() {
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-semibold text-slate-700 block mb-1.5">Sản phẩm thuốc</label>
-                <select 
+                <select
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
                   value={selectedMedicineId}
                   onChange={(e) => handleMedicineSelect(e.target.value)}
@@ -196,12 +350,12 @@ export function PurchaseOrderCreate() {
 
               <div>
                 <label className="text-sm font-semibold text-slate-700 block mb-1.5">Số lượng</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   min="1"
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
                 />
               </div>
 
@@ -210,13 +364,13 @@ export function PurchaseOrderCreate() {
                   Đơn giá nhập (đ)
                   <span className="text-xs text-slate-400 font-normal ml-1">— tự điền từ giá tham khảo</span>
                 </label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   min="0"
                   step="1000"
                   value={unitPrice}
                   onChange={(e) => setUnitPrice(Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
                 />
               </div>
 
@@ -227,7 +381,7 @@ export function PurchaseOrderCreate() {
                 </motion.div>
               )}
 
-              <button 
+              <button
                 onClick={handleAddMedicine}
                 className="w-full py-2.5 bg-[#0057cd] hover:bg-[#004bb1] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm"
               >
@@ -268,7 +422,7 @@ export function PurchaseOrderCreate() {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {cart.map((item) => (
-                      <motion.tr 
+                      <motion.tr
                         key={item.id}
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -282,7 +436,7 @@ export function PurchaseOrderCreate() {
                           {(item.unitPrice * item.quantity).toLocaleString('vi-VN')}đ
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <button 
+                          <button
                             onClick={() => handleRemoveItem(item.id)}
                             className="text-slate-400 hover:text-rose-600 transition-colors p-1"
                           >
@@ -312,17 +466,19 @@ export function PurchaseOrderCreate() {
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={async () => {
                   setIsSubmitting(true);
                   setErrorMsg(null);
                   try {
-                    const res = await fetch('/api/purchase-orders', {
+                     const res = await fetch('/api/purchase-orders', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         supplierId: selectedSupplierId,
-                        items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice }))
+                        items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
+                        linkedPrId: cart[0]?.prId || "",
+                        requisitionIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
                       })
                     });
                     const resData = await res.json();
@@ -349,8 +505,8 @@ export function PurchaseOrderCreate() {
                 {isSubmitting ? (
                   <>
                     <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                     </svg>
                     Đang xử lý...
                   </>
