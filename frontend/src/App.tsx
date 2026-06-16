@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 // Layouts
 import { AuthLayout } from "./layouts/AuthLayout";
@@ -54,6 +54,12 @@ import { BranchRequisition } from "./pages/branch/BranchRequisition";
 import { Sales } from "./pages/pharmacist/Sales";
 import { DrugInteractions } from "./pages/pharmacist/DrugInteractions";
 
+// Helper component to preserve query parameters on redirect
+function RedirectWithSearch({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={{ pathname: to, search: location.search }} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -72,10 +78,10 @@ export default function App() {
         </Route>
 
         {/* Cũ (Redirect để tương thích trong trường hợp back lại) */}
-        <Route path="/login" element={<Navigate to="/auth/login" replace />} />
-        <Route path="/register" element={<Navigate to="/auth/register" replace />} />
-        <Route path="/forgot-password" element={<Navigate to="/auth/forgot-password" replace />} />
-        <Route path="/verify-email" element={<Navigate to="/auth/verify-email" replace />} />
+        <Route path="/login" element={<RedirectWithSearch to="/auth/login" />} />
+        <Route path="/register" element={<RedirectWithSearch to="/auth/register" />} />
+        <Route path="/forgot-password" element={<RedirectWithSearch to="/auth/forgot-password" />} />
+        <Route path="/verify-email" element={<RedirectWithSearch to="/auth/verify-email" />} />
         <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
 
         {/* --- Customer Routes --- */}
