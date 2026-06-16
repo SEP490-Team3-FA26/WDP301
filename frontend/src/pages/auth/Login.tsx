@@ -207,7 +207,7 @@ export function Login() {
         </div>
 
         <a 
-          href="http://localhost:4000/api/auth/google"
+          href="/api/auth/google"
           className="w-full flex justify-center items-center gap-3 py-3.5 px-4 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 hover:bg-slate-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-200 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
         >
           <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
