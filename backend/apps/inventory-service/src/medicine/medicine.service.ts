@@ -16,6 +16,7 @@ export class MedicineService {
 
   async getMedicineFilters() {
     try {
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy bộ lọc thuốc');
       const categories = await this.medicineModel.distinct('category').exec();
       const classifications = await this.medicineModel.distinct('drug_classification').exec();
       return {
@@ -124,6 +125,7 @@ export class MedicineService {
     classification?: string;
   }) {
     try {
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', query);
       const page = query.page || 1;
       const limit = query.limit || 10;
       const search = query.search || '';
@@ -224,7 +226,7 @@ export class MedicineService {
           ];
 
           const [data, total] = await Promise.all([
-            this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).exec(),
+            this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).lean().exec(),
             this.medicineModel.countDocuments(filterQuery).exec(),
           ]);
 
@@ -302,7 +304,7 @@ export class MedicineService {
         if (classification) filterQuery.drug_classification = classification;
 
         const [data, total] = await Promise.all([
-          this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).exec(),
+          this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).lean().exec(),
           this.medicineModel.countDocuments(filterQuery).exec(),
         ]);
 
@@ -374,14 +376,17 @@ export class MedicineService {
 
   async getInventoryStats() {
     try {
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy thống kê tồn kho');
       const today = new Date();
       const ninetyDaysFromNow = new Date();
       ninetyDaysFromNow.setDate(today.getDate() + 90);
 
+      console.log('🔍 [Inventory MS] Đang truy vấn database (tối ưu select & lean)...');
       const [medicines, batches] = await Promise.all([
-        this.medicineModel.find().exec(),
-        this.batchModel.find().exec()
+        this.medicineModel.find().select('price').lean().exec(),
+        this.batchModel.find({ stock: { $gt: 0 } }).select('medicineId stock expDate status').lean().exec()
       ]);
+      console.log(`✅ [Inventory MS] Truy vấn thành công: ${medicines.length} medicines, ${batches.length} batches`);
 
       const totalMedicines = medicines.length;
 
@@ -394,7 +399,7 @@ export class MedicineService {
         return sum + (price * b.stock);
       }, 0);
 
-      const batchesByMedId = new Map<string, MedicineBatch[]>();
+      const batchesByMedId = new Map<string, any[]>();
       for (const batch of activeBatches) {
         const list = batchesByMedId.get(batch.medicineId) || [];
         list.push(batch);
@@ -444,9 +449,13 @@ export class MedicineService {
       const ninetyDaysFromNow = new Date();
       ninetyDaysFromNow.setDate(today.getDate() + 90);
 
-      const batches = await this.batchModel.find({ stock: { $gt: 0 } }).exec();
+      // Tối ưu hóa: chỉ select các field cần thiết, sử dụng lean() và lọc trực tiếp theo ngày hết hạn (trong vòng 90 ngày)
+      const batches = await this.batchModel.find({
+        stock: { $gt: 0 },
+        expDate: { $lte: ninetyDaysFromNow }
+      }).select('medicineId batchNo expDate stock status').lean().exec();
       const medIds = [...new Set(batches.map(b => b.medicineId))];
-      const medicines = await this.medicineModel.find({ _id: { $in: medIds } }).exec();
+      const medicines = await this.medicineModel.find({ _id: { $in: medIds } }).select('name category unit').lean().exec();
       const medMap = new Map(medicines.map(m => [m._id.toString(), m]));
 
       const report = batches
