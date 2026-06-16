@@ -55,7 +55,7 @@ services:
       - REDIS_PORT=6379
       - KAFKA_BROKERS=kafka:29092
       - TS_NODE_TRANSPILE_ONLY=true
-    command: sh -c "npm install --no-audit --no-fund --quiet && npm run dev:all"
+    command: sh -c "npm install --no-audit --no-fund --quiet --legacy-peer-deps && npm run dev:all"
     depends_on:
       kafka:
         condition: service_healthy

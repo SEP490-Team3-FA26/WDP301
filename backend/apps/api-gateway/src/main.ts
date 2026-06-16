@@ -22,10 +22,14 @@ async function bootstrap() {
     }),
   );
 
-  // CORS — Cho phép Frontend gọi API (wildcard trong K8s)
+  // CORS — Cho phép Frontend gọi API (Động để hỗ trợ Flutter Web / React Web)
   app.enableCors({
-    origin: process.env.FRONTEND_URL || '*',
-    credentials: false,
+    origin: (origin, callback) => {
+      // Cho phép mọi origin gửi request đến (hoặc có thể kiểm tra cụ thể origin)
+      // Trong môi trường dev, phản hồi trực tiếp origin của client để tránh lỗi CORS
+      callback(null, true);
+    },
+    credentials: true,
   });
 
   // ─── Health Check Endpoint ───────────────────────────────────
