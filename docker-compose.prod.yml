@@ -45,10 +45,10 @@ services:
       test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 10s
       timeout: 10s
-      retries: 10
-      start_period: 30s
-    volumes:
-      - kafka_data:/tmp/kraft-combined-logs
+      retries: 15
+      start_period: 45s
+    # Không mount named volume: KRaft log dir /tmp/kraft-combined-logs do
+    # appuser (uid 1000) ghi — named volume thuộc root sẽ gây Permission denied.
     networks: [wdp301-network]
 
   backend:
@@ -80,4 +80,3 @@ networks:
 
 volumes:
   redis_data:
-  kafka_data:

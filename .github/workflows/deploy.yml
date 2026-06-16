@@ -13,8 +13,8 @@ name: CI/CD — Build → ECR → Deploy EC2
 
 on:
   push:
-    branches: [main, dev]
-  workflow_dispatch:
+    branches: [main]   # chỉ build & deploy khi push/merge vào main
+  workflow_dispatch:    # cho phép chạy tay từ tab Actions khi cần
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
