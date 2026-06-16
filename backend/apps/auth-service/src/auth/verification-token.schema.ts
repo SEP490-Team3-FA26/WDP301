@@ -4,6 +4,7 @@ import { Document, Types } from 'mongoose';
 export enum TokenType {
   EMAIL_VERIFICATION = 'email_verification',
   PASSWORD_RESET = 'password_reset',
+  TWO_FACTOR = 'two_factor',
 }
 
 @Schema({ timestamps: true })
