@@ -84,6 +84,9 @@ resource "aws_instance" "this" {
   metadata_options {
     http_tokens   = "required" # IMDSv2 only
     http_endpoint = "enabled"
+    # hop limit 2: cho phép container Docker đọc IMDS để lấy credentials từ
+    # instance role (mặc định 1 sẽ chặn vì container thêm 1 network hop).
+    http_put_response_hop_limit = 2
   }
 
   tags = merge(var.tags, { Name = var.name })
