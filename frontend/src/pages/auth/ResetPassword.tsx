@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, Lock, ShieldCheck } from "lucide-react";
+import { ArrowRight, Lock, ShieldCheck, Mail } from "lucide-react";
 import { authService } from "../../services/auth.service";
 
 export function ResetPassword() {
@@ -8,7 +8,9 @@ export function ResetPassword() {
   const [searchParams] = useSearchParams();
   
   // Fallback to localStorage if search params does not contain email
-  const emailParam = searchParams.get("email") || authService.getPendingEmail();
+  const [email, setEmail] = useState(
+    searchParams.get("email") || authService.getPendingEmail() || ""
+  );
 
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -22,14 +24,14 @@ export function ResetPassword() {
     setError("");
     setSuccess("");
 
-    if (!emailParam) {
+    if (!email) {
       setError("Thiếu thông tin email. Vui lòng quay lại bước gửi mã.");
       setLoading(false);
       return;
     }
 
     try {
-      await authService.resetPassword(emailParam, token, newPassword);
+      await authService.resetPassword(email, token, newPassword);
 
       setSuccess("Đặt lại mật khẩu thành công! Đang chuyển hướng...");
       setTimeout(() => {
@@ -46,10 +48,26 @@ export function ResetPassword() {
     <>
       <div className="mb-8 text-center mt-2">
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">Đặt lại mật khẩu</h2>
-        <p className="text-sm font-medium text-slate-500 mt-2">Nhập mã OTP đã được gửi đến {emailParam}</p>
+        <p className="text-sm font-medium text-slate-500 mt-2">Nhập email và mã OTP để đặt lại mật khẩu</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-1.5">
+          <label className="block text-sm font-bold text-slate-700">Email liên hệ</label>
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[#0057cd] transition-colors">
+              <Mail className="h-5 w-5" />
+            </div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white/60 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] focus:bg-white transition-all shadow-sm"
+              placeholder="Nhập email của bạn"
+              required
+            />
+          </div>
+        </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-bold text-slate-700">Mã xác nhận (OTP)</label>
           <div className="relative group">
