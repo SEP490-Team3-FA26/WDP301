@@ -47,7 +47,11 @@ class _DirectorScreenState extends State<DirectorScreen> {
       _poPendingApprovals.removeAt(index);
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Đã PHÊ DUYỆT đơn nhập hàng $poId')),
+      SnackBar(
+        content: Text('Đã PHÊ DUYỆT đơn nhập hàng $poId', style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -56,18 +60,36 @@ class _DirectorScreenState extends State<DirectorScreen> {
       _poPendingApprovals.removeAt(index);
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Đã TỪ CHỐI đơn nhập hàng $poId')),
+      SnackBar(
+        content: Text('Đã TỪ CHỐI đơn nhập hàng $poId', style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F4F8),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Báo cáo Giám Đốc', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: const Color(0xFF1A73E8),
-        elevation: 0,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Báo cáo Giám Đốc', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 18)),
+            Text('ĐƠN HÀNG CHỜ PHÊ DUYỆT & DOANH THU CHI NHÁNH', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70, letterSpacing: 1.0)),
+          ],
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
@@ -76,29 +98,44 @@ class _DirectorScreenState extends State<DirectorScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Chart Card
+              // Chart Card (Premium executive design)
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                elevation: 2,
+                color: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: Colors.grey.shade100)),
+                elevation: 3,
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(18.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Doanh Thu Toàn Hệ Thống (Tháng 6)',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1B365D)),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Doanh Thu Toàn Hệ Thống',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Tháng 6, 2026',
+                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                              ),
+                            ],
                           ),
-                          Text(
-                            '1.205 tỷ ₫',
-                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.green),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+                            child: const Text(
+                              '1.205 tỷ ₫',
+                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.green),
+                            ),
                           )
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 18),
                       // Custom Revenue chart painter
                       SizedBox(
                         height: 150,
@@ -107,7 +144,7 @@ class _DirectorScreenState extends State<DirectorScreen> {
                           painter: RevenueChartPainter(),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
@@ -124,16 +161,22 @@ class _DirectorScreenState extends State<DirectorScreen> {
               const SizedBox(height: 24),
 
               // PO Pending approval list
-              Text(
-                'Duyệt Đơn Nhập Hàng (${_poPendingApprovals.length})',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B365D)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Duyệt Đơn Nhập Hàng (${_poPendingApprovals.length})',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                  const Icon(Icons.pending_actions, color: Colors.amber),
+                ],
               ),
               const SizedBox(height: 12),
               _poPendingApprovals.isEmpty
                   ? Card(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       child: const Padding(
-                        padding: EdgeInsets.all(24.0),
+                        padding: EdgeInsets.all(28.0),
                         child: Center(
                           child: Text(
                             'Không có đơn PO nào đang chờ duyệt.',
@@ -149,9 +192,10 @@ class _DirectorScreenState extends State<DirectorScreen> {
                       itemBuilder: (context, index) {
                         final po = _poPendingApprovals[index];
                         return Card(
+                          color: Colors.white,
                           margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 1,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.grey.shade100)),
+                          elevation: 2,
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Column(
@@ -162,25 +206,25 @@ class _DirectorScreenState extends State<DirectorScreen> {
                                   children: [
                                     Text(
                                       'Mã đơn: ${po['id']}',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B365D)),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                                     ),
                                     Text(
                                       po['amount']!,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16),
+                                      style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.green, fontSize: 15),
                                     )
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                Text('Chi nhánh: ${po['branch']}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                                Text('Nhà cung cấp: ${po['supplier']}'),
+                                Text('Chi nhánh: ${po['branch']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                Text('Nhà cung cấp: ${po['supplier']}', style: const TextStyle(fontSize: 13, color: Colors.black54)),
                                 const SizedBox(height: 8),
                                 Container(
                                   width: double.infinity,
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade100)),
                                   child: Text(
                                     po['items']!,
-                                    style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                                    style: TextStyle(color: Colors.grey.shade700, fontSize: 11, height: 1.3),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
@@ -189,17 +233,17 @@ class _DirectorScreenState extends State<DirectorScreen> {
                                   children: [
                                     TextButton(
                                       onPressed: () => _rejectPO(index, po['id']!),
-                                      child: const Text('Từ chối', style: TextStyle(color: Colors.red)),
+                                      child: const Text('Từ chối', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                                     ),
                                     const SizedBox(width: 8),
                                     ElevatedButton(
                                       onPressed: () => _approvePO(index, po['id']!),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF1B365D),
+                                        backgroundColor: const Color(0xFF0F172A),
                                         foregroundColor: Colors.white,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
-                                      child: const Text('Phê duyệt'),
+                                      child: const Text('Phê duyệt', style: TextStyle(fontWeight: FontWeight.bold)),
                                     )
                                   ],
                                 )
@@ -214,22 +258,23 @@ class _DirectorScreenState extends State<DirectorScreen> {
               // Pharmacy branches list
               const Text(
                 'Hiệu Suất Từng Chi Nhánh',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0D47A1)),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
               ),
               const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))
                   ],
+                  border: Border.all(color: Colors.grey.shade100),
                 ),
                 child: ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _branchPerformances.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
                   itemBuilder: (context, index) {
                     final branch = _branchPerformances[index];
                     final isUp = branch['growth']!.startsWith('+');
@@ -238,32 +283,33 @@ class _DirectorScreenState extends State<DirectorScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       title: Text(
                         branch['name']!,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                       ),
-                      subtitle: Text('Giao dịch: ${branch['transactions']}'),
+                      subtitle: Text('Tổng giao dịch: ${branch['transactions']}', style: const TextStyle(fontSize: 12)),
                       trailing: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
                             branch['revenue']!,
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B365D)),
+                            style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
                           ),
+                          const SizedBox(height: 2),
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                isUp ? Icons.arrow_upward : Icons.arrow_downward,
+                                isUp ? Icons.trending_up : Icons.trending_down,
                                 size: 12,
                                 color: isUp ? Colors.green : Colors.red,
                               ),
-                              const SizedBox(width: 2),
+                              const SizedBox(width: 4),
                               Text(
                                 branch['growth']!,
                                 style: TextStyle(
                                   color: isUp ? Colors.green : Colors.red,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                 ),
                               )
                             ],
@@ -284,48 +330,53 @@ class _DirectorScreenState extends State<DirectorScreen> {
   Widget _buildLegend(String label, Color color) {
     return Row(
       children: [
-        Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
       ],
     );
   }
 }
 
-// Custom Painter to draw a clean and beautiful bar/line chart representing revenue
+// Custom Painter to draw a clean and beautiful smooth curve area chart representing revenue
 class RevenueChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paintLine = Paint()
-      ..color = Colors.blue
+      ..color = const Color(0xFF0F172A)
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
     final paintFill = Paint()
       ..shader = LinearGradient(
-        colors: [Colors.blue.withValues(alpha: 0.3), Colors.blue.withValues(alpha: 0.01)],
+        colors: [const Color(0xFF0F172A).withValues(alpha: 0.2), const Color(0xFF0F172A).withValues(alpha: 0.01)],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
     final path = Path();
     
-    // Simulating points for days in month
     final points = [
       Offset(0, size.height * 0.8),
-      Offset(size.width * 0.15, size.height * 0.75),
-      Offset(size.width * 0.3, size.height * 0.5),
-      Offset(size.width * 0.45, size.height * 0.55),
-      Offset(size.width * 0.6, size.height * 0.3),
-      Offset(size.width * 0.75, size.height * 0.45),
-      Offset(size.width * 0.9, size.height * 0.15),
-      Offset(size.width, size.height * 0.1),
+      Offset(size.width * 0.15, size.height * 0.72),
+      Offset(size.width * 0.3, size.height * 0.48),
+      Offset(size.width * 0.45, size.height * 0.52),
+      Offset(size.width * 0.6, size.height * 0.28),
+      Offset(size.width * 0.75, size.height * 0.4),
+      Offset(size.width * 0.9, size.height * 0.18),
+      Offset(size.width, size.height * 0.08),
     ];
 
     path.moveTo(points[0].dx, points[0].dy);
-    for (int i = 1; i < points.length; i++) {
-      path.lineTo(points[i].dx, points[i].dy);
+    
+    // Draw smooth bezier curves
+    for (int i = 0; i < points.length - 1; i++) {
+      final p1 = points[i];
+      final p2 = points[i + 1];
+      final controlPoint1 = Offset(p1.dx + (p2.dx - p1.dx) / 2, p1.dy);
+      final controlPoint2 = Offset(p1.dx + (p2.dx - p1.dx) / 2, p2.dy);
+      path.cubicTo(controlPoint1.dx, controlPoint1.dy, controlPoint2.dx, controlPoint2.dy, p2.dx, p2.dy);
     }
 
     final fillPath = Path.from(path)
@@ -337,8 +388,14 @@ class RevenueChartPainter extends CustomPainter {
     canvas.drawPath(path, paintLine);
 
     // Draw dot at latest point
-    final paintDot = Paint()..color = Colors.green..strokeWidth = 8;
+    final paintDot = Paint()..color = Colors.green..style = PaintingStyle.fill;
+    final paintStroke = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
     canvas.drawCircle(points.last, 6, paintDot);
+    canvas.drawCircle(points.last, 6, paintStroke);
   }
 
   @override

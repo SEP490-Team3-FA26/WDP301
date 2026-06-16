@@ -12,7 +12,7 @@ export class MedicineService {
   constructor(
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
-  ) {}
+  ) { }
 
   async getMedicineFilters() {
     try {
@@ -136,7 +136,7 @@ export class MedicineService {
         let aiServiceUrl = `http://ai-service:8000/api/ai/medicines?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`;
         if (category) aiServiceUrl += `&category=${encodeURIComponent(category)}`;
         if (classification) aiServiceUrl += `&classification=${encodeURIComponent(classification)}`;
-        
+
         let mappedAiData: any[] = [];
         let aiTotal = 0;
         let useFallback = false;
@@ -195,6 +195,14 @@ export class MedicineService {
                     stock: b.stock,
                     status: b.status,
                   })),
+                  cong_dung: med.cong_dung || 'N/A',
+                  cach_dung: med.cach_dung || 'N/A',
+                  tac_dung_phu: med.tac_dung_phu || 'N/A',
+                  luu_y: med.luu_y || 'N/A',
+                  bao_quan: med.bao_quan || 'N/A',
+                  manufacturer: med.manufacturer || 'N/A',
+                  registration_number: med.registration_number || 'N/A',
+                  dosage_form: med.dosage_form || 'N/A',
                 };
               });
             }
@@ -209,7 +217,7 @@ export class MedicineService {
           const filterQuery: any = {};
           if (category) filterQuery.category = category;
           if (classification) filterQuery.drug_classification = classification;
-          
+
           filterQuery.$or = [
             { name: { $regex: search, $options: 'i' } },
             { active_ingredient: { $regex: search, $options: 'i' } }
@@ -222,7 +230,7 @@ export class MedicineService {
 
           const medIds = data.map(med => med._id.toString());
           const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).exec();
-          
+
           const batchesByMedId = new Map<string, MedicineBatch[]>();
           for (const batch of allBatches) {
             const list = batchesByMedId.get(batch.medicineId) || [];
@@ -262,6 +270,14 @@ export class MedicineService {
                 stock: b.stock,
                 status: b.status,
               })),
+              cong_dung: med.cong_dung || 'N/A',
+              cach_dung: med.cach_dung || 'N/A',
+              tac_dung_phu: med.tac_dung_phu || 'N/A',
+              luu_y: med.luu_y || 'N/A',
+              bao_quan: med.bao_quan || 'N/A',
+              manufacturer: med.manufacturer || 'N/A',
+              registration_number: med.registration_number || 'N/A',
+              dosage_form: med.dosage_form || 'N/A',
             };
           });
 
@@ -293,7 +309,7 @@ export class MedicineService {
         // Truy vấn lô hàng cho toàn bộ danh sách kết quả hiển thị
         const medIds = data.map(med => med._id.toString());
         const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).exec();
-        
+
         const batchesByMedId = new Map<string, MedicineBatch[]>();
         for (const batch of allBatches) {
           const list = batchesByMedId.get(batch.medicineId) || [];
@@ -333,6 +349,14 @@ export class MedicineService {
               stock: b.stock,
               status: b.status,
             })),
+            cong_dung: med.cong_dung || 'N/A',
+            cach_dung: med.cach_dung || 'N/A',
+            tac_dung_phu: med.tac_dung_phu || 'N/A',
+            luu_y: med.luu_y || 'N/A',
+            bao_quan: med.bao_quan || 'N/A',
+            manufacturer: med.manufacturer || 'N/A',
+            registration_number: med.registration_number || 'N/A',
+            dosage_form: med.dosage_form || 'N/A',
           };
         });
 
@@ -360,7 +384,7 @@ export class MedicineService {
       ]);
 
       const totalMedicines = medicines.length;
-      
+
       const activeBatches = batches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
       const totalStock = activeBatches.reduce((sum, b) => sum + b.stock, 0);
 
@@ -384,7 +408,7 @@ export class MedicineService {
         const medId = med._id.toString();
         const medBatches = batchesByMedId.get(medId) || [];
         const stock = medBatches.reduce((sum, b) => sum + b.stock, 0);
-        
+
         if (stock === 0) {
           outOfStockCount++;
         } else if (stock <= 50) {
@@ -429,7 +453,7 @@ export class MedicineService {
         .map(b => {
           const med = medMap.get(b.medicineId);
           const expDate = new Date(b.expDate);
-          
+
           let status = 'ACTIVE';
           if (expDate < today) {
             status = 'EXPIRED';
