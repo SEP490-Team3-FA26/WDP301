@@ -37,6 +37,15 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+      KAFKA_LOG4J_ROOT_LOGLEVEL: 'ERROR'
+      KAFKA_LOG4J_LOGGERS: 'org.apache.kafka.image.loader.MetadataLoader=ERROR,org.apache.kafka=ERROR,kafka=ERROR,state.change.logger=ERROR,kafka.log.LogCleaner=ERROR'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     networks:
       - wdp301-network
 
@@ -55,7 +64,7 @@ services:
       - REDIS_PORT=6379
       - KAFKA_BROKERS=kafka:29092
       - TS_NODE_TRANSPILE_ONLY=true
-    command: sh -c "npm install --no-audit --no-fund --quiet --legacy-peer-deps && npm run dev:all"
+    command: sh -c "npm install && npm run dev:all"
     depends_on:
       kafka:
         condition: service_healthy
