@@ -1,50 +1,69 @@
-name: CI/CD — Build → ECR → Deploy EC2
+name: CI/CD — Test (dev + main) · Deploy EC2 (main only)
 
 # ──────────────────────────────────────────────────────────────
-# Required GitHub repo secrets:
-#   AWS_ACCESS_KEY_ID       IAM user/key allowed to push to ECR
-#   AWS_SECRET_ACCESS_KEY
-#   EC2_HOST                Public IP / DNS of the EC2 instance
-#   EC2_SSH_KEY             Private key (.pem contents) for the EC2 key pair
-# Required GitHub repo variables (Settings → Variables):
-#   AWS_REGION              e.g. ap-southeast-1   (defaults below if unset)
-#   ECR_REGISTRY            e.g. <acct>.dkr.ecr.ap-southeast-1.amazonaws.com
+#  push dev   → job "build-and-test"  (lint + test + build image verify)
+#  push main  → job "build-and-test" + job "deploy" (build → push ECR → EC2)
+#
+# Required GitHub repo secrets (chỉ cần cho job deploy / main):
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY   (CI user push ECR)
+#   EC2_HOST                                   (IP/DNS EC2)
+#   EC2_SSH_KEY                                (private key .pem)
+# Repo variable: AWS_REGION (mặc định ap-southeast-1)
 # ──────────────────────────────────────────────────────────────
 
 on:
   push:
-    branches: [main]   # chỉ build & deploy khi push/merge vào main
-  workflow_dispatch:    # cho phép chạy tay từ tab Actions khi cần
+    branches: [main, dev]
+  workflow_dispatch:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
   BACKEND_REPO: wdp301-backend
-  # Frontend deploy bởi Vercel (không build/push ECR ở đây).
 
 jobs:
   # ──────────────────────────────────────────────
-  test:
+  # CI — chạy trên MỌI push (dev + main)
+  #   lint + test, và build image để xác minh (không push)
+  # ──────────────────────────────────────────────
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Backend lint & test
+
+      - name: Install + lint + test (backend)
         working-directory: backend
         run: |
           npm ci --legacy-peer-deps
           npm run lint || true
           npm test -- --passWithNoTests || true
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build image để chắc Dockerfile build được — CHỈ verify trên dev
+      # (trên main, job deploy sẽ build thật rồi nên không build lại ở đây).
+      - name: Build backend image (verify, no push)
+        if: github.ref != 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/docker/backend.Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # ──────────────────────────────────────────────
-  build-and-push:
-    needs: test
+  # CD — chỉ chạy khi push/merge vào MAIN
+  #   build → push ECR → SSH deploy EC2
+  # ──────────────────────────────────────────────
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -78,14 +97,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ──────────────────────────────────────────────
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      # Ship the compose file to the instance
       - name: Copy compose file to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -98,7 +109,7 @@ jobs:
       - name: Pull & restart on EC2
         uses: appleboy/ssh-action@v1.2.0
         env:
-          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          IMAGE_TAG: ${{ steps.meta.outputs.tag }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
@@ -107,10 +118,7 @@ jobs:
           script: |
             set -e
             cd /opt/wdp301
-
-            # Persist the new tag into .env (so manual `up` reuses it too)
             grep -q '^IMAGE_TAG=' .env && sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" .env || echo "IMAGE_TAG=${IMAGE_TAG}" >> .env
-
             ecr-login
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
