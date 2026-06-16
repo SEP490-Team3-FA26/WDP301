@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Mail } from "lucide-react";
+import { authService } from "../../services/auth.service";
 
 export function ForgotPassword() {
   const navigate = useNavigate();
@@ -16,17 +17,7 @@ export function ForgotPassword() {
     setSuccess("");
 
     try {
-      const response = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Yêu cầu thất bại');
-      }
+      await authService.forgotPassword(email);
 
       setSuccess("Mã xác nhận đã được gửi đến email của bạn! Đang chuyển hướng...");
       setTimeout(() => {
