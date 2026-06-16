@@ -1,91 +1,125 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Search, MapPin, Users, Package, AlertTriangle, Clock, X, ChevronRight, Activity, RotateCcw, Building2, Bell, CheckCircle2 } from "lucide-react";
 
-// Mock data for branches
-const branchesData = [
-  {
-    id: "BR-001",
-    name: "Nhà thuốc VinaPharmacy - CN1",
-    address: "Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
-    image: "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=500&auto=format&fit=crop&q=60",
-    status: "active",
-    manager: "Nguyễn Văn A",
-    contact: "0901234567",
-    stats: {
-      employees: 12,
-      totalStock: 15420,
-      lowStock: 15,
-      expiring: 8
-    },
-    alerts: [
-      { id: 1, type: "low_stock", item: "Paracetamol 500mg", current: 20, min: 50, time: "2 giờ trước (Từ quầy)" },
-      { id: 2, type: "expiring", item: "Amoxicillin 250mg", expiryDate: "10/11/2023", time: "Hệ thống (Cronjob định kỳ)" },
-      { id: 3, type: "low_stock", item: "Vitamin C 1000mg", current: 5, min: 20, time: "5 giờ trước (Từ quầy)" }
-    ]
-  },
-  {
-    id: "BR-002",
-    name: "Nhà thuốc VinaPharmacy - CN2",
-    address: "Phường Thảo Điền, Quận 2, TP. Hồ Chí Minh",
-    image: "https://images.unsplash.com/photo-1555636222-cae831e670b3?w=500&auto=format&fit=crop&q=60",
-    status: "active",
-    manager: "Trần Thị B",
-    contact: "0912345678",
-    stats: {
-      employees: 8,
-      totalStock: 8250,
-      lowStock: 3,
-      expiring: 2
-    },
-    alerts: [
-      { id: 4, type: "expiring", item: "Panadol Extra", expiryDate: "15/12/2023", time: "Hệ thống (Cronjob định kỳ)" },
-      { id: 5, type: "low_stock", item: "Khẩu trang y tế", current: 15, min: 100, time: "1 ngày trước (Từ quầy)" }
-    ]
-  },
-  {
-    id: "BR-003",
-    name: "Nhà thuốc VinaPharmacy - CN3",
-    address: "Phường Hải Châu 1, Quận Hải Châu, Đà Nẵng",
-    image: "https://images.unsplash.com/photo-1576602976047-174e57a47881?w=500&auto=format&fit=crop&q=60",
-    status: "maintenance",
-    manager: "Lê Văn C",
-    contact: "0923456789",
-    stats: {
-      employees: 5,
-      totalStock: 5120,
-      lowStock: 0,
-      expiring: 12
-    },
-    alerts: [
-      { id: 6, type: "expiring", item: "Kháng sinh Zinnat", expiryDate: "01/11/2023", time: "Hệ thống (Cronjob định kỳ)" }
-    ]
-  },
-  {
-    id: "BR-004",
-    name: "Nhà thuốc VinaPharmacy - CN4",
-    address: "Phường Tràng Tiền, Quận Hoàn Kiếm, Hà Nội",
-    image: "https://images.unsplash.com/photo-1563213126-a4273aedbc13?w=500&auto=format&fit=crop&q=60",
-    status: "active",
-    manager: "Phạm Thị D",
-    contact: "0934567890",
-    stats: {
-      employees: 15,
-      totalStock: 22100,
-      lowStock: 25,
-      expiring: 1
-    },
-    alerts: [
-      { id: 7, type: "low_stock", item: "Nước muối sinh lý", current: 50, min: 200, time: "1 giờ trước (Từ quầy)" },
-      { id: 8, type: "low_stock", item: "Bông y tế", current: 10, min: 50, time: "3 giờ trước (Từ quầy)" }
-    ]
-  }
-];
+interface Branch {
+  _id?: string;
+  id: string; // branchCode
+  branchCode: string;
+  name: string;
+  address: string;
+  image: string;
+  status: 'active' | 'maintenance';
+  manager: string;
+  contact: string;
+  stats: {
+    employees: number;
+    totalStock: number;
+    lowStock: number;
+    expiring: number;
+  };
+  alerts: {
+    id: number;
+    type: string;
+    item: string;
+    current?: number;
+    min?: number;
+    expiryDate?: string;
+    time: string;
+  }[];
+}
 
 export function Branches() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState<typeof branchesData[0] | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
 
-  const filteredBranches = branchesData.filter(branch => 
+  const fetchBranches = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/branches");
+      if (!res.ok) throw new Error("Không thể tải danh sách chi nhánh");
+      const data = await res.json();
+      const mapped = data.map((b: any) => ({
+        ...b,
+        id: b.branchCode,
+      }));
+      setBranches(mapped);
+      setError(null);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Đã xảy ra lỗi khi tải dữ liệu");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBranches();
+  }, []);
+
+  const handleCreate = async (newData: any) => {
+    try {
+      const res = await fetch("/api/branches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newData),
+      });
+      if (!res.ok) throw new Error("Không thể tạo chi nhánh");
+      const created = await res.json();
+      const mapped = {
+        ...created,
+        id: created.branchCode,
+      };
+      setBranches((prev) => [...prev, mapped]);
+      setIsCreateOpen(false);
+    } catch (err: any) {
+      alert(err.message || "Lỗi khi tạo chi nhánh");
+    }
+  };
+
+  const handleUpdate = async (id: string, updatedData: any) => {
+    try {
+      const res = await fetch(`/api/branches/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedData),
+      });
+      if (!res.ok) throw new Error("Không thể cập nhật chi nhánh");
+      const updated = await res.json();
+      const mapped = {
+        ...updated,
+        id: updated.branchCode,
+      };
+      setBranches((prev) => prev.map((b) => (b._id === id ? mapped : b)));
+      setEditingBranch(null);
+      
+      // Update selected branch detail modal if open
+      if (selectedBranch && selectedBranch._id === id) {
+        setSelectedBranch(mapped);
+      }
+    } catch (err: any) {
+      alert(err.message || "Lỗi khi cập nhật chi nhánh");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/branches/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Không thể xóa chi nhánh");
+      setBranches((prev) => prev.filter((b) => b._id !== id));
+      setSelectedBranch(null);
+    } catch (err: any) {
+      alert(err.message || "Lỗi khi xóa chi nhánh");
+    }
+  };
+
+  const filteredBranches = branches.filter(branch => 
     branch.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     branch.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -108,59 +142,103 @@ export function Branches() {
               className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all shadow-sm"
             />
           </div>
-          <button className="px-5 py-2.5 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap">
+          <button 
+            onClick={() => setIsCreateOpen(true)}
+            className="px-5 py-2.5 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap"
+          >
             <Building2 size={18} />
             Thêm chi nhánh
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredBranches.map(branch => (
-          <div 
-            key={branch.id} 
-            onClick={() => setSelectedBranch(branch)}
-            className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group flex flex-col h-full"
-          >
-            <div className="relative h-48 overflow-hidden">
-              <img src={branch.image} alt={branch.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute top-3 right-3 flex gap-2">
-                <span className={`px-2.5 py-1 text-[11px] font-bold rounded-lg shadow-sm backdrop-blur-md ${
-                  branch.status === 'active' ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-white'
-                }`}>
-                  {branch.status === 'active' ? 'Hoạt động' : 'Bảo trì / Sửa chữa'}
-                </span>
-              </div>
-              {(branch.stats.lowStock > 0 || branch.stats.expiring > 0) && (
-                <div className="absolute top-3 left-3 bg-rose-500/90 text-white px-2.5 py-1 text-[11px] font-bold rounded-lg shadow-sm backdrop-blur-md flex items-center gap-1.5">
-                   <Bell size={12} className="animate-pulse" />
-                   {branch.stats.lowStock + branch.stats.expiring} Cảnh báo
-                </div>
-              )}
-            </div>
-            <div className="p-5 flex flex-col flex-1">
-              <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#0057cd] transition-colors line-clamp-1">{branch.name}</h3>
-              <div className="flex items-start gap-2 text-slate-500 mt-2 text-sm">
-                <MapPin size={16} className="shrink-0 mt-0.5 text-slate-400" />
-                <span className="line-clamp-2 leading-relaxed">{branch.address}</span>
-              </div>
-              
-              <div className="mt-5 grid grid-cols-2 gap-3 pt-4 border-t border-slate-100 flex-1 content-end">
-                <div className="flex flex-col">
-                   <span className="text-xs text-slate-500 font-medium font-mono mb-1 flex items-center gap-1"><Users size={12}/> Nhân sự</span>
-                   <span className="font-bold text-slate-800">{branch.stats.employees} người</span>
-                </div>
-                <div className="flex flex-col">
-                   <span className="text-xs text-slate-500 font-medium font-mono mb-1 flex items-center gap-1"><Package size={12}/> Tồn kho</span>
-                   <span className="font-bold text-slate-800">{branch.stats.totalStock.toLocaleString()} SP</span>
-                </div>
-              </div>
-            </div>
+      {loading ? (
+        <div className="flex items-center justify-center p-12 bg-white rounded-2xl border border-slate-200">
+          <div className="flex flex-col items-center gap-3">
+             <div className="w-8 h-8 border-4 border-slate-200 border-t-[#0057cd] rounded-full animate-spin"></div>
+             <p className="text-sm font-semibold text-slate-500">Đang tải danh sách chi nhánh...</p>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : error ? (
+        <div className="bg-rose-50 border border-rose-200 p-6 rounded-2xl text-center">
+          <AlertTriangle size={36} className="mx-auto text-rose-500 mb-2" />
+          <h3 className="font-bold text-rose-800">Đã xảy ra lỗi</h3>
+          <p className="text-rose-600 text-sm mt-1">{error}</p>
+          <button 
+             onClick={fetchBranches}
+             className="mt-4 px-4 py-2 bg-rose-600 text-white text-sm font-bold rounded-xl hover:bg-rose-700 transition-colors"
+          >
+             Thử lại
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredBranches.map(branch => (
+            <div 
+              key={branch._id || branch.id} 
+              className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group flex flex-col h-full"
+            >
+              {/* Card Header Media */}
+              <div className="relative h-48 overflow-hidden" onClick={() => setSelectedBranch(branch)}>
+                <img src={branch.image} alt={branch.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <div className="absolute top-3 right-3 flex gap-2">
+                  <span className={`px-2.5 py-1 text-[11px] font-bold rounded-lg shadow-sm backdrop-blur-md ${
+                    branch.status === 'active' ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-white'
+                  }`}>
+                    {branch.status === 'active' ? 'Hoạt động' : 'Bảo trì / Sửa chữa'}
+                  </span>
+                </div>
+                {(branch.stats.lowStock > 0 || branch.stats.expiring > 0) && (
+                  <div className="absolute top-3 left-3 bg-rose-500/90 text-white px-2.5 py-1 text-[11px] font-bold rounded-lg shadow-sm backdrop-blur-md flex items-center gap-1.5">
+                     <Bell size={12} className="animate-pulse" />
+                     {branch.stats.lowStock + branch.stats.expiring} Cảnh báo
+                  </div>
+                )}
+              </div>
+
+              {/* Card Body */}
+              <div className="p-5 flex flex-col flex-1">
+                <div className="flex-1" onClick={() => setSelectedBranch(branch)}>
+                  <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#0057cd] transition-colors line-clamp-1">{branch.name}</h3>
+                  <div className="flex items-start gap-2 text-slate-500 mt-2 text-sm">
+                    <MapPin size={16} className="shrink-0 mt-0.5 text-slate-400" />
+                    <span className="line-clamp-2 leading-relaxed">{branch.address}</span>
+                  </div>
+                  
+                  <div className="mt-5 grid grid-cols-2 gap-3 pt-4 border-t border-slate-100 content-end">
+                    <div className="flex flex-col">
+                       <span className="text-xs text-slate-500 font-medium font-mono mb-1 flex items-center gap-1"><Users size={12}/> Nhân sự</span>
+                       <span className="font-bold text-slate-800">{branch.stats.employees} người</span>
+                    </div>
+                    <div className="flex flex-col">
+                       <span className="text-xs text-slate-500 font-medium font-mono mb-1 flex items-center gap-1"><Package size={12}/> Tồn kho</span>
+                       <span className="font-bold text-slate-800">{branch.stats.totalStock.toLocaleString()} SP</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Footer Actions */}
+                <div className="mt-4 pt-4 border-t border-slate-100 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => setSelectedBranch(branch)}
+                    className="flex-1 py-2.5 text-xs font-bold text-[#0057cd] bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors text-center"
+                  >
+                    Xem chi tiết
+                  </button>
+                  <button
+                    onClick={() => setEditingBranch(branch)}
+                    className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors text-center border border-slate-150"
+                  >
+                    Chỉnh sửa
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       
-      {filteredBranches.length === 0 && (
+      {!loading && !error && filteredBranches.length === 0 && (
          <div className="bg-white p-12 text-center rounded-2xl border border-slate-200">
             <Building2 size={48} className="mx-auto text-slate-300 mb-4" />
             <h3 className="text-lg font-bold text-slate-700">Không tìm thấy chi nhánh</h3>
@@ -169,13 +247,32 @@ export function Branches() {
       )}
 
       {selectedBranch && (
-        <BranchDetailModal branch={selectedBranch} onClose={() => setSelectedBranch(null)} />
+        <BranchDetailModal 
+           branch={selectedBranch} 
+           onClose={() => setSelectedBranch(null)} 
+           onDelete={handleDelete}
+        />
+      )}
+
+      {isCreateOpen && (
+        <CreateBranchModal 
+           onClose={() => setIsCreateOpen(false)} 
+           onCreate={handleCreate}
+        />
+      )}
+
+      {editingBranch && (
+        <EditBranchModal 
+           branch={editingBranch} 
+           onClose={() => setEditingBranch(null)} 
+           onUpdate={handleUpdate}
+        />
       )}
     </div>
   );
 }
 
-function BranchDetailModal({ branch, onClose }: { branch: typeof branchesData[0], onClose: () => void }) {
+function BranchDetailModal({ branch, onClose, onDelete }: { branch: Branch, onClose: () => void, onDelete: (id: string) => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
@@ -197,13 +294,27 @@ function BranchDetailModal({ branch, onClose }: { branch: typeof branchesData[0]
                     </div>
                  </div>
              </div>
-             <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors self-start">
-               <X size={24} />
-             </button>
+             
+             <div className="flex items-center gap-2">
+                 <button
+                    onClick={() => {
+                       if (branch._id && window.confirm("Bạn có chắc chắn muốn xóa chi nhánh này?")) {
+                          onDelete(branch._id);
+                       }
+                    }}
+                    className="px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold rounded-xl text-xs transition-colors border border-rose-100 flex items-center gap-1.5"
+                 >
+                    Xóa chi nhánh
+                 </button>
+                 <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors self-start">
+                   <X size={24} />
+                 </button>
+             </div>
           </div>
 
           <div className="overflow-y-auto p-5 lg:p-6 flex flex-col lg:flex-row gap-6">
              <div className="lg:w-1/3 flex flex-col gap-6">
+                {/* Basic Info Details */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                    <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-4">
                       <MapPin size={18} className="text-[#0057cd]" /> Thông tin cơ bản
@@ -211,7 +322,29 @@ function BranchDetailModal({ branch, onClose }: { branch: typeof branchesData[0]
                    <div className="space-y-4 text-sm">
                       <div>
                          <div className="text-slate-500 uppercase text-[10px] tracking-widest font-bold mb-1">Địa chỉ</div>
-                         <div className="font-medium text-slate-800">{branch.address}</div>
+                         <div className="font-medium text-slate-800 leading-relaxed">{branch.address}</div>
+                         
+                         {/* Dynamic Google Maps Embed Widget */}
+                         <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 h-40 relative group shadow-sm">
+                            <iframe
+                               title="Google Maps"
+                               width="100%"
+                               height="100%"
+                               style={{ border: 0 }}
+                               loading="lazy"
+                               src={`https://maps.google.com/maps?q=${encodeURIComponent(branch.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                            />
+                            <a 
+                               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(branch.address)}`}
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               className="absolute inset-0 bg-slate-900/10 hover:bg-slate-900/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"
+                            >
+                               <span className="px-3 py-1.5 bg-white text-slate-800 font-bold rounded-xl text-xs shadow-md flex items-center gap-1.5">
+                                  Xem trên Google Maps <ChevronRight size={14}/>
+                               </span>
+                            </a>
+                         </div>
                       </div>
                       <div>
                          <div className="text-slate-500 uppercase text-[10px] tracking-widest font-bold mb-1">Quản lý trực tiếp</div>
@@ -304,6 +437,253 @@ function BranchDetailModal({ branch, onClose }: { branch: typeof branchesData[0]
                 </div>
              </div>
           </div>
+       </div>
+    </div>
+  );
+}
+
+function CreateBranchModal({ onClose, onCreate }: { onClose: () => void; onCreate: (data: any) => void }) {
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [manager, setManager] = useState("");
+  const [contact, setContact] = useState("");
+  const [status, setStatus] = useState<"active" | "maintenance">("active");
+  const [image, setImage] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !address.trim() || !manager.trim() || !contact.trim()) {
+      alert("Vui lòng điền đầy đủ các thông tin bắt buộc!");
+      return;
+    }
+    onCreate({
+      name,
+      address,
+      manager,
+      contact,
+      status,
+      image: image.trim() || undefined,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden transform transition-all">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100">
+             <h2 className="text-xl font-bold text-slate-900">Thêm chi nhánh mới</h2>
+             <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors">
+                <X size={20} />
+             </button>
+          </div>
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+             <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tên chi nhánh *</label>
+                <input
+                   type="text"
+                   required
+                   value={name}
+                   onChange={(e) => setName(e.target.value)}
+                   placeholder="Nhập tên chi nhánh (VD: VinaPharmacy - CN5)"
+                   className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                />
+             </div>
+             <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Địa chỉ *</label>
+                <input
+                   type="text"
+                   required
+                   value={address}
+                   onChange={(e) => setAddress(e.target.value)}
+                   placeholder="Địa chỉ chi nhánh..."
+                   className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                />
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quản lý *</label>
+                   <input
+                      type="text"
+                      required
+                      value={manager}
+                      onChange={(e) => setManager(e.target.value)}
+                      placeholder="Người quản lý..."
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                   />
+                </div>
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Số điện thoại *</label>
+                   <input
+                      type="text"
+                      required
+                      value={contact}
+                      onChange={(e) => setContact(e.target.value)}
+                      placeholder="Liên hệ..."
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                   />
+                </div>
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Trạng thái</label>
+                   <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as any)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] bg-white transition-all"
+                   >
+                      <option value="active">Hoạt động</option>
+                      <option value="maintenance">Bảo trì</option>
+                   </select>
+                </div>
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Hình ảnh (URL)</label>
+                   <input
+                      type="text"
+                      value={image}
+                      onChange={(e) => setImage(e.target.value)}
+                      placeholder="Tùy chọn..."
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                   />
+                </div>
+             </div>
+             <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                   type="button"
+                   onClick={onClose}
+                   className="px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-200 transition-colors"
+                >
+                   Hủy
+                </button>
+                <button
+                   type="submit"
+                   className="px-5 py-2.5 bg-[#0057cd] text-white font-bold rounded-xl text-sm hover:bg-[#00419e] transition-colors"
+                >
+                   Lưu chi nhánh
+                </button>
+             </div>
+          </form>
+       </div>
+    </div>
+  );
+}
+
+function EditBranchModal({ branch, onClose, onUpdate }: { branch: Branch; onClose: () => void; onUpdate: (id: string, data: any) => void }) {
+  const [name, setName] = useState(branch.name);
+  const [address, setAddress] = useState(branch.address);
+  const [manager, setManager] = useState(branch.manager);
+  const [contact, setContact] = useState(branch.contact);
+  const [status, setStatus] = useState<"active" | "maintenance">(branch.status);
+  const [image, setImage] = useState(branch.image);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !address.trim() || !manager.trim() || !contact.trim()) {
+      alert("Vui lòng điền đầy đủ các thông tin bắt buộc!");
+      return;
+    }
+    if (branch._id) {
+      onUpdate(branch._id, {
+        name,
+        address,
+        manager,
+        contact,
+        status,
+        image,
+      });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden transform transition-all">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100">
+             <h2 className="text-xl font-bold text-slate-900">Chỉnh sửa thông tin chi nhánh</h2>
+             <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors">
+                <X size={20} />
+             </button>
+          </div>
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+             <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tên chi nhánh *</label>
+                <input
+                   type="text"
+                   required
+                   value={name}
+                   onChange={(e) => setName(e.target.value)}
+                   className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                />
+             </div>
+             <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Địa chỉ *</label>
+                <input
+                   type="text"
+                   required
+                   value={address}
+                   onChange={(e) => setAddress(e.target.value)}
+                   className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                />
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quản lý *</label>
+                   <input
+                      type="text"
+                      required
+                      value={manager}
+                      onChange={(e) => setManager(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                   />
+                </div>
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Số điện thoại *</label>
+                   <input
+                      type="text"
+                      required
+                      value={contact}
+                      onChange={(e) => setContact(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                   />
+                </div>
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Trạng thái</label>
+                   <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as any)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] bg-white transition-all"
+                   >
+                      <option value="active">Hoạt động</option>
+                      <option value="maintenance">Bảo trì</option>
+                   </select>
+                </div>
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Hình ảnh (URL)</label>
+                   <input
+                      type="text"
+                      value={image}
+                      onChange={(e) => setImage(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                   />
+                </div>
+             </div>
+             <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                   type="button"
+                   onClick={onClose}
+                   className="px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-200 transition-colors"
+                >
+                   Hủy
+                </button>
+                <button
+                   type="submit"
+                   className="px-5 py-2.5 bg-[#0057cd] text-white font-bold rounded-xl text-sm hover:bg-[#00419e] transition-colors"
+                >
+                   Cập nhật
+                </button>
+             </div>
+          </form>
        </div>
     </div>
   );

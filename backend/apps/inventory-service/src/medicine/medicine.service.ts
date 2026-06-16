@@ -469,4 +469,47 @@ export class MedicineService {
       throw new RpcException(error.message || 'Lỗi lấy báo cáo hết hạn');
     }
   }
+
+  async getMedicinesByIds(ids: string[]) {
+    try {
+      this.logger.log(`Fetching multiple medicines by IDs: ${ids.join(', ')}`);
+      const medicines = await this.medicineModel.find({ _id: { $in: ids } }).exec();
+      const batches = await this.batchModel.find({
+        medicineId: { $in: ids },
+        status: 'ACTIVE',
+        stock: { $gt: 0 }
+      }).exec();
+
+      const batchesByMedId = new Map<string, MedicineBatch[]>();
+      for (const batch of batches) {
+        const list = batchesByMedId.get(batch.medicineId) || [];
+        list.push(batch);
+        batchesByMedId.set(batch.medicineId, list);
+      }
+
+      return medicines.map((med) => {
+        const medId = med._id.toString();
+        const medBatches = batchesByMedId.get(medId) || [];
+        const totalStock = medBatches.reduce((sum, b) => sum + b.stock, 0);
+
+        let earliestExpiryStr = '2026-12-31';
+        if (medBatches.length > 0) {
+          const earliestBatch = medBatches.reduce((min, b) => new Date(b.expDate) < new Date(min.expDate) ? b : min, medBatches[0]);
+          earliestExpiryStr = new Date(earliestBatch.expDate).toISOString().split('T')[0];
+        }
+
+        const medObj = med.toObject();
+        return {
+          ...medObj,
+          id: medId,
+          stock: totalStock,
+          expiry: earliestExpiryStr,
+          status: totalStock > 0 ? 'In Stock' : 'Out of Stock'
+        };
+      });
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi lấy danh sách chi tiết thuốc');
+    }
+  }
 }
+

@@ -19,7 +19,7 @@ export function Login() {
     if (token) {
       localStorage.setItem("token", token);
       localStorage.setItem("userRole", "user"); // Mặc định role user từ google login
-      navigate('/profile');
+      navigate('/customer');
     }
 
     if (urlError) {
@@ -55,7 +55,7 @@ export function Login() {
       case "pharmacist":
         return "/pharmacist";
       case "user":
-        return "/profile";
+        return "/customer";
       default:
         return "/admin";
     }

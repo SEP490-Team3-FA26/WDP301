@@ -65,4 +65,15 @@ export class MedicineController {
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy báo cáo hết hạn');
     }
   }
+
+  @MessagePattern('inventory.medicine.get_by_ids')
+  async getMedicinesByIds(@Payload() data: { ids: string[] }) {
+    try {
+      return await this.medicineService.getMedicinesByIds(data.ids);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy chi tiết danh sách thuốc');
+    }
+  }
 }
+

@@ -35,6 +35,10 @@ export class User extends Document {
 
   @Prop()
   googleId?: string;
+
+  @Prop({ default: null })
+  branchId?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+

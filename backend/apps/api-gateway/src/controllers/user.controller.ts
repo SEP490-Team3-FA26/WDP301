@@ -3,6 +3,8 @@ import {
   Get,
   Put,
   Post,
+  Delete,
+  Param,
   Body,
   UseGuards,
   Request,
@@ -26,6 +28,11 @@ export class UserController implements OnModuleInit {
     await subscribeToKafkaTopics(this.kafkaClient, [
       'user.edit_profile',
       'user.change_avatar',
+      'user.cart.get',
+      'user.cart.add',
+      'user.cart.update',
+      'user.cart.delete',
+      'user.cart.clear',
     ]);
   }
 
@@ -46,4 +53,56 @@ export class UserController implements OnModuleInit {
       avatarUrl: data.avatarUrl,
     });
   }
+
+  // --- CART REST ENDPOINTS ---
+
+  @Get('cart')
+  @ApiOperation({ summary: 'Lấy thông tin giỏ hàng của user' })
+  async getCart(@Request() req) {
+    return await sendKafkaMessage(this.kafkaClient, 'user.cart.get', {
+      userId: req.user.sub,
+    });
+  }
+
+  @Post('cart')
+  @ApiOperation({ summary: 'Thêm sản phẩm vào giỏ hàng' })
+  async addToCart(@Request() req, @Body() data: { medicineId: string; quantity?: number }) {
+    return await sendKafkaMessage(this.kafkaClient, 'user.cart.add', {
+      userId: req.user.sub,
+      medicineId: data.medicineId,
+      quantity: data.quantity || 1,
+    });
+  }
+
+  @Put('cart/:medicineId')
+  @ApiOperation({ summary: 'Cập nhật số lượng của sản phẩm trong giỏ hàng' })
+  async updateCartItem(
+    @Request() req,
+    @Param('medicineId') medicineId: string,
+    @Body('quantity') quantity: number
+  ) {
+    return await sendKafkaMessage(this.kafkaClient, 'user.cart.update', {
+      userId: req.user.sub,
+      medicineId,
+      quantity,
+    });
+  }
+
+  @Delete('cart/:medicineId')
+  @ApiOperation({ summary: 'Xóa sản phẩm khỏi giỏ hàng' })
+  async deleteCartItem(@Request() req, @Param('medicineId') medicineId: string) {
+    return await sendKafkaMessage(this.kafkaClient, 'user.cart.delete', {
+      userId: req.user.sub,
+      medicineId,
+    });
+  }
+
+  @Post('cart/clear')
+  @ApiOperation({ summary: 'Dọn sạch giỏ hàng' })
+  async clearCart(@Request() req) {
+    return await sendKafkaMessage(this.kafkaClient, 'user.cart.clear', {
+      userId: req.user.sub,
+    });
+  }
 }
+

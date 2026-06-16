@@ -11,11 +11,19 @@ export function CustomerCart() {
   const [interactionResult, setInteractionResult] = useState<any>(null);
   const [showInteractionBox, setShowInteractionBox] = useState(false);
 
-  const loadCart = () => {
+  const loadCart = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    
     try {
-      const data = localStorage.getItem("customer_cart");
-      if (data) {
-        setCartItems(JSON.parse(data));
+      const res = await fetch("/api/users/cart", {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCartItems(data.items || []);
       }
     } catch (err) {
       console.error("Error loading cart:", err);
@@ -26,34 +34,68 @@ export function CustomerCart() {
     loadCart();
   }, []);
 
-  const updateQuantity = (id: string, newQty: number) => {
+  const updateQuantity = async (id: string, newQty: number) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
     if (newQty <= 0) {
       handleDelete(id);
       return;
     }
-    const updated = cartItems.map((item) => {
-      if (item.id === id) {
-        if (newQty > item.stock) {
-          alert(`Chỉ còn ${item.stock} sản phẩm khả dụng trong kho!`);
-          return item;
-        }
-        return { ...item, quantity: newQty };
+
+    // Check client-side stock first before sending request
+    const item = cartItems.find((it) => it.id === id);
+    if (item && newQty > item.stock) {
+      alert(`Chỉ còn ${item.stock} sản phẩm khả dụng trong kho!`);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/users/cart/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ quantity: newQty })
+      });
+      
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || "Không thể cập nhật số lượng.");
       }
-      return item;
-    });
-    setCartItems(updated);
-    localStorage.setItem("customer_cart", JSON.stringify(updated));
-    window.dispatchEvent(new Event("cartUpdated"));
+
+      await loadCart();
+      window.dispatchEvent(new Event("cartUpdated"));
+    } catch (err: any) {
+      alert(err.message || "Lỗi cập nhật giỏ hàng");
+    }
   };
 
-  const handleDelete = (id: string) => {
-    const updated = cartItems.filter((item) => item.id !== id);
-    setCartItems(updated);
-    localStorage.setItem("customer_cart", JSON.stringify(updated));
-    window.dispatchEvent(new Event("cartUpdated"));
-    // Hide interaction result if items changed
-    setInteractionResult(null);
-    setShowInteractionBox(false);
+  const handleDelete = async (id: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const response = await fetch(`/api/users/cart/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || "Không thể xóa sản phẩm.");
+      }
+
+      await loadCart();
+      window.dispatchEvent(new Event("cartUpdated"));
+      setInteractionResult(null);
+      setShowInteractionBox(false);
+    } catch (err: any) {
+      alert(err.message || "Lỗi xóa sản phẩm");
+    }
   };
 
   // Check drug interactions using the API Gateway
@@ -102,6 +144,9 @@ export function CustomerCart() {
   const vat = Math.round((subtotal - memberDiscount) * 0.08); // 8% VAT
   const total = subtotal - memberDiscount + vat;
 
+  // Check if any item has price changed
+  const hasPriceChangedItem = cartItems.some((it) => it.priceChanged);
+
   return (
     <div className="flex flex-col gap-6 flex-1">
       <div className="flex items-center gap-3 border-b border-slate-150 pb-4">
@@ -119,6 +164,21 @@ export function CustomerCart() {
           {/* Left: Cart Items List */}
           <div className="flex-1 flex flex-col gap-6 w-full">
             
+            {/* Price change notification banner */}
+            {hasPriceChangedItem && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-sm flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                  <Info size={20} />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-amber-900 text-sm">Cảnh báo cập nhật giá!</h4>
+                  <p className="text-[11px] text-amber-700 font-semibold mt-0.5 leading-normal">
+                    Một số sản phẩm trong giỏ hàng của bạn đã được cập nhật giá mới từ hệ thống. Vui lòng kiểm tra lại đơn giá và tổng thanh toán trước khi tiến hành đặt hàng.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* AI Drug Interaction Checker Widget */}
             <div className="bg-gradient-to-r from-indigo-50/50 to-blue-50/30 border border-blue-100 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-start gap-3.5">
@@ -242,6 +302,11 @@ export function CustomerCart() {
                         {item.active_ingredient && (
                           <div className="text-[10px] font-semibold text-[#0d6efd] mt-1">Hoạt chất: {item.active_ingredient}</div>
                         )}
+                        {item.priceChanged && (
+                          <div className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1 mt-1.5 inline-block">
+                            ⚠️ Đã đổi giá (Giá cũ: {item.addedPrice.toLocaleString()}₫)
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-5 text-center">
                         <div className="flex items-center justify-center gap-2.5">
@@ -359,3 +424,4 @@ export function CustomerCart() {
     </div>
   );
 }
+
