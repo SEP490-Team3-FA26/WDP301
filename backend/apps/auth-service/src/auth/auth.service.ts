@@ -13,7 +13,7 @@ import { User, UserRole } from './user.schema';
 import { VerificationToken, TokenType } from './verification-token.schema';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import * as nodemailer from 'nodemailer';
+import { SqsEmailService } from '../email/sqs-email.service';
 
 @Injectable()
 export class AuthService {
@@ -23,6 +23,7 @@ export class AuthService {
     @InjectModel(VerificationToken.name)
     private readonly tokenModel: Model<VerificationToken>,
     private readonly jwtService: JwtService,
+    private readonly emailService: SqsEmailService,
   ) {}
 
   // ============================================================
@@ -180,17 +181,8 @@ export class AuthService {
     });
 
     try {
-      if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-          },
-        });
-
-        await transporter.sendMail({
-          from: `"ABC Pharmacy" <${process.env.SMTP_USER}>`,
+      if (this.emailService.isEnabled) {
+        await this.emailService.sendEmail({
           to: email,
           subject: 'Mã xác nhận khôi phục mật khẩu',
           html: `
@@ -228,12 +220,12 @@ export class AuthService {
             </div>
           `,
         });
-        console.log(`✉️ [Email] Đã gửi OTP đến ${email}`);
+        console.log(`✉️ [Email] Đã enqueue OTP đến ${email} (SQS→Lambda→SES)`);
       } else {
         console.warn(`⚠️ [MOCK EMAIL] Gửi email đến ${email}. Mã OTP: ${otp}`);
       }
     } catch (error: any) {
-      console.error(`❌ [Email Error] Lỗi gửi mail: ${error.message}`);
+      console.error(`❌ [Email Error] Lỗi enqueue mail: ${error.message}`);
     }
 
     return { message: 'Mã xác nhận đã được gửi đến email của bạn!' };
