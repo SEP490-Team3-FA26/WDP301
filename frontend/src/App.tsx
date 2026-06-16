@@ -6,6 +6,7 @@ import { AdminLayout } from "./layouts/AdminLayout";
 import { WarehouseLayout } from "./layouts/WarehouseLayout";
 import { BranchLayout } from "./layouts/BranchLayout";
 import { PharmacistLayout } from "./layouts/PharmacistLayout";
+import { CustomerLayout } from "./layouts/CustomerLayout";
 
 // Auth Pages
 import { Landing } from "./pages/common/Landing";
@@ -19,6 +20,12 @@ import { DashboardHome } from "./pages/common/Dashboard";
 import { Profile } from "./pages/common/Profile";
 import { Settings } from "./pages/common/Settings";
 import { AIInsights } from "./pages/common/AIInsights";
+
+// Customer Pages
+import { CustomerShop } from "./pages/customer/CustomerShop";
+import { CustomerCart } from "./pages/customer/CustomerCart";
+import { CustomerCheckout } from "./pages/customer/CustomerCheckout";
+import { AIConsultant } from "./pages/customer/AIConsultant";
 
 // Master Data
 import { Products } from "./pages/master-data/Products";
@@ -50,7 +57,7 @@ export default function App() {
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/interactions" element={<DrugInteractions />} />
-        
+
         {/* Auth Routes */}
         <Route path="/auth" element={<AuthLayout />}>
           <Route path="login" element={<Login />} />
@@ -65,6 +72,15 @@ export default function App() {
         <Route path="/forgot-password" element={<Navigate to="/auth/forgot-password" replace />} />
         <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
 
+        {/* --- Customer Routes --- */}
+        <Route path="/customer" element={<CustomerLayout />}>
+          <Route index element={<Navigate to="shop" replace />} />
+          <Route path="shop" element={<CustomerShop />} />
+          <Route path="cart" element={<CustomerCart />} />
+          <Route path="checkout" element={<CustomerCheckout />} />
+          <Route path="ai-consult" element={<AIConsultant />} />
+        </Route>
+
         {/* --- Admin / HQ Routes --- */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<DashboardHome />} />
@@ -75,7 +91,7 @@ export default function App() {
           <Route path="ai-insights" element={<AIInsights />} />
           <Route path="profile" element={<Profile />} />
           <Route path="settings" element={<Settings />} />
-          
+
           <Route path="inventory" element={<Inventory />} />
           <Route path="inventory/import" element={<InventoryHistory type="import" />} />
           <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
@@ -97,7 +113,7 @@ export default function App() {
           <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
           <Route path="ai-insights" element={<AIInsights />} />
           <Route path="profile" element={<Profile />} />
-          
+
           <Route path="master-data/products" element={<Products />} />
           <Route path="master-data/suppliers" element={<Suppliers />} />
         </Route>
@@ -128,3 +144,4 @@ export default function App() {
     </BrowserRouter>
   );
 }
+

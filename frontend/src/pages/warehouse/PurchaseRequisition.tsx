@@ -6,30 +6,72 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
+// --- In-memory cache for instant back-navigation (resets on page refresh/new login) ---
+const prCache: Record<string, { data: any[]; ts: number }> = {};
+let lastSelectedTab: "SUBMITTED" | "CONSOLIDATED" | "APPROVED" = "SUBMITTED";
+
+function getCachedPrList(tab: string): any[] | null {
+  const entry = prCache[tab];
+  if (!entry) return null;
+  // Cache valid for 5 minutes
+  if (Date.now() - entry.ts > 5 * 60 * 1000) {
+    delete prCache[tab];
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedPrList(tab: string, data: any[]) {
+  prCache[tab] = { data, ts: Date.now() };
+}
+
 /**
  * BƯỚC 2a — Quản lý Kho tiếp nhận PR từ chi nhánh, gom đơn rồi gửi lên HQ.
  * Sau khi HQ duyệt (APPROVED), Quản lý Kho tạo PO.
  */
 export function PurchaseRequisition() {
   const navigate = useNavigate();
-  const [prList, setPrList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [prList, setPrList] = useState<any[]>(() => getCachedPrList(lastSelectedTab) || []);
+  const [loading, setLoading] = useState(() => !getCachedPrList(lastSelectedTab));
   const [searchQuery, setSearchQuery] = useState("");
-  const [tab, setTab] = useState<"SUBMITTED" | "CONSOLIDATED" | "APPROVED">("SUBMITTED");
+  const [tab, setTab] = useState<"SUBMITTED" | "CONSOLIDATED" | "APPROVED">(lastSelectedTab);
   const [selectedPrs, setSelectedPrs] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [detailPr, setDetailPr] = useState<any>(null);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
-      const res = await fetch(`/api/purchase-requisitions?status=${tab}`);
-      if (res.ok) setPrList(await res.json());
-    } catch { } finally { setLoading(false); }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const res = await fetch(`/api/purchase-requisitions?status=${tab}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        setPrList(data);
+        setCachedPrList(tab, data);
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        console.error('PR fetch timed out after 20s');
+      }
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); setSelectedPrs([]); }, [tab]);
+  useEffect(() => {
+    lastSelectedTab = tab;
+    const cached = getCachedPrList(tab);
+    if (cached) {
+      // Show cached data instantly, refresh in background
+      setPrList(cached);
+      setLoading(false);
+      fetchData(false); // silent background refresh
+    } else {
+      fetchData(true);
+    }
+    setSelectedPrs([]);
+  }, [tab]);
 
   // Gom đơn: SUBMITTED → CONSOLIDATED
   const handleConsolidate = async () => {
@@ -222,8 +264,8 @@ export function PurchaseRequisition() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex-1">
-        <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center gap-3">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 mt-2">
+        <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center gap-3 shrink-0">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
             <input type="text" placeholder="Tìm mã PR hoặc chi nhánh..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
@@ -231,7 +273,7 @@ export function PurchaseRequisition() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-auto flex-1">
           {loading ? (
             <div className="flex flex-col items-center py-16 gap-3"><Loader2 className="animate-spin text-amber-600" size={28} /><p className="text-slate-500 text-sm">Đang tải...</p></div>
           ) : filtered.length === 0 ? (

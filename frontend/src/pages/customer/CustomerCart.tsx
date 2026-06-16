@@ -1,0 +1,361 @@
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { ShoppingCart, Trash2, ArrowRight, Minus, Plus, ShieldAlert, Sparkles, XCircle, Info, HeartPulse } from "lucide-react";
+
+export function CustomerCart() {
+  const navigate = useNavigate();
+  const [cartItems, setCartItems] = useState<any[]>([]);
+  
+  // AI Interaction check states
+  const [checkingInteraction, setCheckingInteraction] = useState(false);
+  const [interactionResult, setInteractionResult] = useState<any>(null);
+  const [showInteractionBox, setShowInteractionBox] = useState(false);
+
+  const loadCart = () => {
+    try {
+      const data = localStorage.getItem("customer_cart");
+      if (data) {
+        setCartItems(JSON.parse(data));
+      }
+    } catch (err) {
+      console.error("Error loading cart:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadCart();
+  }, []);
+
+  const updateQuantity = (id: string, newQty: number) => {
+    if (newQty <= 0) {
+      handleDelete(id);
+      return;
+    }
+    const updated = cartItems.map((item) => {
+      if (item.id === id) {
+        if (newQty > item.stock) {
+          alert(`Chỉ còn ${item.stock} sản phẩm khả dụng trong kho!`);
+          return item;
+        }
+        return { ...item, quantity: newQty };
+      }
+      return item;
+    });
+    setCartItems(updated);
+    localStorage.setItem("customer_cart", JSON.stringify(updated));
+    window.dispatchEvent(new Event("cartUpdated"));
+  };
+
+  const handleDelete = (id: string) => {
+    const updated = cartItems.filter((item) => item.id !== id);
+    setCartItems(updated);
+    localStorage.setItem("customer_cart", JSON.stringify(updated));
+    window.dispatchEvent(new Event("cartUpdated"));
+    // Hide interaction result if items changed
+    setInteractionResult(null);
+    setShowInteractionBox(false);
+  };
+
+  // Check drug interactions using the API Gateway
+  const handleCheckInteractions = async () => {
+    if (cartItems.length < 2) {
+      alert("Cần có ít nhất 2 loại thuốc trong giỏ hàng để kiểm tra tương tác chéo!");
+      return;
+    }
+    setCheckingInteraction(true);
+    setInteractionResult(null);
+    setShowInteractionBox(true);
+
+    try {
+      const medicineNames = cartItems.map((it) => it.name);
+      
+      const res = await fetch("/api/medicines/check-interaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ medicines: medicineNames })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setInteractionResult(data);
+      } else {
+        const err = await res.json();
+        setInteractionResult({
+          error: true,
+          message: err.detail || err.message || "Lỗi không xác định khi kiểm tra tương tác."
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setInteractionResult({
+        error: true,
+        message: "Lỗi kết nối máy chủ y tế."
+      });
+    } finally {
+      setCheckingInteraction(false);
+    }
+  };
+
+  // Pricing calculations
+  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const memberDiscount = Math.round(subtotal * 0.05); // 5% discount
+  const vat = Math.round((subtotal - memberDiscount) * 0.08); // 8% VAT
+  const total = subtotal - memberDiscount + vat;
+
+  return (
+    <div className="flex flex-col gap-6 flex-1">
+      <div className="flex items-center gap-3 border-b border-slate-150 pb-4">
+        <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-[#0d6efd]">
+          <ShoppingCart size={22} />
+        </div>
+        <div>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Giỏ Hàng Của Bạn</h1>
+          <p className="text-xs text-slate-500 font-medium">Kiểm tra danh mục sản phẩm đã chọn trước khi thanh toán.</p>
+        </div>
+      </div>
+
+      {cartItems.length > 0 ? (
+        <div className="flex flex-col xl:flex-row gap-8 items-start">
+          {/* Left: Cart Items List */}
+          <div className="flex-1 flex flex-col gap-6 w-full">
+            
+            {/* AI Drug Interaction Checker Widget */}
+            <div className="bg-gradient-to-r from-indigo-50/50 to-blue-50/30 border border-blue-100 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                  <HeartPulse size={20} />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                    Kiểm Tra Tương Tác Dược Lý Bằng AI
+                    <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black rounded-full uppercase tracking-wider">AI Powered</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    Hệ thống AI sẽ đối chiếu dữ liệu tương tác từ FDA và Bộ Y Tế để phân tích tính an toàn của giỏ hàng.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleCheckInteractions}
+                disabled={cartItems.length < 2 || checkingInteraction}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm shrink-0 flex items-center gap-1.5"
+              >
+                <Sparkles size={13} />
+                {checkingInteraction ? "Đang phân tích..." : "Kiểm tra ngay"}
+              </button>
+            </div>
+
+            {/* Render Interaction results box */}
+            {showInteractionBox && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col gap-4 animate-slide-in-top">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h4 className="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldAlert size={16} className="text-indigo-600 animate-pulse" /> Kết quả đánh giá lâm sàng
+                  </h4>
+                  <button
+                    onClick={() => setShowInteractionBox(false)}
+                    className="text-xs text-slate-400 hover:text-slate-700 font-bold"
+                  >
+                    Đóng
+                  </button>
+                </div>
+
+                {checkingInteraction ? (
+                  <div className="flex items-center justify-center py-6 gap-2.5">
+                    <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Dược sĩ AI đang duyệt toa...</span>
+                  </div>
+                ) : interactionResult?.error ? (
+                  <div className="p-4 bg-red-50 text-red-700 border border-red-100 rounded-xl text-xs font-semibold flex items-center gap-2">
+                    <XCircle size={16} className="text-red-500 shrink-0" />
+                    {interactionResult.message}
+                  </div>
+                ) : interactionResult ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500">Mức độ cảnh báo:</span>
+                      <span
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                          interactionResult.severity === "Cao"
+                            ? "bg-red-100 text-red-800 animate-bounce"
+                            : interactionResult.severity === "Trung bình"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-emerald-100 text-emerald-800"
+                        }`}
+                      >
+                        {interactionResult.severity || "An toàn / Safe"}
+                      </span>
+                    </div>
+
+                    {interactionResult.has_interactions && interactionResult.interactions?.length > 0 ? (
+                      <div className="space-y-3 mt-1.5">
+                        {interactionResult.interactions.map((inter: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="bg-rose-50/50 border border-rose-100 rounded-xl p-4 flex flex-col gap-2"
+                          >
+                            <div className="font-extrabold text-[13px] text-rose-950 flex items-center gap-1.5">
+                              ⚠️ Tương tác: <span className="underline">{inter.drug_a}</span> x <span className="underline">{inter.drug_b}</span>
+                            </div>
+                            <p className="text-xs text-rose-800 leading-relaxed font-semibold">
+                              {inter.description}
+                            </p>
+                            <div className="text-[11px] bg-white border border-rose-100/50 p-2.5 rounded-lg text-slate-700 font-bold leading-normal">
+                              Khuyến nghị: {inter.recommendation}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl p-4 font-semibold text-xs leading-relaxed">
+                        Không phát hiện bất kỳ tương tác chéo nguy hại nào giữa các thành phần thuốc trong giỏ hàng. Bạn có thể yên tâm sử dụng!
+                      </div>
+                    )}
+                    {interactionResult.general_advice && (
+                      <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-[11px] font-bold text-slate-600 leading-relaxed mt-2.5">
+                        💡 Lời khuyên y tế: {interactionResult.general_advice}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* Cart Items Table container */}
+            <div className="bg-white border border-slate-200 rounded-[20px] shadow-sm overflow-hidden">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    <th className="px-6 py-4">Sản Phẩm</th>
+                    <th className="px-4 py-4 text-center">Số Lượng</th>
+                    <th className="px-6 py-4 text-right">Đơn Giá</th>
+                    <th className="px-6 py-4 text-right">Thành Tiền</th>
+                    <th className="px-4 py-4 text-center">Xóa</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {cartItems.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
+                      <td className="px-6 py-5">
+                        <div className="font-extrabold text-slate-900 text-[14px]">{item.name}</div>
+                        <div className="text-[11px] text-slate-400 font-medium mt-0.5">{item.category}</div>
+                        {item.active_ingredient && (
+                          <div className="text-[10px] font-semibold text-[#0d6efd] mt-1">Hoạt chất: {item.active_ingredient}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-5 text-center">
+                        <div className="flex items-center justify-center gap-2.5">
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-90 transition-transform"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span className="font-bold text-[14px] text-slate-900 w-6 text-center">{item.quantity}</span>
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-90 transition-transform"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 text-right font-medium text-slate-500">
+                        {item.price.toLocaleString()}₫
+                        <span className="text-[10px] text-slate-400 block mt-0.5">/{item.unit}</span>
+                      </td>
+                      <td className="px-6 py-5 text-right font-black text-slate-900">
+                        {(item.price * item.quantity).toLocaleString()}₫
+                      </td>
+                      <td className="px-4 py-5 text-center">
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Link
+              to="/customer/shop"
+              className="text-xs font-bold text-[#0d6efd] hover:underline flex items-center gap-1.5 self-start"
+            >
+              ← Tiếp tục mua thêm thuốc khác
+            </Link>
+          </div>
+
+          {/* Right: Payment Sidebar */}
+          <div className="w-full xl:w-[360px] flex flex-col gap-6 shrink-0 lg:sticky lg:top-24">
+            
+            {/* Promos */}
+            <div className="bg-white border border-slate-200 rounded-[20px] p-5 shadow-sm">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Ưu Đãi Thành Viên</span>
+              <div className="mt-2.5 p-3.5 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-xl">
+                <span className="font-black text-xs block mb-0.5">VIP Silver Member 5% Off</span>
+                <p className="text-[10px] font-semibold text-emerald-700/90 leading-normal">
+                  Chiết khấu thành viên được tự động áp dụng trực tiếp cho toàn bộ đơn hàng của bạn.
+                </p>
+              </div>
+            </div>
+
+            {/* Total breakdown */}
+            <div className="bg-white border border-slate-200 rounded-[20px] p-6 shadow-sm flex flex-col gap-4">
+              <h3 className="font-black text-slate-800 text-xs uppercase tracking-wider border-b border-slate-100 pb-3">Tóm tắt giỏ hàng</h3>
+              
+              <div className="flex flex-col gap-2.5 text-xs font-semibold text-slate-600">
+                <div className="flex justify-between items-center">
+                  <span>Tạm tính / Subtotal</span>
+                  <span className="font-bold text-slate-900">{subtotal.toLocaleString()}₫</span>
+                </div>
+                <div className="flex justify-between items-center text-[#ba1a1a]">
+                  <span>Ưu đãi thành viên (5%)</span>
+                  <span className="font-bold">-{memberDiscount.toLocaleString()}₫</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Thuế VAT (8%)</span>
+                  <span className="font-bold text-slate-900">{vat.toLocaleString()}₫</span>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-4 mt-2">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-black text-slate-900 uppercase tracking-wider pb-0.5">Tổng thanh toán</span>
+                  <span className="text-2xl font-black text-[#0d6efd] tracking-tight">{total.toLocaleString()}₫</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate("/customer/checkout")}
+                className="w-full mt-2.5 bg-[#0d6efd] hover:bg-[#0a58ca] text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-blue-150 transition-all active:scale-98"
+              >
+                Tiến hành đặt hàng <ArrowRight size={14} />
+              </button>
+            </div>
+
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-[24px] p-16 flex flex-col items-center justify-center text-center">
+          <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 border border-slate-100 mb-4">
+            <ShoppingCart size={28} />
+          </div>
+          <h3 className="font-bold text-slate-700 text-md">Giỏ hàng trống</h3>
+          <p className="text-slate-400 text-xs mt-1.5 max-w-xs leading-normal">
+            Không có sản phẩm nào trong giỏ hàng. Nhấp vào cửa hàng để chọn loại thuốc phù hợp.
+          </p>
+          <Link
+            to="/customer/shop"
+            className="mt-5 px-6 py-2.5 bg-[#0d6efd] text-white text-xs font-bold rounded-xl hover:bg-[#0a58ca] transition-all uppercase tracking-wider shadow-sm"
+          >
+            Vào cửa hàng ngay
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}

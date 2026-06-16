@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Building2, AlertTriangle, Search, Plus, Trash2, CheckCircle2, ShieldAlert, PackagePlus, ClipboardList } from "lucide-react";
+import { ArrowLeft, Building2, AlertTriangle, Search, Plus, Trash2, CheckCircle2, ShieldAlert, PackagePlus, ClipboardList, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 
 export function PurchaseOrderCreate() {
@@ -20,6 +20,84 @@ export function PurchaseOrderCreate() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [approvedPrs, setApprovedPrs] = useState<any[]>([]);
   const [selectedPrId, setSelectedPrId] = useState<string>("");
+  const [isPrefilling, setIsPrefilling] = useState(false);
+  const prefillDone = useRef(false);
+
+  // --- Helper: fetch a single medicine by ID ---
+  const fetchMedicineById = async (id: string) => {
+    try {
+      const res = await fetch(`/api/medicines/${id}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  };
+
+  // --- Fast prefill: fetch only the medicines referenced in PR items ---
+  useEffect(() => {
+    if (prefillDone.current) return;
+    if (!state?.prefillPrItems || state.prefillPrItems.length === 0) return;
+
+    prefillDone.current = true;
+    setIsPrefilling(true);
+
+    // 1. Consolidate PR items by medicineId
+    const itemMap = new Map<string, any>();
+    state.prefillPrItems.forEach(item => {
+      if (!item || !item.medicineId) return;
+      if (itemMap.has(item.medicineId)) {
+        const existing = itemMap.get(item.medicineId);
+        if (existing) {
+          existing.quantity += item.requestedQuantity || item.quantity || 0;
+          if (item.prId) {
+            existing.prIds = [...(existing.prIds || []), item.prId];
+          }
+        }
+      } else {
+        itemMap.set(item.medicineId, {
+          ...item,
+          quantity: item.requestedQuantity || item.quantity || 0,
+          prIds: item.prId ? [item.prId] : []
+        });
+      }
+    });
+
+    // 2. Fetch only the needed medicines by ID (parallel, very fast)
+    const uniqueIds = [...itemMap.keys()];
+    Promise.all(uniqueIds.map(id => fetchMedicineById(id)))
+      .then(results => {
+        const medMap = new Map<string, any>();
+        results.forEach(med => {
+          if (med) {
+            const id = med.id || med._id;
+            medMap.set(id, med);
+          }
+        });
+
+        const newCart: any[] = [];
+        itemMap.forEach((item, medicineId) => {
+          const med = medMap.get(medicineId);
+          if (med) {
+            newCart.push({
+              ...med,
+              id: med.id || med._id,
+              quantity: item.quantity,
+              unitPrice: med.price || 0,
+              prId: item.prId,
+              prIds: item.prIds || []
+            });
+          }
+        });
+
+        if (newCart.length > 0) {
+          setCart(newCart);
+          if (newCart[0].supplierId) {
+            setSelectedSupplierId(newCart[0].supplierId);
+          }
+        }
+      })
+      .catch(err => console.error('Prefill error:', err))
+      .finally(() => setIsPrefilling(false));
+  }, [state]);
 
   useEffect(() => {
     // Fetch Suppliers
@@ -28,8 +106,8 @@ export function PurchaseOrderCreate() {
       .then(data => setSuppliers(data))
       .catch(err => console.error(err));
 
-    // Fetch Medicines
-    fetch('/api/medicines?limit=10000') // Getting all for dropdown and prefill matching
+    // Fetch Medicines for dropdown (lazy — not needed for prefill)
+    fetch('/api/medicines?limit=10000')
       .then(res => res.json())
       .then(data => setMedicines(data.data || data))
       .catch(err => console.error(err));
@@ -44,7 +122,7 @@ export function PurchaseOrderCreate() {
       .catch(err => console.error(err));
   }, []);
 
-  // Prefill effect when navigation state is present
+  // Prefill effect for single medicine (e.g. from low-stock alert)
   useEffect(() => {
     if (state?.prefilledMedicineId && medicines.length > 0) {
       const med = medicines.find(m => m.id === state.prefilledMedicineId);
@@ -56,52 +134,10 @@ export function PurchaseOrderCreate() {
           setSelectedSupplierId(med.supplierId);
         }
       }
-    } else if (state?.prefillPrItems && medicines.length > 0 && cart.length === 0) {
-      const itemMap = new Map();
-      state.prefillPrItems.forEach(item => {
-        if (!item || !item.medicineId) return;
-        if (itemMap.has(item.medicineId)) {
-          const existing = itemMap.get(item.medicineId);
-          if (existing) {
-            existing.quantity += item.requestedQuantity || item.quantity || 0;
-            if (item.prId) {
-              existing.prIds = [...(existing.prIds || []), item.prId];
-            }
-          }
-        } else {
-          itemMap.set(item.medicineId, {
-            ...item,
-            quantity: item.requestedQuantity || item.quantity || 0,
-            prIds: item.prId ? [item.prId] : []
-          });
-        }
-      });
-
-      const newCart: any[] = [];
-      itemMap.forEach((item, medicineId) => {
-        const med = medicines.find(m => m.id === medicineId || m._id === medicineId);
-        if (med) {
-          newCart.push({
-            ...med,
-            id: med.id || med._id,
-            quantity: item.quantity,
-            unitPrice: med.price || 0,
-            prId: item.prId,
-            prIds: item.prIds || []
-          });
-        }
-      });
-
-      if (newCart.length > 0) {
-        setCart(newCart);
-        if (newCart[0].supplierId && !selectedSupplierId) {
-          setSelectedSupplierId(newCart[0].supplierId);
-        }
-      }
     }
-  }, [state, medicines, cart.length]);
+  }, [state, medicines]);
 
-  const handlePrSelect = (prId: string) => {
+  const handlePrSelect = async (prId: string) => {
     setSelectedPrId(prId);
     if (!prId) {
       setCart([]);
@@ -111,6 +147,8 @@ export function PurchaseOrderCreate() {
 
     const selectedPr = approvedPrs.find(pr => pr._id === prId);
     if (!selectedPr) return;
+
+    setIsPrefilling(true);
 
     const prItems = (selectedPr.items || []).map((item: any) => ({
       medicineId: item.medicineId,
@@ -139,26 +177,44 @@ export function PurchaseOrderCreate() {
       }
     });
 
-    const newCart: any[] = [];
-    itemMap.forEach((item, medId) => {
-      const med = medicines.find(m => m.id === medId || m._id === medId);
-      if (med) {
-        newCart.push({
-          ...med,
-          id: med.id || med._id,
-          quantity: item.quantity,
-          unitPrice: med.price || 0,
-          prId: item.prId,
-          prIds: item.prIds || []
-        });
-      }
-    });
+    try {
+      // Fetch only the medicines referenced in this PR (fast parallel fetch)
+      const uniqueIds = [...itemMap.keys()];
+      const results = await Promise.all(uniqueIds.map(id => fetchMedicineById(id)));
+      
+      const medMap = new Map<string, any>();
+      results.forEach(med => {
+        if (med) {
+          const id = med.id || med._id;
+          medMap.set(id, med);
+        }
+      });
 
-    if (newCart.length > 0) {
-      setCart(newCart);
-      if (newCart[0].supplierId) {
-        setSelectedSupplierId(newCart[0].supplierId);
+      const newCart: any[] = [];
+      itemMap.forEach((item, medicineId) => {
+        const med = medMap.get(medicineId);
+        if (med) {
+          newCart.push({
+            ...med,
+            id: med.id || med._id,
+            quantity: item.quantity,
+            unitPrice: med.price || 0,
+            prId: item.prId,
+            prIds: item.prIds || []
+          });
+        }
+      });
+
+      if (newCart.length > 0) {
+        setCart(newCart);
+        if (newCart[0].supplierId) {
+          setSelectedSupplierId(newCart[0].supplierId);
+        }
       }
+    } catch (err) {
+      console.error('PR select prefill error:', err);
+    } finally {
+      setIsPrefilling(false);
     }
   };
 
@@ -401,7 +457,13 @@ export function PurchaseOrderCreate() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-0">
-              {cart.length === 0 ? (
+              {isPrefilling ? (
+                <div className="h-full flex flex-col items-center justify-center text-emerald-600 gap-3 py-16">
+                  <Loader2 size={28} className="animate-spin" />
+                  <p className="text-sm font-semibold text-slate-600">Đang tải dữ liệu từ PR...</p>
+                  <p className="text-xs text-slate-400">Vui lòng chờ trong giây lát</p>
+                </div>
+              ) : cart.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
                   <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center border border-dashed border-slate-300">
                     <PackagePlus size={24} className="text-slate-400" />
@@ -471,7 +533,7 @@ export function PurchaseOrderCreate() {
                   setIsSubmitting(true);
                   setErrorMsg(null);
                   try {
-                     const res = await fetch('/api/purchase-orders', {
+                    const res = await fetch('/api/purchase-orders', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({

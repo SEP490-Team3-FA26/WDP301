@@ -20,13 +20,22 @@ export function BranchRequisition() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      
       const [prRes, medRes] = await Promise.all([
-        fetch("/api/purchase-requisitions").then(r => r.json()).catch(() => []),
-        fetch("/api/medicines?limit=500").then(r => r.json()).then(d => d.data || d).catch(() => []),
+        fetch("/api/purchase-requisitions", { signal: controller.signal }).then(r => r.json()).catch(() => []),
+        fetch("/api/medicines?limit=500", { signal: controller.signal }).then(r => r.json()).then(d => d.data || d).catch(() => []),
       ]);
+      
+      clearTimeout(timeoutId);
       setPrList(prRes);
       setMedicines(medRes);
-    } catch { }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        console.error('Fetch timed out after 20s');
+      }
+    }
     finally { setLoading(false); }
   };
 

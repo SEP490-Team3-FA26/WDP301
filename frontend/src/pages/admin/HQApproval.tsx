@@ -106,7 +106,7 @@ export function HQApproval() {
           <ArrowRight size={14} className="text-slate-300" />
           <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg opacity-50">Kho đã gom đơn</span>
           <ArrowRight size={14} className="text-slate-400" />
-          <span className="px-3 py-1.5 bg-violet-500 text-white rounded-lg ring-2 ring-violet-300">👉 Bạn phê duyệt</span>
+          <span className="px-3 py-1.5 bg-violet-500 text-white rounded-lg ring-2 ring-violet-300">Bạn phê duyệt</span>
           <ArrowRight size={14} className="text-slate-400" />
           <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg opacity-50">Kho tạo PO</span>
         </div>
@@ -181,8 +181,8 @@ export function HQApproval() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex-1">
-        <div className="p-4 border-b border-slate-200 bg-slate-50">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 mt-2">
+        <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0">
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
             <input type="text" placeholder="Tìm mã PR hoặc chi nhánh..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
@@ -190,7 +190,7 @@ export function HQApproval() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-auto flex-1">
           {loading ? (
             <div className="flex flex-col items-center py-16 gap-3"><Loader2 className="animate-spin text-violet-600" size={28} /><p className="text-slate-500 text-sm">Đang tải...</p></div>
           ) : filtered.length === 0 ? (
