@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ShieldCheck } from "lucide-react";
+import { authService } from "../../services/auth.service";
 
 export function VerifyEmail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const emailParam = searchParams.get("email") || "";
+  
+  // Fallback to localStorage if search params does not contain email (e.g. page refresh/redirect parameter drops)
+  const emailParam = searchParams.get("email") || authService.getPendingEmail();
 
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
@@ -26,17 +29,7 @@ export function VerifyEmail() {
     }
 
     try {
-      const response = await fetch('/api/auth/verify-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailParam, token }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Xác thực tài khoản thất bại');
-      }
+      await authService.verifyEmail(emailParam, token);
 
       setSuccess("Kích hoạt tài khoản thành công! Đang chuyển hướng đăng nhập...");
       setTimeout(() => {
@@ -56,18 +49,7 @@ export function VerifyEmail() {
     setSuccess("");
 
     try {
-      const response = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailParam }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Không thể gửi lại mã OTP');
-      }
-
+      await authService.resendVerification(emailParam);
       setSuccess("Mã xác thực OTP mới đã được gửi vào email của bạn!");
     } catch (err: any) {
       setError(err.message);

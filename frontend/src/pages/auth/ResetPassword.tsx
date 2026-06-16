@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Lock, ShieldCheck } from "lucide-react";
+import { authService } from "../../services/auth.service";
 
 export function ResetPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const emailParam = searchParams.get("email") || "";
+  
+  // Fallback to localStorage if search params does not contain email
+  const emailParam = searchParams.get("email") || authService.getPendingEmail();
 
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -26,17 +29,7 @@ export function ResetPassword() {
     }
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailParam, token, newPassword }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Đặt lại mật khẩu thất bại');
-      }
+      await authService.resetPassword(emailParam, token, newPassword);
 
       setSuccess("Đặt lại mật khẩu thành công! Đang chuyển hướng...");
       setTimeout(() => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Mail, Lock, Building2, PackageSearch, Store, Pill, ShieldCheck, CheckCircle2, Users } from "lucide-react";
+import { authService } from "../../services/auth.service";
 
 export function Login() {
   const navigate = useNavigate();
@@ -67,23 +68,7 @@ export function Login() {
     setError("");
     
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      let data;
-      try {
-        const text = await response.text();
-        data = text ? JSON.parse(text) : {};
-      } catch (err) {
-        throw new Error('Không thể kết nối đến máy chủ. Backend có thể đang khởi động...');
-      }
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Đăng nhập thất bại (Máy chủ không phản hồi đúng định dạng).');
-      }
+      const data = await authService.login(email, password);
 
       // Lưu JWT Token và Role
       localStorage.setItem("token", data.access_token);
