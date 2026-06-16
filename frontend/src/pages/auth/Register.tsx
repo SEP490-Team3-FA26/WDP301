@@ -33,7 +33,7 @@ export function Register() {
 
       setSuccess("Đăng ký thành công! Đang chuyển hướng sang trang xác thực OTP...");
       setTimeout(() => {
-        navigate(`/verify-email?email=${encodeURIComponent(email)}`);
+        navigate(`/auth/verify-email?email=${encodeURIComponent(email)}`);
       }, 2000);
     } catch (err: any) {
       setError(err.message);
