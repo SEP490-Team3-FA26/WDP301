@@ -1,10 +1,11 @@
 import { BaseDashboardLayout } from "./BaseDashboardLayout";
-import { LayoutDashboard, Settings, Building2, Banknote, BarChart3, Sparkles, PackageSearch } from "lucide-react";
+import { LayoutDashboard, Settings, Building2, Banknote, BarChart3, Sparkles, PackageSearch, ShieldCheck } from "lucide-react";
 
 export function AdminLayout() {
   const adminNavItems = [
     { name: "Tổng quan Admin", href: "/admin", icon: <LayoutDashboard size={20} /> },
     { name: "Quản lý chi nhánh", href: "/admin/branches", icon: <Building2 size={20} /> },
+    { name: "Phê duyệt mua hàng", href: "/admin/approvals", icon: <ShieldCheck size={20} /> },
     { 
       name: "Kho tổng (Warehouse)", 
       icon: <PackageSearch size={20} />,

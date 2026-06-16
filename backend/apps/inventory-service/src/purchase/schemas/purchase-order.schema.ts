@@ -9,6 +9,9 @@ export class PurchaseOrderItem {
   @Prop({ type: Number, required: true, min: 1 })
   quantity: number;
 
+  @Prop({ type: Number, default: 0 })
+  receivedQuantity: number; // Số lượng đã nhận thực tế (dùng cho Partial Delivery)
+
   @Prop({ type: Number, required: true, min: 0 })
   unitPrice: number;
 }
@@ -25,11 +28,21 @@ export class PurchaseOrder extends Document {
   @Prop({ type: Number, required: true, min: 0 })
   totalAmount: number;
 
-  @Prop({ type: String, default: 'PENDING', enum: ['PENDING', 'COMPLETED', 'CANCELLED'] })
+  @Prop({
+    type: String,
+    default: 'PENDING',
+    enum: ['PENDING', 'PARTIAL_RECEIVED', 'COMPLETED', 'CANCELLED'],
+  })
   status: string;
 
   @Prop({ type: String }) // Optional user ID of creator
   createdBy: string;
+
+  @Prop({ type: String }) // Liên kết ngược lại PR gốc (nếu PO được tạo từ PR đã duyệt)
+  linkedPrId: string;
+
+  @Prop({ type: Number, default: 0 }) // Pipeline/Incoming Stock — hàng dự kiến về
+  expectedIncoming: number;
 }
 
 export const PurchaseOrderSchema = SchemaFactory.createForClass(PurchaseOrder);

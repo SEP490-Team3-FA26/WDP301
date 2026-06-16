@@ -6,8 +6,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 
 import { SupplierController } from './controllers/supplier.controller';
+import { PurchaseRequisitionController } from './controllers/purchase-requisition.controller';
 import { PurchaseOrderController } from './controllers/purchase-order.controller';
 import { GoodsReceiptController } from './controllers/goods-receipt.controller';
+import { InventoryTransactionController } from './controllers/inventory-transaction.controller';
 import { PrescriptionController } from './controllers/prescription.controller';
 import { SalesController } from './controllers/sales.controller';
 import { UserController } from './controllers/user.controller';
@@ -120,8 +122,10 @@ import { GoogleStrategy } from './strategies/google.strategy';
   ],
   controllers: [
     SupplierController, 
+    PurchaseRequisitionController,
     PurchaseOrderController, 
-    GoodsReceiptController, 
+    GoodsReceiptController,
+    InventoryTransactionController,
     PrescriptionController, 
     SalesController,
     UserController,

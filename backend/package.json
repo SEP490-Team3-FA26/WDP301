@@ -54,7 +54,7 @@
     "dotenv": "^17.4.2",
     "ioredis": "^5.10.1",
     "kafkajs": "^2.2.4",
-    "mongodb": "^7.3.0",
+    "mongodb": "^6.8.0",
     "mongoose": "^8.2.3",
     "nodemailer": "^8.0.10",
     "passport": "^0.7.0",

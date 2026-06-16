@@ -38,11 +38,16 @@ import { Suppliers } from "./pages/master-data/Suppliers";
 import { Inventory } from "./pages/warehouse/Inventory";
 import { InventoryHistory } from "./pages/warehouse/InventoryHistory";
 import { PurchaseOrderCreate } from "./pages/warehouse/PurchaseOrderCreate";
+import { PurchaseRequisition } from "./pages/warehouse/PurchaseRequisition";
 
-// Admin / Branch Pages
+// Admin / HQ Pages
 import { Finance } from "./pages/admin/Finance";
 import { Reports } from "./pages/admin/Reports";
 import { Branches } from "./pages/admin/Branches";
+import { HQApproval } from "./pages/admin/HQApproval";
+
+// Branch Pages
+import { BranchRequisition } from "./pages/branch/BranchRequisition";
 
 // Pharmacist / Branch Pages
 import { Sales } from "./pages/pharmacist/Sales";
@@ -86,6 +91,7 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="branches" element={<Branches />} />
+            <Route path="approvals" element={<HQApproval />} />
             <Route path="finance" element={<Finance />} />
             <Route path="reports" element={<Reports />} />
             <Route path="ai-insights" element={<AIInsights />} />
@@ -108,6 +114,7 @@ export default function App() {
           <Route path="/warehouse" element={<WarehouseLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory/requisitions" element={<PurchaseRequisition />} />
             <Route path="inventory/import" element={<InventoryHistory type="import" />} />
             <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
@@ -125,6 +132,7 @@ export default function App() {
           <Route path="/branch" element={<BranchLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="sales" element={<Sales />} />
+            <Route path="requisitions" element={<BranchRequisition />} />
             <Route path="finance" element={<Finance />} />
             <Route path="reports" element={<Reports />} />
             <Route path="profile" element={<Profile />} />
@@ -151,5 +159,3 @@ export default function App() {
     </BrowserRouter>
   );
 }
-
-
