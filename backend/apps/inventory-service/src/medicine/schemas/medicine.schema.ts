@@ -56,12 +56,6 @@ export class Medicine extends Document {
 
   @Prop()
   expiry_date?: string;
-
-  @Prop({ sparse: true })
-  sku?: string;
-
-  @Prop({ sparse: true })
-  barcode?: string;
 }
 
 export const MedicineSchema = SchemaFactory.createForClass(Medicine);
