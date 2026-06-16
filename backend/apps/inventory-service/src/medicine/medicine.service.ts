@@ -197,14 +197,7 @@ export class MedicineService {
                     stock: b.stock,
                     status: b.status,
                   })),
-                  cong_dung: med.cong_dung || 'N/A',
-                  cach_dung: med.cach_dung || 'N/A',
-                  tac_dung_phu: med.tac_dung_phu || 'N/A',
-                  luu_y: med.luu_y || 'N/A',
-                  bao_quan: med.bao_quan || 'N/A',
-                  manufacturer: med.manufacturer || 'N/A',
-                  registration_number: med.registration_number || 'N/A',
-                  dosage_form: med.dosage_form || 'N/A',
+                  // Các field chi tiết được load riêng qua API /medicines/:id
                 };
               });
             }
@@ -272,14 +265,7 @@ export class MedicineService {
                 stock: b.stock,
                 status: b.status,
               })),
-              cong_dung: med.cong_dung || 'N/A',
-              cach_dung: med.cach_dung || 'N/A',
-              tac_dung_phu: med.tac_dung_phu || 'N/A',
-              luu_y: med.luu_y || 'N/A',
-              bao_quan: med.bao_quan || 'N/A',
-              manufacturer: med.manufacturer || 'N/A',
-              registration_number: med.registration_number || 'N/A',
-              dosage_form: med.dosage_form || 'N/A',
+              // Các field chi tiết được load riêng qua API /medicines/:id
             };
           });
 
@@ -351,14 +337,7 @@ export class MedicineService {
               stock: b.stock,
               status: b.status,
             })),
-            cong_dung: med.cong_dung || 'N/A',
-            cach_dung: med.cach_dung || 'N/A',
-            tac_dung_phu: med.tac_dung_phu || 'N/A',
-            luu_y: med.luu_y || 'N/A',
-            bao_quan: med.bao_quan || 'N/A',
-            manufacturer: med.manufacturer || 'N/A',
-            registration_number: med.registration_number || 'N/A',
-            dosage_form: med.dosage_form || 'N/A',
+            // Các field chi tiết được load riêng qua API /medicines/:id
           };
         });
 

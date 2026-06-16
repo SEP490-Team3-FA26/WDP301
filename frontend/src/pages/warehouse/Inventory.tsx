@@ -438,31 +438,28 @@ export function Inventory() {
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
-                      <div className="relative inline-block">
-                        <select
-                          value={item.status}
-                          disabled={updatingStatusId === item.id}
-                          onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                          className={`appearance-none pl-8 pr-7 py-1.5 rounded-full text-xs font-black outline-none cursor-pointer transition-all border shadow-sm
-                            ${item.status === 'In Stock' ? 'bg-emerald-50/80 text-emerald-700 border-emerald-100 hover:border-emerald-200' : 
-                              item.status === 'Low Stock' ? 'bg-amber-50/80 text-amber-700 border-amber-100 hover:border-amber-200' : 
-                              'bg-rose-50/80 text-rose-700 border-rose-100 hover:border-rose-200'}
-                            ${updatingStatusId === item.id ? 'opacity-50 cursor-wait' : ''}
-                          `}
-                        >
-                          <option value="In Stock">Sẵn sàng</option>
-                          <option value="Low Stock">Sắp hết</option>
-                          <option value="Out of Stock">Hết hàng</option>
-                        </select>
-                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                          {item.status === 'In Stock' && <CheckCircle2 size={13} className="text-emerald-600" />}
-                          {item.status === 'Low Stock' && <AlertCircle size={13} className="text-amber-600" />}
-                          {item.status === 'Out of Stock' && <AlertCircle size={13} className="text-rose-600" />}
-                        </div>
-                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[9px]">
-                          ▼
-                        </div>
-                      </div>
+                      {(() => {
+                        const isOutOfStock = item.stock === 0;
+                        const isLowStock = item.stock > 0 && item.stock <= item.minStock;
+                        if (isOutOfStock) return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-100">
+                            <AlertCircle size={12} className="text-rose-500" />
+                            Hết hàng
+                          </span>
+                        );
+                        if (isLowStock) return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                            <AlertCircle size={12} className="text-amber-500" />
+                            Sắp hết
+                          </span>
+                        );
+                        return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                            <CheckCircle2 size={12} className="text-emerald-500" />
+                            Sẵn sàng
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-2.5 text-slate-600 relative">
                       {item.batches && item.batches.length > 1 ? (
