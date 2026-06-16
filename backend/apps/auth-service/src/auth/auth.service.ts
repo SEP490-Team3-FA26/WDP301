@@ -27,9 +27,9 @@ export class AuthService {
   ) {}
 
   // ============================================================
-  // ĐĂNG KÝ - Tạo tài khoản mới
+  // ĐĂNG KÝ - Tạo tài khoản mới + Gửi OTP kích hoạt
   // ============================================================
-  async register(dto: RegisterDto): Promise<{ message: string; userId: string }> {
+  async register(dto: RegisterDto): Promise<any> {
     const existing = await this.userModel.findOne({ email: dto.email });
     if (existing) {
       throw new ConflictException(`Email "${dto.email}" đã được đăng ký!`);
@@ -42,12 +42,18 @@ export class AuthService {
       email: dto.email,
       passwordHash,
       role: dto.role ?? UserRole.PHARMACIST,
+      isEmailVerified: false,
     });
 
     const savedUser = await newUser.save();
+
+    // Sinh và gửi OTP kích hoạt qua email
+    await this.generateAndSendVerificationOtp(savedUser.email);
+
     return {
-      message: 'Đăng ký tài khoản thành công!',
+      message: 'Đăng ký tài khoản thành công! Vui lòng kiểm tra email của bạn để lấy mã OTP kích hoạt tài khoản.',
       userId: savedUser._id.toString(),
+      email: savedUser.email,
     };
   }
 
@@ -68,6 +74,10 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(dto.password, userFromDb.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác!');
+    }
+
+    if (!userFromDb.isEmailVerified) {
+      throw new UnauthorizedException('Tài khoản chưa được xác thực email!');
     }
 
     if (userFromDb.isTwoFactorEnabled) {
@@ -513,5 +523,125 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  // ============================================================
+  // ĐĂNG KÝ - SINH VÀ GỬI OTP KÍCH HOẠT QUA EMAIL
+  // ============================================================
+  async generateAndSendVerificationOtp(email: string): Promise<any> {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+    // Xóa các token kích hoạt cũ của email này
+    await this.tokenModel.deleteMany({ userId: email, type: TokenType.EMAIL_VERIFICATION });
+
+    // Tạo token kích hoạt mới
+    await this.tokenModel.create({
+      token: otp,
+      type: TokenType.EMAIL_VERIFICATION,
+      expiresAt,
+      userId: email,
+      isUsed: false,
+    });
+
+    try {
+      if (this.emailService.isEnabled) {
+        await this.emailService.sendEmail({
+          to: email,
+          subject: 'Mã xác thực kích hoạt tài khoản',
+          html: `
+            <div style="background-color: #f8fafc; padding: 40px 20px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+              <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);">
+                <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 32px 24px; text-align: center;">
+                  <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">VinaPharmacy</h1>
+                </div>
+                <div style="padding: 40px 32px;">
+                  <h2 style="color: #0f172a; font-size: 22px; font-weight: 700; margin-top: 0; margin-bottom: 16px; text-align: center;">Kích hoạt tài khoản</h2>
+                  <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 32px; text-align: center;">
+                    Xin chào!<br>
+                    Cảm ơn bạn đã đăng ký tài khoản tại VinaPharmacy. Đây là mã xác thực OTP của bạn:
+                  </p>
+                  <div style="text-align: center; margin-bottom: 32px;">
+                    <div style="display: inline-block; padding: 4px; border-radius: 16px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);">
+                      <span style="display: block; letter-spacing: 8px; color: #065f46; font-size: 40px; font-weight: 900; padding: 16px 32px; background-color: #ffffff; border-radius: 12px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                        ${otp}
+                      </span>
+                    </div>
+                  </div>
+                  <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; margin-bottom: 32px;">
+                    <p style="color: #b45309; font-size: 14px; margin: 0; text-align: center;">
+                      <span style="margin-right: 4px; font-size: 16px;">⏳</span> Mã xác nhận sẽ hết hạn sau <strong>5 phút</strong>.
+                    </p>
+                  </div>
+                  <hr style="border: none; border-top: 1px solid #e2e8f0; margin-bottom: 24px;">
+                  <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
+                    Nếu bạn không đăng ký tài khoản tại hệ thống của chúng tôi, vui lòng bỏ qua email này.<br><br>
+                    Trân trọng,<br>
+                    <strong style="color: #0f172a;">Đội ngũ VinaPharmacy</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+          `,
+        });
+        console.log(`✉️ [Email] Đã gửi OTP kích hoạt đến ${email} (SQS→Lambda→SES)`);
+      } else {
+        console.warn(`⚠️ [MOCK EMAIL] Gửi OTP kích hoạt đến ${email}. Mã OTP: ${otp}`);
+      }
+    } catch (error: any) {
+      console.error(`❌ [Email Error] Lỗi gửi OTP kích hoạt: ${error.message}`);
+    }
+  }
+
+  // ============================================================
+  // ĐĂNG KÝ - XÁC THỰC EMAIL BẰNG MÃ OTP
+  // ============================================================
+  async verifyEmail(email: string, token: string): Promise<any> {
+    const verificationToken = await this.tokenModel.findOne({
+      userId: email,
+      token,
+      type: TokenType.EMAIL_VERIFICATION,
+      isUsed: false,
+    });
+
+    if (!verificationToken) {
+      throw new UnauthorizedException('Mã xác nhận OTP không chính xác!');
+    }
+
+    if (new Date() > verificationToken.expiresAt) {
+      throw new UnauthorizedException('Mã xác nhận OTP đã hết hạn!');
+    }
+
+    const user = await this.userModel.findOne({ email });
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy thông tin tài khoản!');
+    }
+
+    user.isEmailVerified = true;
+    await user.save();
+
+    verificationToken.isUsed = true;
+    await verificationToken.save();
+
+    return { message: 'Xác thực email thành công! Tài khoản của bạn đã được kích hoạt.' };
+  }
+
+  // ============================================================
+  // ĐĂNG KÝ - GỬI LẠI MÃ OTP KÍCH HOẠT
+  // ============================================================
+  async resendVerificationOtp(email: string): Promise<any> {
+    const user = await this.userModel.findOne({ email });
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản với email này!');
+    }
+
+    if (user.isEmailVerified) {
+      throw new ConflictException('Tài khoản này đã được xác thực trước đó!');
+    }
+
+    await this.generateAndSendVerificationOtp(email);
+
+    return { message: 'Mã xác nhận mới đã được gửi vào email của bạn!' };
   }
 }
