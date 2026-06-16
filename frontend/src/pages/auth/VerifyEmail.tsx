@@ -1,11 +1,16 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, ShieldCheck, Mail } from "lucide-react";
+import { authService } from "../../services/auth.service";
 
 export function VerifyEmail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const emailParam = searchParams.get("email") || "";
+  
+  // Fallback to localStorage if search params does not contain email
+  const [email, setEmail] = useState(
+    searchParams.get("email") || authService.getPendingEmail() || ""
+  );
 
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
@@ -19,24 +24,14 @@ export function VerifyEmail() {
     setError("");
     setSuccess("");
 
-    if (!emailParam) {
-      setError("Thiếu thông tin email. Vui lòng đăng ký lại.");
+    if (!email) {
+      setError("Thiếu thông tin email. Vui lòng nhập email xác thực.");
       setLoading(false);
       return;
     }
 
     try {
-      const response = await fetch('/api/auth/verify-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailParam, token }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Xác thực tài khoản thất bại');
-      }
+      await authService.verifyEmail(email, token);
 
       setSuccess("Kích hoạt tài khoản thành công! Đang chuyển hướng đăng nhập...");
       setTimeout(() => {
@@ -50,24 +45,16 @@ export function VerifyEmail() {
   };
 
   const handleResend = async () => {
-    if (!emailParam) return;
+    if (!email) {
+      setError("Vui lòng nhập email trước khi yêu cầu gửi lại mã.");
+      return;
+    }
     setResendLoading(true);
     setError("");
     setSuccess("");
 
     try {
-      const response = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailParam }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Không thể gửi lại mã OTP');
-      }
-
+      await authService.resendVerification(email);
       setSuccess("Mã xác thực OTP mới đã được gửi vào email của bạn!");
     } catch (err: any) {
       setError(err.message);
@@ -80,10 +67,27 @@ export function VerifyEmail() {
     <>
       <div className="mb-8 text-center mt-2">
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">Xác thực tài khoản</h2>
-        <p className="text-sm font-medium text-slate-500 mt-2">Nhập mã kích hoạt (OTP) gửi đến {emailParam}</p>
+        <p className="text-sm font-medium text-slate-500 mt-2">Nhập email và mã kích hoạt (OTP) để kích hoạt tài khoản</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-1.5">
+          <label className="block text-sm font-bold text-slate-700">Email xác thực</label>
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[#0057cd] transition-colors">
+              <Mail className="h-5 w-5" />
+            </div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white/60 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] focus:bg-white transition-all shadow-sm"
+              placeholder="Nhập email của bạn"
+              required
+            />
+          </div>
+        </div>
+
         <div className="space-y-1.5">
           <label className="block text-sm font-bold text-slate-700">Mã xác nhận (OTP)</label>
           <div className="relative group">
