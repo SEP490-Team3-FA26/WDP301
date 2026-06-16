@@ -273,13 +273,15 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
                             : r.status === "PENDING"
                             ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : r.status === "PARTIAL_RECEIVED"
+                            ? "bg-orange-50 text-orange-700 border-orange-200"
                             : "bg-slate-50 text-slate-500 border-slate-200"
                         }`}>
-                          {r.status}
+                          {r.status === "PARTIAL_RECEIVED" ? "GIAO THIẾU" : r.status}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {r.status === "PENDING" ? (
+                        {(r.status === "PENDING" || r.status === "PARTIAL_RECEIVED") ? (
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
@@ -287,7 +289,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                             }}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
                           >
-                            Nhận hàng
+                            {r.status === "PARTIAL_RECEIVED" ? "Nhận tiếp" : "Nhận hàng"}
                           </button>
                         ) : (
                           <button 
@@ -484,6 +486,7 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
   const [itemsData, setItemsData] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   // Initialize form with PO items
   useEffect(() => {
@@ -493,8 +496,8 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
           medicineId: it.medicineId,
           batchNo: "",
           expDate: "",
-          quantity: it.quantity, // Pre-fill with order quantity
-          maxQuantity: it.quantity, // Save original to validate
+          quantity: (it.quantity - (it.receivedQuantity || 0)) || it.quantity,
+          maxQuantity: (it.quantity - (it.receivedQuantity || 0)) || it.quantity,
           unitPrice: it.unitPrice
         }))
       );
@@ -559,7 +562,12 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
 
       const resData = await res.json();
       if (res.ok) {
-        onSuccess();
+        if (resData.warnings && resData.warnings.length > 0) {
+          setWarnings(resData.warnings);
+          setTimeout(() => onSuccess(), 3000);
+        } else {
+          onSuccess();
+        }
       } else {
         setErrorMessage(resData.message || "Tạo phiếu nhập kho thất bại. Lỗi từ máy chủ.");
       }
@@ -651,6 +659,15 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
               </div>
             ))}
           </div>
+
+          {warnings.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-bold space-y-2">
+              <div className="flex items-center gap-2 text-amber-700 font-black"><AlertTriangle size={18} /> CẢNH BÁO HÀNG CẬN DATE</div>
+              {warnings.map((w, i) => <p key={i} className="text-xs leading-relaxed">{w}</p>)}
+              <p className="text-xs text-amber-600 mt-2">Nhập kho đã hoàn tất. Tự động đóng sau 3 giây...</p>
+            </motion.div>
+          )}
 
           {errorMessage && (
             <motion.div 
