@@ -23,11 +23,25 @@ class _BranchScreenState extends State<BranchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Quản Lý Cơ Sở', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: const Color(0xFF1A73E8),
-        elevation: 0,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Quản Lý Cơ Sở', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 18)),
+            Text('CHI NHÁNH BÁN LẺ VÀ NHÂN SỰ CA TRỰC', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70, letterSpacing: 1.0)),
+          ],
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF2E7D32), Color(0xFF4CAF50)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
@@ -36,29 +50,53 @@ class _BranchScreenState extends State<BranchScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Branch Info Header
+              // Branch Info Header (Premium Card design)
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF1A73E8), Color(0xFF64B5F6)],
+                    colors: [Color(0xFF2E7D32), Color(0xFF81C784)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2E7D32).withValues(alpha: 0.25),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
+                    )
+                  ]
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('CHI NHÁNH QUẬN 10', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    const Text('Doanh Thu Hôm Nay', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('CƠ SỞ 10 - QUẬN 10', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
+                          child: const Text('ONLINE', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Doanh Thu Hôm Nay', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('8,300,000 ₫', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
-                        const Text('16 giao dịch', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                        const Text('8,300,000 ₫', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                          child: const Text(
+                            '16 hóa đơn',
+                            style: TextStyle(color: Color(0xFF2E7D32), fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
                       ],
                     )
                   ],
@@ -69,45 +107,50 @@ class _BranchScreenState extends State<BranchScreen> {
               // Staff roster / duty lists
               const Text(
                 'Nhân Sự Đang Trong Ca',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
               ),
               const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))
                   ],
+                  border: Border.all(color: Colors.grey.shade100),
                 ),
                 child: ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _staffs.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
                   itemBuilder: (context, index) {
                     final staff = _staffs[index];
                     final isOnDuty = staff['status'] == 'ON_DUTY';
                     
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      leading: CircleAvatar(
+                        backgroundColor: (isOnDuty ? const Color(0xFF2E7D32) : Colors.grey).withValues(alpha: 0.1),
+                        child: Icon(Icons.person, color: isOnDuty ? const Color(0xFF2E7D32) : Colors.grey),
+                      ),
                       title: Text(
                         staff['name']!,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
                       ),
-                      subtitle: Text('${staff['time']} \nDoanh số bán: ${staff['sales']}'),
+                      subtitle: Text('${staff['time']} \nDoanh số: ${staff['sales']}', style: const TextStyle(fontSize: 12, height: 1.3)),
                       trailing: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isOnDuty ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+                          color: isOnDuty ? Colors.green.shade50 : Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           isOnDuty ? 'Đang trực' : 'Vắng mặt',
                           style: TextStyle(
-                            color: isOnDuty ? Colors.green : Colors.grey,
+                            color: isOnDuty ? Colors.green.shade700 : Colors.grey.shade600,
                             fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                            fontSize: 11,
                           ),
                         ),
                       ),
@@ -120,7 +163,7 @@ class _BranchScreenState extends State<BranchScreen> {
               // Local low stock warnings
               const Text(
                 'Cảnh Báo Thiếu Thuốc Tại Cơ Sở',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
               ),
               const SizedBox(height: 12),
               ListView.builder(
@@ -132,8 +175,9 @@ class _BranchScreenState extends State<BranchScreen> {
                   final isOut = alert['stock'] == 0;
 
                   return Card(
+                    color: Colors.white,
                     margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.grey.shade100)),
                     elevation: 1,
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
@@ -145,7 +189,7 @@ class _BranchScreenState extends State<BranchScreen> {
                             children: [
                               Text(
                                 alert['name']!,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -156,8 +200,8 @@ class _BranchScreenState extends State<BranchScreen> {
                                 child: Text(
                                   isOut ? 'Hết hàng' : 'Cận kho',
                                   style: TextStyle(
-                                    color: isOut ? Colors.red : Colors.amber.shade800,
-                                    fontSize: 10,
+                                    color: isOut ? Colors.red.shade700 : Colors.amber.shade900,
+                                    fontSize: 9,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -165,8 +209,8 @@ class _BranchScreenState extends State<BranchScreen> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Text('Tồn kho hiện tại: ${alert['stock']} ${alert['unit']}'),
-                          Text('Nhà cung cấp: ${alert['supplier']}'),
+                          Text('Tồn kho hiện tại: ${alert['stock']} ${alert['unit']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                          Text('Nhà cung cấp: ${alert['supplier']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                           const SizedBox(height: 12),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
@@ -174,16 +218,20 @@ class _BranchScreenState extends State<BranchScreen> {
                               ElevatedButton.icon(
                                 onPressed: () {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Đã gửi yêu cầu cấp hàng thuốc ${alert['name']}')),
+                                    SnackBar(
+                                      content: Text('Đã gửi yêu cầu cấp hàng thuốc ${alert['name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      backgroundColor: const Color(0xFF2E7D32),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
                                   );
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1A73E8),
+                                  backgroundColor: const Color(0xFF2E7D32),
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
-                                icon: const Icon(Icons.send, size: 16),
-                                label: const Text('Gửi yêu cầu cấp hàng'),
+                                icon: const Icon(Icons.send, size: 14),
+                                label: const Text('Gửi yêu cầu cấp hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                               )
                             ],
                           )

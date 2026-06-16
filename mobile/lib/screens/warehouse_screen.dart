@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -9,61 +11,18 @@ class WarehouseScreen extends StatefulWidget {
 
 class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _searchQuery = '';
   
   // Track expanded medicine IDs for batch dropdowns
   final Set<String> _expandedMedIds = {};
 
-  final List<Map<String, dynamic>> _medicines = [
-    {
-      'id': 'MED-001',
-      'name': 'Amoxicillin 500mg',
-      'category': 'Kháng sinh',
-      'stock': 120,
-      'minStock': 50,
-      'price': '85,000 ₫',
-      'unit': 'Hộp',
-      'batches': [
-        {'batchNo': 'Lô A1', 'expDate': '12/12/2026', 'stock': 80, 'status': 'ACTIVE'},
-        {'batchNo': 'Lô A2', 'expDate': '10/05/2027', 'stock': 40, 'status': 'ACTIVE'},
-      ]
-    },
-    {
-      'id': 'MED-002',
-      'name': 'Panadol Extra',
-      'category': 'Giảm đau',
-      'stock': 35,
-      'minStock': 50,
-      'price': '45,000 ₫',
-      'unit': 'Hộp',
-      'batches': [
-        {'batchNo': 'Lô B1', 'expDate': '25/08/2026', 'stock': 35, 'status': 'ACTIVE'}
-      ]
-    },
-    {
-      'id': 'MED-003',
-      'name': 'Decolgen Forte',
-      'category': 'Cảm cúm',
-      'stock': 0,
-      'minStock': 50,
-      'price': '38,000 ₫',
-      'unit': 'Vỉ',
-      'batches': []
-    },
-    {
-      'id': 'MED-004',
-      'name': 'Cefuroxim 500mg',
-      'category': 'Kháng sinh',
-      'stock': 200,
-      'minStock': 50,
-      'price': '120,000 ₫',
-      'unit': 'Hộp',
-      'batches': [
-        {'batchNo': 'Lô C1', 'expDate': '10/07/2026', 'stock': 150, 'status': 'ACTIVE'},
-        {'batchNo': 'Lô C2', 'expDate': '15/12/2026', 'stock': 50, 'status': 'ACTIVE'}
-      ]
-    }
-  ];
+  // DB Pagination State
+  final List<Map<String, dynamic>> _medicines = [];
+  int _currentPage = 1;
+  bool _isLoading = false;
+  bool _hasMore = true;
+  final ScrollController _scrollController = ScrollController();
+  String _searchQuery = '';
+  Timer? _debounceTimer;
 
   final List<Map<String, dynamic>> _expiredBatches = [
     {
@@ -96,12 +55,234 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+        _loadMedicines();
+      }
+    });
+
+    _loadMedicines(reset: true);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _scrollController.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
+  }
+
+  // Load medicines from DB with pagination
+  Future<void> _loadMedicines({bool reset = false}) async {
+    if (_isLoading) return;
+    if (reset) {
+      setState(() {
+        _currentPage = 1;
+        _medicines.clear();
+        _hasMore = true;
+      });
+    }
+
+    if (!_hasMore) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final results = await ApiService.getMedicines(
+        page: _currentPage,
+        limit: 10,
+        search: _searchQuery,
+      );
+
+      setState(() {
+        _isLoading = false;
+        if (results.length < 10) {
+          _hasMore = false;
+        }
+        _medicines.addAll(results);
+        _currentPage++;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Widget _buildListImagePlaceholder() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.cyan.shade50,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Icon(
+        Icons.medication_outlined,
+        size: 24,
+        color: Colors.cyan,
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade500),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: valueColor ?? const Color(0xFF1E293B),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMedicineDetails(Map<String, dynamic> med) {
+    final isRx = med['isRx'] as bool? ?? false;
+    final outOfStock = (med['stock'] as num? ?? 0) <= 0;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Main scrollable details
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: med['image'] != null && med['image'].toString().isNotEmpty
+                              ? Image.network(
+                                  med['image'],
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) => _buildListImagePlaceholder(),
+                                )
+                              : _buildListImagePlaceholder(),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isRx ? Colors.red.shade50 : Colors.green.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  isRx ? 'Rx - Thuốc kê đơn' : 'OTC - Không kê đơn',
+                                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isRx ? Colors.red.shade700 : Colors.green.shade700),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                med['name'] ?? 'N/A',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${med['price'] ?? 0} ₫ / ${med['unit'] ?? 'Hộp'}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00838F)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    _buildDetailRow('Hoạt chất', med['active'] ?? 'N/A'),
+                    _buildDetailRow('Phân nhóm', med['category'] ?? 'Chưa phân loại'),
+                    _buildDetailRow('Nhà sản xuất', med['manufacturer'] ?? 'N/A'),
+                    _buildDetailRow('Dạng bào chế', med['dosage_form'] ?? 'N/A'),
+                    _buildDetailRow('Số đăng ký', med['registration_number'] ?? 'N/A'),
+                    _buildDetailRow('Tình trạng', outOfStock ? 'Hết hàng' : 'Còn hàng (Tồn: ${med['stock']} ${med['unit']})', 
+                        valueColor: outOfStock ? Colors.red : Colors.green.shade700),
+                    const Divider(height: 24),
+                    const Text('Chỉ định / Công dụng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                    const SizedBox(height: 4),
+                    Text(med['cong_dung'] ?? 'N/A', style: TextStyle(fontSize: 11, color: Colors.grey.shade700, height: 1.4)),
+                    const SizedBox(height: 12),
+                    const Text('Liều dùng / Hướng dẫn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                    const SizedBox(height: 4),
+                    Text(med['cach_dung'] ?? 'N/A', style: TextStyle(fontSize: 11, color: Colors.grey.shade700, height: 1.4)),
+                    const SizedBox(height: 12),
+                    const Text('Tác dụng phụ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                    const SizedBox(height: 4),
+                    Text(med['tac_dung_phu'] ?? 'N/A', style: TextStyle(fontSize: 11, color: Colors.grey.shade700, height: 1.4)),
+                    const SizedBox(height: 12),
+                    const Text('Lưu ý & Bảo quản', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                    const SizedBox(height: 4),
+                    Text('${med['luu_y'] ?? 'N/A'}\nBảo quản: ${med['bao_quan'] ?? 'N/A'}', style: TextStyle(fontSize: 11, color: Colors.grey.shade700, height: 1.4)),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _onSearchChanged(String query) {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      setState(() {
+        _searchQuery = query;
+      });
+      _loadMedicines(reset: true);
+    });
   }
 
   void _toggleExpand(String id) {
@@ -116,25 +297,33 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    final filteredMedicines = _medicines.where((med) {
-      final name = med['name']!.toString().toLowerCase();
-      final query = _searchQuery.toLowerCase();
-      return name.contains(query);
-    }).toList();
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Thủ Kho Dược', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: const Color(0xFF1A73E8),
-        elevation: 0,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Thủ Kho Dược', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 18)),
+            Text('QUẢN LÝ NHẬP XUẤT & TỒN KHO LÔ HÀNG', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70, letterSpacing: 1.0)),
+          ],
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF00838F), Color(0xFF00ACC1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
+          unselectedLabelColor: Colors.white60,
           indicatorColor: Colors.white,
-          indicatorWeight: 3,
+          indicatorWeight: 3.5,
           tabs: const [
             Tab(text: 'Tồn Kho'),
             Tab(text: 'Báo Cáo Hết Hạn'),
@@ -144,259 +333,310 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
       body: TabBarView(
         controller: _tabController,
         children: [
-          // TAB 1: Inventory Management & Search
-          SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Stats overview row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildSimpleStatCard(
-                          title: 'Mặt hàng',
-                          value: '${_medicines.length}',
-                          icon: Icons.medical_services,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildSimpleStatCard(
-                          title: 'Sắp hết hàng',
-                          value: '${_medicines.where((m) => (m['stock'] as int) <= (m['minStock'] as int)).length}',
-                          icon: Icons.warning_amber_rounded,
-                          color: Colors.amber,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildSimpleStatCard(
-                          title: 'Cận/Hết hạn',
-                          value: '${_expiredBatches.length}',
-                          icon: Icons.calendar_today,
-                          color: Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+          _buildInventoryTab(),
+          _buildExpirationReportTab(),
+        ],
+      ),
+    );
+  }
 
-                  // Search Bar
-                  TextField(
-                    onChanged: (val) {
-                      setState(() {
-                        _searchQuery = val;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      hintText: 'Tìm kiếm thuốc theo tên...',
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
+  Widget _buildInventoryTab() {
+    return RefreshIndicator(
+      onRefresh: () => _loadMedicines(reset: true),
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Stats overview row
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildSimpleStatCard(
+                      title: 'Tổng số loại',
+                      value: '${_medicines.length}',
+                      icon: Icons.medical_services,
+                      color: Colors.blue,
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Medicine items with batch dropdowns
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: filteredMedicines.length,
-                    itemBuilder: (context, index) {
-                      final med = filteredMedicines[index];
-                      final isExpanded = _expandedMedIds.contains(med['id']);
-                      final isLow = (med['stock'] as int) <= (med['minStock'] as int);
-                      final hasMultipleBatches = (med['batches'] as List).length > 1;
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 1,
-                        child: Column(
-                          children: [
-                            ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              title: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      med['name']!,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                    ),
-                                  ),
-                                  if (isLow)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.shade50,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.red.shade100),
-                                      ),
-                                      child: const Text(
-                                        'Sắp hết',
-                                        style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold),
-                                      ),
-                                    )
-                                ],
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 4),
-                                  Text('Danh mục: ${med['category']}  •  Giá: ${med['price']}'),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Tồn kho: ${med['stock']} ${med['unit']} / Tối thiểu: ${med['minStock']} ${med['unit']}',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: isLow ? Colors.red : Colors.grey.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              trailing: hasMultipleBatches
-                                  ? IconButton(
-                                      icon: Icon(
-                                        isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                                        color: Colors.blue,
-                                      ),
-                                      onPressed: () => _toggleExpand(med['id']!),
-                                    )
-                                  : null,
-                            ),
-                            
-                            // Collapsible Batch Dropdown list
-                            if (hasMultipleBatches && isExpanded)
-                              Container(
-                                color: Colors.blue.shade50.withValues(alpha: 0.4),
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  children: [
-                                    const Row(
-                                      children: [
-                                        Icon(Icons.inventory_2_outlined, size: 14, color: Colors.blue),
-                                        SizedBox(width: 6),
-                                        Text(
-                                          'Hạn sử dụng chi tiết từng lô:',
-                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue),
-                                        ),
-                                      ],
-                                    ),
-                                    const Divider(height: 12),
-                                    ...(med['batches'] as List).map((b) {
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              '${b['batchNo']}  (HSD: ${b['expDate']})',
-                                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                                            ),
-                                            Text(
-                                              '${b['stock']} ${med['unit']}',
-                                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildSimpleStatCard(
+                      title: 'Sắp hết hàng',
+                      value: '${_medicines.where((m) => (m['stock'] as int) <= 50).length}',
+                      icon: Icons.warning_amber_rounded,
+                      color: Colors.amber,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildSimpleStatCard(
+                      title: 'Lô cận/hết hạn',
+                      value: '${_expiredBatches.length}',
+                      icon: Icons.calendar_today,
+                      color: Colors.red,
+                    ),
                   ),
                 ],
               ),
-            ),
-          ),
+              const SizedBox(height: 16),
 
-          // TAB 2: Expiration Reports View
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ListView.builder(
-              itemCount: _expiredBatches.length,
-              itemBuilder: (context, index) {
-                final eb = _expiredBatches[index];
-                final isExpired = eb['status'] == 'EXPIRED';
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 1,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              eb['medicineName']!,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: isExpired ? Colors.red.shade50 : Colors.amber.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                isExpired ? 'Hết Hạn' : 'Cận Hạn',
-                                style: TextStyle(
-                                  color: isExpired ? Colors.red : Colors.amber.shade800,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text('Mã Lô: ${eb['batchNo']}'),
-                        const SizedBox(height: 4),
-                        Text('Hạn sử dụng: ${eb['expDate']}'),
-                        const SizedBox(height: 4),
-                        Text('Tồn lô: ${eb['stock']} ${eb['unit']}'),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Đã lên kế hoạch tiêu hủy lô ${eb['batchNo']}')),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isExpired ? Colors.red : const Color(0xFF1A73E8),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              icon: const Icon(Icons.delete_sweep, size: 16),
-                              label: Text(isExpired ? 'Tiêu hủy' : 'Xử lý cận hạn'),
-                            )
-                          ],
-                        )
-                      ],
+              // Search Bar
+              Container(
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))
+                  ]
+                ),
+                child: TextField(
+                  onChanged: _onSearchChanged,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search, color: Color(0xFF00838F)),
+                    hintText: 'Tìm kiếm thuốc theo tên hoặc hoạt chất...',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
                     ),
                   ),
-                );
-              },
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Medicine items with batch dropdowns
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _medicines.length + (_isLoading ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index >= _medicines.length) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: CircularProgressIndicator(color: Color(0xFF00838F)),
+                      ),
+                    );
+                  }
+
+                  final med = _medicines[index];
+                  final isLow = (med['stock'] as int) <= 50;
+                  final batches = med['batches'] as List? ?? [];
+                  final hasMultipleBatches = batches.isNotEmpty;
+                  final isExpanded = _expandedMedIds.contains(med['id']);
+
+                  return Card(
+                    color: Colors.white,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.grey.shade100)),
+                    child: Column(
+                      children: [
+                        ListTile(
+                          onTap: () => _showMedicineDetails(med),
+                          leading: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: med['image'] != null && med['image'].toString().isNotEmpty
+                                ? Image.network(
+                                    med['image'],
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) => _buildListImagePlaceholder(),
+                                  )
+                                : _buildListImagePlaceholder(),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  med['name']!,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                                ),
+                              ),
+                              if (isLow)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.red.shade100),
+                                  ),
+                                  child: const Text(
+                                    'Sắp hết',
+                                    style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.bold),
+                                  ),
+                                )
+                            ],
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Text('Hoạt chất: ${med['active']}  •  Giá: ${med['price']} ₫'),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Tồn kho: ${med['stock']} ${med['unit']} / Cảnh báo: 50 ${med['unit']}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: isLow ? Colors.red : Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          trailing: hasMultipleBatches
+                              ? IconButton(
+                                  icon: Icon(
+                                    isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                    color: const Color(0xFF00838F),
+                                  ),
+                                  onPressed: () => _toggleExpand(med['id']!),
+                                )
+                              : null,
+                        ),
+                        
+                        // Collapsible Batch Dropdown list
+                        if (hasMultipleBatches && isExpanded)
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00838F).withValues(alpha: 0.05),
+                              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
+                            ),
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.inventory_2_outlined, size: 14, color: Color(0xFF00838F)),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Hạn sử dụng chi tiết từng lô:',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF00838F)),
+                                    ),
+                                  ],
+                                ),
+                                const Divider(height: 12),
+                                ...batches.map((b) {
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          '${b['batchNo']}  (HSD: ${b['expDate']})',
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                        ),
+                                        Text(
+                                          '${b['stock']} ${med['unit']}',
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpirationReportTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: ListView.builder(
+        itemCount: _expiredBatches.length,
+        itemBuilder: (context, index) {
+          final eb = _expiredBatches[index];
+          final isExpired = eb['status'] == 'EXPIRED';
+
+          return Card(
+            color: Colors.white,
+            margin: const EdgeInsets.only(bottom: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.grey.shade100)),
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        eb['medicineName']!,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isExpired ? Colors.red.shade50 : Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          isExpired ? 'Hết Hạn' : 'Cận Hạn',
+                          style: TextStyle(
+                            color: isExpired ? Colors.red : Colors.amber.shade900,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  Text('Mã Lô: ${eb['batchNo']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  Text('Hạn sử dụng: ${eb['expDate']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  Text('Tồn lô: ${eb['stock']} ${eb['unit']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Đã lên kế hoạch xử lý lô ${eb['batchNo']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              backgroundColor: isExpired ? Colors.red : const Color(0xFF00838F),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isExpired ? Colors.red : const Color(0xFF00838F),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.delete_sweep, size: 16),
+                        label: Text(isExpired ? 'Tiêu hủy lô' : 'Xử lý cận hạn'),
+                      )
+                    ],
+                  )
+                ],
+              ),
             ),
-          )
-        ],
+          );
+        },
       ),
     );
   }
@@ -415,15 +655,20 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2))
         ],
+        border: Border.all(color: Colors.grey.shade100),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 24),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 20),
+          ),
           const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
+          Text(title, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
         ],
       ),
     );

@@ -12,10 +12,11 @@ export class MedicineService {
   constructor(
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
-  ) {}
+  ) { }
 
   async getMedicineFilters() {
     try {
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy bộ lọc thuốc');
       const categories = await this.medicineModel.distinct('category').exec();
       const classifications = await this.medicineModel.distinct('drug_classification').exec();
       return {
@@ -124,6 +125,7 @@ export class MedicineService {
     classification?: string;
   }) {
     try {
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', query);
       const page = query.page || 1;
       const limit = query.limit || 10;
       const search = query.search || '';
@@ -136,7 +138,7 @@ export class MedicineService {
         let aiServiceUrl = `http://ai-service:8000/api/ai/medicines?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`;
         if (category) aiServiceUrl += `&category=${encodeURIComponent(category)}`;
         if (classification) aiServiceUrl += `&classification=${encodeURIComponent(classification)}`;
-        
+
         let mappedAiData: any[] = [];
         let aiTotal = 0;
         let useFallback = false;
@@ -195,6 +197,7 @@ export class MedicineService {
                     stock: b.stock,
                     status: b.status,
                   })),
+                  // Các field chi tiết được load riêng qua API /medicines/:id
                 };
               });
             }
@@ -209,20 +212,20 @@ export class MedicineService {
           const filterQuery: any = {};
           if (category) filterQuery.category = category;
           if (classification) filterQuery.drug_classification = classification;
-          
+
           filterQuery.$or = [
             { name: { $regex: search, $options: 'i' } },
             { active_ingredient: { $regex: search, $options: 'i' } }
           ];
 
           const [data, total] = await Promise.all([
-            this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).exec(),
+            this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).lean().exec(),
             this.medicineModel.countDocuments(filterQuery).exec(),
           ]);
 
           const medIds = data.map(med => med._id.toString());
           const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).exec();
-          
+
           const batchesByMedId = new Map<string, MedicineBatch[]>();
           for (const batch of allBatches) {
             const list = batchesByMedId.get(batch.medicineId) || [];
@@ -262,6 +265,7 @@ export class MedicineService {
                 stock: b.stock,
                 status: b.status,
               })),
+              // Các field chi tiết được load riêng qua API /medicines/:id
             };
           });
 
@@ -286,14 +290,14 @@ export class MedicineService {
         if (classification) filterQuery.drug_classification = classification;
 
         const [data, total] = await Promise.all([
-          this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).exec(),
+          this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).lean().exec(),
           this.medicineModel.countDocuments(filterQuery).exec(),
         ]);
 
         // Truy vấn lô hàng cho toàn bộ danh sách kết quả hiển thị
         const medIds = data.map(med => med._id.toString());
         const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).exec();
-        
+
         const batchesByMedId = new Map<string, MedicineBatch[]>();
         for (const batch of allBatches) {
           const list = batchesByMedId.get(batch.medicineId) || [];
@@ -333,6 +337,7 @@ export class MedicineService {
               stock: b.stock,
               status: b.status,
             })),
+            // Các field chi tiết được load riêng qua API /medicines/:id
           };
         });
 
@@ -350,17 +355,20 @@ export class MedicineService {
 
   async getInventoryStats() {
     try {
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy thống kê tồn kho');
       const today = new Date();
       const ninetyDaysFromNow = new Date();
       ninetyDaysFromNow.setDate(today.getDate() + 90);
 
+      console.log('🔍 [Inventory MS] Đang truy vấn database (tối ưu select & lean)...');
       const [medicines, batches] = await Promise.all([
-        this.medicineModel.find().exec(),
-        this.batchModel.find().exec()
+        this.medicineModel.find().select('price').lean().exec(),
+        this.batchModel.find({ stock: { $gt: 0 } }).select('medicineId stock expDate status').lean().exec()
       ]);
+      console.log(`✅ [Inventory MS] Truy vấn thành công: ${medicines.length} medicines, ${batches.length} batches`);
 
       const totalMedicines = medicines.length;
-      
+
       const activeBatches = batches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
       const totalStock = activeBatches.reduce((sum, b) => sum + b.stock, 0);
 
@@ -370,7 +378,7 @@ export class MedicineService {
         return sum + (price * b.stock);
       }, 0);
 
-      const batchesByMedId = new Map<string, MedicineBatch[]>();
+      const batchesByMedId = new Map<string, any[]>();
       for (const batch of activeBatches) {
         const list = batchesByMedId.get(batch.medicineId) || [];
         list.push(batch);
@@ -384,7 +392,7 @@ export class MedicineService {
         const medId = med._id.toString();
         const medBatches = batchesByMedId.get(medId) || [];
         const stock = medBatches.reduce((sum, b) => sum + b.stock, 0);
-        
+
         if (stock === 0) {
           outOfStockCount++;
         } else if (stock <= 50) {
@@ -420,16 +428,20 @@ export class MedicineService {
       const ninetyDaysFromNow = new Date();
       ninetyDaysFromNow.setDate(today.getDate() + 90);
 
-      const batches = await this.batchModel.find({ stock: { $gt: 0 } }).exec();
+      // Tối ưu hóa: chỉ select các field cần thiết, sử dụng lean() và lọc trực tiếp theo ngày hết hạn (trong vòng 90 ngày)
+      const batches = await this.batchModel.find({
+        stock: { $gt: 0 },
+        expDate: { $lte: ninetyDaysFromNow }
+      }).select('medicineId batchNo expDate stock status').lean().exec();
       const medIds = [...new Set(batches.map(b => b.medicineId))];
-      const medicines = await this.medicineModel.find({ _id: { $in: medIds } }).exec();
+      const medicines = await this.medicineModel.find({ _id: { $in: medIds } }).select('name category unit').lean().exec();
       const medMap = new Map(medicines.map(m => [m._id.toString(), m]));
 
       const report = batches
         .map(b => {
           const med = medMap.get(b.medicineId);
           const expDate = new Date(b.expDate);
-          
+
           let status = 'ACTIVE';
           if (expDate < today) {
             status = 'EXPIRED';

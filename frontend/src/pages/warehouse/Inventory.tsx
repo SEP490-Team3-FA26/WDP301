@@ -222,66 +222,61 @@ export function Inventory() {
   };
 
   return (
-    <div className="space-y-6 flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-y-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tổng Quan Kho</h1>
-          <p className="text-slate-500 mt-1">Quản lý danh sách thuốc và tồn kho hiện tại.</p>
-        </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button className="px-5 py-2 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap">
-            <Plus size={18} />
-            Thêm thuốc
-          </button>
-        </div>
+    <div className="flex flex-col gap-2 h-full bg-[#faf8ff] px-6 pt-4 pb-3 lg:px-8 overflow-hidden">
+      <div className="flex flex-row justify-between items-center">
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Tổng Quan Kho</h1>
+        <button className="px-4 py-1.5 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap text-sm">
+          <Plus size={16} />
+          Thêm thuốc
+        </button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - compact */}
       {!statsLoading && stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-              <Package size={24} />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 animate-in fade-in duration-300">
+          <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+              <Package size={18} />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng loại thuốc</p>
-              <p className="text-xl font-extrabold text-slate-900 mt-1">{stats.totalMedicines}</p>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Tổng loại thuốc</p>
+              <p className="text-lg font-extrabold text-slate-900">{stats.totalMedicines}</p>
             </div>
           </div>
           
-          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-              <TrendingUp size={24} />
+          <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+              <TrendingUp size={18} />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng tồn kho</p>
-              <p className="text-xl font-extrabold text-slate-900 mt-1">{stats.totalStock.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-400">đơn vị</span></p>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Tổng tồn kho</p>
+              <p className="text-lg font-extrabold text-slate-900">{stats.totalStock.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-400">đv</span></p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-              <AlertCircle size={24} />
+          <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+              <AlertCircle size={18} />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cần bổ sung hàng</p>
-              <p className="text-sm font-extrabold text-slate-900 mt-1">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Cần bổ sung hàng</p>
+              <p className="text-xs font-extrabold text-slate-900">
                 <span className="text-amber-600">{stats.lowStockCount} sắp hết</span>
-                <span className="text-slate-300 mx-1.5">|</span>
+                <span className="text-slate-300 mx-1">|</span>
                 <span className="text-rose-600">{stats.outOfStockCount} hết</span>
               </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-              <Calendar size={24} />
+          <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+            <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
+              <Calendar size={18} />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hạn sử dụng lô</p>
-              <p className="text-sm font-extrabold text-slate-900 mt-1">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Hạn sử dụng lô</p>
+              <p className="text-xs font-extrabold text-slate-900">
                 <span className="text-amber-600">{stats.soonToExpireCount} cận hạn</span>
-                <span className="text-slate-300 mx-1.5">|</span>
+                <span className="text-slate-300 mx-1">|</span>
                 <span className="text-rose-600">{stats.expiredCount} hết hạn</span>
               </p>
             </div>
@@ -289,29 +284,31 @@ export function Inventory() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-6">
+      {/* Tabs - compact */}
+      <div className="flex bg-slate-100/70 p-1 rounded-xl w-fit border border-slate-200/40 backdrop-blur-sm gap-1">
         <button
           onClick={() => setActiveTab("inventory")}
-          className={`pb-3 font-bold text-sm transition-all border-b-2 px-1 ${
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 ${
             activeTab === "inventory"
-              ? "border-[#0057cd] text-[#0057cd]"
-              : "border-transparent text-slate-500 hover:text-slate-800"
+              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
           }`}
         >
+          <Package size={13} />
           Danh Sách Tồn Kho
         </button>
         <button
           onClick={() => setActiveTab("expiration")}
-          className={`pb-3 font-bold text-sm transition-all border-b-2 px-1 relative ${
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${
             activeTab === "expiration"
-              ? "border-[#0057cd] text-[#0057cd]"
-              : "border-transparent text-slate-500 hover:text-slate-800"
+              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
           }`}
         >
+          <Calendar size={13} />
           Báo Cáo Hết Hạn
           {stats?.expiredCount > 0 && (
-            <span className="absolute -top-1.5 -right-3 bg-rose-500 text-white text-[9px] font-black rounded-full px-1.5 py-0.5">
+            <span className="bg-rose-500 text-white text-[9px] font-black rounded-full px-1.5 py-0.5 shadow-sm shadow-rose-500/20">
               {stats.expiredCount}
             </span>
           )}
@@ -319,52 +316,58 @@ export function Inventory() {
       </div>
 
       {activeTab === "inventory" ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          {/* Toolbar */}
-          <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row gap-4 items-center justify-between bg-slate-50">
-            <div className="relative w-full sm:w-80">
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-100/40 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/30">
+          {/* Toolbar - compact */}
+          <div className="px-4 py-3 border-b border-slate-100 flex flex-col md:flex-row gap-3 items-center justify-between bg-gradient-to-r from-slate-50/60 to-white">
+            <div className="relative w-full md:w-72">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <Search size={18} />
+                <Search size={14} />
               </div>
               <input
                 type="text"
                 placeholder="Tìm kiếm theo mã, tên..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 p-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200/80 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:ring-4 focus:ring-blue-500/10 focus:border-[#0057cd] outline-none transition-all shadow-sm"
               />
             </div>
             
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <select
-                value={selectedClassification}
-                onChange={(e) => setSelectedClassification(e.target.value)}
-                className="w-full sm:w-auto p-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none shadow-sm"
-              >
-                <option value="">Tất cả phân loại</option>
-                {filterOptions.classifications.map(c => (
-                  <option key={c} value={c}>
-                    {c === 'PRESCRIPTION_ANTIBIOTIC' ? 'Kê đơn / Kháng sinh' : 
-                     c === 'COMMON_SUPPLEMENT' ? 'Không kê đơn / TPCN' : c}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <div className="relative w-full sm:w-auto">
+                <select
+                  value={selectedClassification}
+                  onChange={(e) => setSelectedClassification(e.target.value)}
+                  className="w-full sm:w-auto pl-3 pr-8 py-2 bg-white border border-slate-200/80 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50 transition-colors focus:ring-4 focus:ring-blue-500/10 focus:border-[#0057cd] outline-none shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="">Tất cả phân loại</option>
+                  {filterOptions.classifications.map(c => (
+                    <option key={c} value={c}>
+                      {c === 'PRESCRIPTION_ANTIBIOTIC' ? 'Kê đơn / Kháng sinh' : 
+                       c === 'COMMON_SUPPLEMENT' ? 'Không kê đơn / TPCN' : c}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[9px]">▼</div>
+              </div>
 
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full sm:w-auto p-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none shadow-sm"
-              >
-                <option value="">Tất cả danh mục</option>
-                {filterOptions.categories.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <div className="relative w-full sm:w-auto">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full sm:w-auto pl-3 pr-8 py-2 bg-white border border-slate-200/80 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50 transition-colors focus:ring-4 focus:ring-blue-500/10 focus:border-[#0057cd] outline-none shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="">Tất cả danh mục</option>
+                  {filterOptions.categories.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[9px]">▼</div>
+              </div>
             </div>
           </div>
 
           {/* Table & Loading States */}
-          <div className="overflow-x-auto relative min-h-[300px]">
+          <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
             {loading ? (
               <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
                 <Loader2 className="animate-spin text-[#0057cd]" size={32} />
@@ -372,76 +375,93 @@ export function Inventory() {
               </div>
             ) : null}
 
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="text-[10px] text-slate-400 uppercase bg-slate-50/60 border-b border-slate-100/80 tracking-wider">
                 <tr>
-                  <th scope="col" className="px-6 py-4 font-medium">Mã & Tên Thuốc</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Danh Mục</th>
-                  <th scope="col" className="px-6 py-4 font-medium text-right">Giá Bán</th>
-                  <th scope="col" className="px-6 py-4 font-medium text-center">Tồn Kho</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Trạng Thái</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Hạn Sử Dụng</th>
-                  <th scope="col" className="px-6 py-4 font-medium text-right">Hành động</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Mã & Tên Thuốc</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Danh Mục & Hoạt Chất</th>
+                  <th scope="col" className="px-4 py-2 font-bold text-right">Giá Bán</th>
+                  <th scope="col" className="px-4 py-2 font-bold text-center">Tồn Kho</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Trạng Thái</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Hạn Sử Dụng</th>
+                  <th scope="col" className="px-4 py-2 font-bold text-right">Hành động</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100/80">
                 {inventory.map((item) => (
-                  <tr key={item.id} className="bg-white hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-900 flex items-center gap-3">
-                        {item.image && (
-                          <div className="w-8 h-8 rounded border border-slate-100 overflow-hidden flex-shrink-0">
-                            <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-semibold text-slate-900 max-w-xs truncate" title={item.name}>{item.name}</div>
-                          <div className="text-xs text-slate-500">{item.id}</div>
+                  <tr key={item.id} className="group bg-white hover:bg-slate-50/40 hover:shadow-[inset_4px_0_0_0_#0057cd] transition-all duration-200">
+                    <td className="px-4 py-2.5">
+                      <div className="font-semibold text-slate-900 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200/40 shadow-sm overflow-hidden flex-shrink-0 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform duration-200">
+                          {item.image ? (
+                            <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                          ) : (
+                            <Package className="text-slate-400 w-4 h-4" />
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <div className="font-bold text-slate-800 max-w-xs truncate text-xs sm:text-sm" title={item.name}>{item.name}</div>
+                          <div className="mt-1 font-mono text-[9px] text-slate-400 bg-slate-50 border border-slate-100/80 px-1.5 py-0.5 rounded-md w-fit">{item.id}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-slate-600 max-w-[200px]">
-                      <div className="truncate font-medium text-slate-700" title={item.category}>{item.category}</div>
+                    <td className="px-4 py-2.5 text-slate-600 max-w-[180px]">
+                      <div className="truncate font-bold text-slate-700 text-xs sm:text-sm" title={item.category}>{item.category}</div>
                       {item.active_ingredient && (
-                        <div className="text-[11px] text-[#0057cd] font-semibold truncate mt-0.5 bg-blue-50 px-1.5 py-0.5 rounded inline-block max-w-full" title={item.active_ingredient}>
+                        <div className="text-[10px] text-[#0057cd] font-black truncate mt-1 bg-blue-50/60 px-2 py-0.5 rounded-md inline-block max-w-full border border-blue-100/40" title={item.active_ingredient}>
                           {item.active_ingredient}
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-slate-900 font-medium text-right whitespace-nowrap">
-                      {item.price.toLocaleString("vi-VN")} ₫ <span className="text-slate-400 text-xs font-normal">/ {item.unit || 'Hộp'}</span>
+                    <td className="px-4 py-2.5 text-slate-900 font-black text-right whitespace-nowrap text-xs">
+                      {item.price.toLocaleString("vi-VN")} ₫ <span className="text-slate-400 text-[10px] font-normal">/ {item.unit || 'Hộp'}</span>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`font-semibold ${item.stock <= item.minStock ? 'text-rose-600' : 'text-slate-900'}`}>
-                        {item.stock}
-                      </span>
-                      <span className="text-xs text-slate-400 ml-1">/ {item.minStock}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="relative inline-block">
-                        <select
-                          value={item.status}
-                          disabled={updatingStatusId === item.id}
-                          onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                          className={`appearance-none pl-8 pr-6 py-1.5 rounded-full text-xs font-bold outline-none cursor-pointer transition-colors border-2
-                            ${item.status === 'In Stock' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-300' : 
-                              item.status === 'Low Stock' ? 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300' : 
-                              'bg-rose-50 text-rose-700 border-rose-200 hover:border-rose-300'}
-                            ${updatingStatusId === item.id ? 'opacity-50 cursor-wait' : ''}
-                          `}
-                        >
-                          <option value="In Stock">Sẵn sàng</option>
-                          <option value="Low Stock">Sắp hết</option>
-                          <option value="Out of Stock">Hết hàng</option>
-                        </select>
-                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                          {item.status === 'In Stock' && <CheckCircle2 size={14} className="text-emerald-600" />}
-                          {item.status === 'Low Stock' && <AlertCircle size={14} className="text-amber-600" />}
-                          {item.status === 'Out of Stock' && <AlertCircle size={14} className="text-rose-600" />}
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-col items-center justify-center gap-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className={`font-black text-xs sm:text-sm ${item.stock <= item.minStock ? 'text-rose-600' : 'text-slate-800'}`}>
+                            {item.stock}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">{item.unit || 'Hộp'}</span>
                         </div>
+                        {/* Miniature progress bar */}
+                        <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden shadow-inner">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              item.stock === 0 ? 'bg-rose-500 w-0' :
+                              item.stock <= item.minStock ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`} 
+                            style={{ width: `${Math.min(100, (item.stock / (item.minStock || 50)) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-slate-400 font-semibold">Min: {item.minStock}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-slate-600 relative">
+                    <td className="px-4 py-2.5">
+                      {(() => {
+                        const isOutOfStock = item.stock === 0;
+                        const isLowStock = item.stock > 0 && item.stock <= item.minStock;
+                        if (isOutOfStock) return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-100">
+                            <AlertCircle size={12} className="text-rose-500" />
+                            Hết hàng
+                          </span>
+                        );
+                        if (isLowStock) return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                            <AlertCircle size={12} className="text-amber-500" />
+                            Sắp hết
+                          </span>
+                        );
+                        return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                            <CheckCircle2 size={12} className="text-emerald-500" />
+                            Sẵn sàng
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 relative">
                       {item.batches && item.batches.length > 1 ? (
                         <div>
                           <button
@@ -449,10 +469,10 @@ export function Inventory() {
                               e.stopPropagation();
                               setOpenDropdownId(openDropdownId === item.id ? null : item.id);
                             }}
-                            className="flex items-center gap-1.5 bg-blue-50 text-[#0057cd] hover:bg-blue-100 text-xs font-bold rounded-lg px-2.5 py-1.5 transition-all border border-blue-100 shadow-sm whitespace-nowrap"
+                            className="flex items-center gap-1.5 bg-blue-50/60 text-[#0057cd] hover:bg-blue-50 hover:text-blue-700 text-xs font-extrabold rounded-lg px-3 py-1.5 transition-all border border-blue-100/50 shadow-sm whitespace-nowrap"
                           >
                             <span>{item.batches.length} Lô</span>
-                            <span className="text-[10px]">▼</span>
+                            <span className="text-[9px]">▼</span>
                           </button>
                           {openDropdownId === item.id && (
                             <>
@@ -463,9 +483,9 @@ export function Inventory() {
                                   setOpenDropdownId(null);
                                 }}
                               />
-                              <div className="absolute left-6 mt-1 w-64 rounded-xl bg-white border border-slate-200 shadow-xl z-30 p-2 py-3 space-y-2 text-xs divide-y divide-slate-100 text-left">
-                                <div className="font-bold text-slate-700 px-2 pb-1 bg-slate-50 rounded">Hạn sử dụng chi tiết:</div>
-                                <div className="pt-2 max-h-40 overflow-y-auto space-y-1 px-1">
+                              <div className="absolute left-6 mt-1 w-64 rounded-xl bg-white border border-slate-200 shadow-xl z-30 p-2 py-3 space-y-2 text-xs divide-y divide-slate-100 text-left animate-in fade-in zoom-in-95 duration-100">
+                                <div className="font-extrabold text-slate-700 px-2 pb-1 bg-slate-50 rounded">Hạn sử dụng chi tiết:</div>
+                                <div className="pt-2 max-h-40 overflow-y-auto space-y-1 px-1 custom-scrollbar">
                                   {item.batches.map((b: any) => (
                                     <div key={b.batchNo} className="flex flex-col py-1 px-1 justify-between hover:bg-slate-50 rounded">
                                       <div className="flex justify-between font-bold text-slate-800">
@@ -488,12 +508,12 @@ export function Inventory() {
                           )}
                         </div>
                       ) : (
-                        <span className="font-semibold text-slate-700">
+                        <span className="font-extrabold text-slate-700 text-xs sm:text-sm">
                           {item.expiry ? new Date(item.expiry).toLocaleDateString("vi-VN") : 'N/A'}
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right flex justify-end gap-2">
+                    <td className="px-4 py-2.5 text-right flex justify-end gap-1">
                       {item.stock <= item.minStock && (
                         <button
                           onClick={() => {
@@ -505,21 +525,21 @@ export function Inventory() {
                               }
                             });
                           }}
-                          className="text-amber-600 hover:text-amber-800 transition-colors p-1.5 rounded-md hover:bg-amber-50"
+                          className="text-amber-600 hover:text-amber-800 transition-colors p-1.5 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-100"
                           title="Nhập hàng ngay"
                         >
-                          <Truck size={18} />
+                          <Truck size={15} />
                         </button>
                       )}
                       <button 
                         onClick={() => fetchMedicineDetails(item.id)}
-                        className="text-[#0057cd] hover:text-[#00419e] transition-colors p-1.5 rounded-md hover:bg-blue-50"
+                        className="text-[#0057cd] hover:text-[#00419e] transition-colors p-1.5 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-100"
                         title="Xem chi tiết"
                       >
-                        <Eye size={18} />
+                        <Eye size={15} />
                       </button>
-                      <button className="text-slate-400 hover:text-slate-700 transition-colors p-1.5 rounded-md hover:bg-slate-100">
-                        <MoreHorizontal size={18} />
+                      <button className="text-slate-400 hover:text-slate-700 transition-colors p-1.5 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200">
+                        <MoreHorizontal size={15} />
                       </button>
                     </td>
                   </tr>
@@ -534,10 +554,10 @@ export function Inventory() {
             )}
           </div>
           
-          {/* Pagination */}
-          <div className="px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white text-sm">
-            <span className="text-slate-500">
-              Hiển thị <span className="font-medium text-slate-900">{inventory.length > 0 ? (page - 1) * limit + 1 : 0}</span> đến <span className="font-medium text-slate-900">{(page - 1) * limit + inventory.length}</span> trong số <span className="font-medium text-slate-900">{total}</span> thuốc
+          {/* Pagination - compact */}
+          <div className="px-4 py-2.5 border-t border-slate-100 flex items-center justify-between bg-white text-sm">
+            <span className="text-xs text-slate-500">
+              Hiển thị <span className="font-semibold text-slate-800">{inventory.length > 0 ? (page - 1) * limit + 1 : 0}</span>–<span className="font-semibold text-slate-800">{(page - 1) * limit + inventory.length}</span> / <span className="font-semibold text-slate-800">{total}</span> thuốc
             </span>
             <div className="flex items-center gap-2">
               <button 
@@ -564,48 +584,56 @@ export function Inventory() {
         </div>
       ) : (
         /* Expiration Report View */
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
-          <div className="p-4 border-b border-slate-200 bg-slate-50">
-            <h3 className="font-bold text-slate-800 text-sm">Danh sách các lô thuốc hết hạn hoặc cận hạn sử dụng (trong vòng 90 ngày)</h3>
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-100/40 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/30 animate-in fade-in duration-200">
+          <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white flex items-center gap-2">
+            <AlertCircle className="text-[#0057cd]" size={16} />
+            <h3 className="font-extrabold text-slate-800 text-xs sm:text-sm">Danh sách các lô thuốc hết hạn hoặc cận hạn sử dụng (trong vòng 90 ngày)</h3>
           </div>
           
-          <div className="overflow-x-auto relative min-h-[300px]">
+          <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
             {expirationLoading ? (
               <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
                 <Loader2 className="animate-spin text-[#0057cd]" size={32} />
                 <p className="text-sm font-semibold text-slate-500">Đang tải báo cáo hết hạn...</p>
               </div>
             ) : null}
-
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+ 
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="text-[11px] text-slate-400 uppercase bg-slate-50/60 border-b border-slate-100/80 tracking-wider font-extrabold">
                 <tr>
-                  <th scope="col" className="px-6 py-4 font-medium">Tên Thuốc</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Số Lô</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Danh Mục</th>
-                  <th scope="col" className="px-6 py-4 font-medium text-center">Tồn Lô</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Hạn Sử Dụng</th>
-                  <th scope="col" className="px-6 py-4 font-medium text-center">Trạng Thái</th>
+                  <th scope="col" className="px-6 py-4 font-bold">Tên Thuốc & Mã</th>
+                  <th scope="col" className="px-6 py-4 font-bold">Số Lô</th>
+                  <th scope="col" className="px-6 py-4 font-bold">Danh Mục</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Tồn Lô</th>
+                  <th scope="col" className="px-6 py-4 font-bold">Hạn Sử Dụng</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Trạng Thái</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {!expirationLoading && expirationReport.map((batch) => (
-                  <tr key={batch.id} className="bg-white hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-semibold text-slate-900">{batch.medicineName}</td>
-                    <td className="px-6 py-4 font-mono font-bold text-slate-700">{batch.batchNo}</td>
-                    <td className="px-6 py-4 text-slate-600">{batch.category}</td>
-                    <td className="px-6 py-4 text-center font-bold text-slate-900">
-                      {batch.stock} <span className="text-xs font-normal text-slate-400">/ {batch.unit}</span>
+                  <tr key={batch.id} className="group bg-white hover:bg-slate-50/50 hover:shadow-[inset_4px_0_0_0_#ef4444] transition-all duration-150">
+                    <td className="px-6 py-4">
+                      <div className="font-semibold text-slate-900 text-xs sm:text-sm">{batch.medicineName}</div>
+                      <div className="mt-1 font-mono text-[9px] text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md w-fit">{batch.medicineId}</div>
                     </td>
-                    <td className="px-6 py-4 text-slate-600 font-semibold">{new Date(batch.expDate).toLocaleDateString("vi-VN")}</td>
+                    <td className="px-6 py-4 font-mono font-bold text-slate-600 text-xs">{batch.batchNo}</td>
+                    <td className="px-6 py-4">
+                      <span className="truncate font-semibold text-slate-600 text-xs sm:text-sm" title={batch.category}>{batch.category}</span>
+                    </td>
+                    <td className="px-6 py-4 text-center font-extrabold text-slate-800 text-xs sm:text-sm">
+                      {batch.stock} <span className="text-slate-400 text-[10px] font-normal">/ {batch.unit}</span>
+                    </td>
+                    <td className="px-6 py-4 text-slate-600 font-bold text-xs sm:text-sm">
+                      {new Date(batch.expDate).toLocaleDateString("vi-VN")}
+                    </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold inline-block border
+                      <span className={`px-3 py-1.5 rounded-full text-xs font-bold inline-block border shadow-sm whitespace-nowrap
                         ${batch.status === 'EXPIRED' 
-                          ? 'bg-rose-50 text-rose-700 border-rose-200' 
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                          ? 'bg-rose-50 text-rose-700 border-rose-100' 
+                          : 'bg-amber-50 text-amber-700 border-amber-100'
                         }
                       `}>
-                        {batch.status === 'EXPIRED' ? 'Đã hết hạn' : 'Sắp hết hạn (Cận hạn)'}
+                        {batch.status === 'EXPIRED' ? 'Đã hết hạn' : 'Sắp hết hạn'}
                       </span>
                     </td>
                   </tr>

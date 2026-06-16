@@ -22,6 +22,12 @@ async function run() {
     console.log('Collections in database:');
     collections.forEach(col => console.log(` - ${col.name}`));
 
+    // Get counts
+    const medicinesCount = await connection.db.collection('medicines').countDocuments();
+    const batchesCount = await connection.db.collection('medicinebatches').countDocuments();
+    console.log(`\nTotal medicines: ${medicinesCount}`);
+    console.log(`Total medicine batches: ${batchesCount}`);
+
     // Inspect medicines schema by fetching raw documents
     const rawMedicines = await connection.db.collection('medicines').find().limit(2).toArray();
     console.log('\nSample Medicines:');
