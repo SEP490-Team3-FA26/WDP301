@@ -31,9 +31,9 @@ export function Register() {
         throw new Error(data.message || 'Đăng ký thất bại');
       }
 
-      setSuccess("Đăng ký thành công! Đang chuyển hướng...");
+      setSuccess("Đăng ký thành công! Đang chuyển hướng sang trang xác thực OTP...");
       setTimeout(() => {
-        navigate("/login");
+        navigate(`/verify-email?email=${encodeURIComponent(email)}`);
       }, 2000);
     } catch (err: any) {
       setError(err.message);
