@@ -25,6 +25,7 @@ import { RegisterDto } from '../dto/register.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { VerifyTwoFactorDto, AuthenticateTwoFactorDto } from '../dto/two-factor.dto';
+import { VerifyEmailDto, ResendVerificationDto } from '../dto/verify-email.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @ApiTags('🔐 Authentication')
@@ -54,6 +55,8 @@ export class AuthController implements OnModuleInit {
       'auth.2fa.enable',
       'auth.2fa.disable',
       'auth.2fa.authenticate',
+      'auth.verify.email',
+      'auth.resend.verification',
     ]);
     console.log('✅ [API Gateway] Đã kết nối tới Kafka và đăng ký Reply Topics');
   }
@@ -281,5 +284,33 @@ export class AuthController implements OnModuleInit {
     }
 
     return result;
+  }
+
+  // ============================================================
+  // POST /api/auth/verify-email — Xác thực email đăng ký tài khoản
+  // ============================================================
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Xác thực địa chỉ email bằng mã OTP khi đăng ký' })
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    return await sendKafkaMessage(
+      this.kafkaClient,
+      'auth.verify.email',
+      JSON.stringify(dto),
+    );
+  }
+
+  // ============================================================
+  // POST /api/auth/resend-verification — Gửi lại mã OTP kích hoạt tài khoản
+  // ============================================================
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Gửi lại mã OTP xác thực email kích hoạt tài khoản' })
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    return await sendKafkaMessage(
+      this.kafkaClient,
+      'auth.resend.verification',
+      JSON.stringify(dto),
+    );
   }
 }

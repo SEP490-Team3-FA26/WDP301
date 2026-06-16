@@ -179,6 +179,36 @@ export class AuthMsController {
     }
   }
 
+  /**
+   * Topic: auth.verify.email
+   */
+  @MessagePattern('auth.verify.email')
+  async handleVerifyEmail(@Payload() data: string) {
+    try {
+      const { email, token } = typeof data === 'string' ? JSON.parse(data) : data;
+      console.log(`📨 [Auth MS] Nhận yêu cầu xác thực email cho: ${email}`);
+      return await this.authService.verifyEmail(email, token);
+    } catch (error) {
+      console.error(`❌ [Auth MS] Lỗi xác thực email:`, error.message);
+      return { error: true, message: error.message, statusCode: error.status || 400 };
+    }
+  }
+
+  /**
+   * Topic: auth.resend.verification
+   */
+  @MessagePattern('auth.resend.verification')
+  async handleResendVerification(@Payload() data: string) {
+    try {
+      const { email } = typeof data === 'string' ? JSON.parse(data) : data;
+      console.log(`📨 [Auth MS] Yêu cầu gửi lại mã kích hoạt cho: ${email}`);
+      return await this.authService.resendVerificationOtp(email);
+    } catch (error) {
+      console.error(`❌ [Auth MS] Lỗi gửi lại mã kích hoạt:`, error.message);
+      return { error: true, message: error.message, statusCode: error.status || 400 };
+    }
+  }
+
   // =========================================================================
   // EVENT-DRIVEN PATTERN (Dùng kafkaClient.emit())
   // Gateway bắn event bất đồng bộ, không cần chờ phản hồi
