@@ -32,18 +32,36 @@ class _AdminScreenState extends State<AdminScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F9),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Admin Dashboard', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: const Color(0xFF1A73E8),
-        elevation: 0,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Admin Dashboard', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 18)),
+            Text('GIÁM SÁT MICROSERVICES & TÀI KHOẢN HỆ THỐNG', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70, letterSpacing: 1.0)),
+          ],
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1E1E2C), Color(0xFF2C2C3E)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Đang làm mới dữ liệu hệ thống...')),
+                const SnackBar(
+                  content: Text('Đang làm mới dữ liệu hệ thống...', style: TextStyle(fontWeight: FontWeight.bold)),
+                  backgroundColor: Color(0xFF2C2C3E),
+                  behavior: SnackBarBehavior.floating,
+                ),
               );
             },
           )
@@ -58,7 +76,7 @@ class _AdminScreenState extends State<AdminScreen> {
               // System health header
               const Text(
                 'Sức Khỏe Hệ Thống',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C)),
               ),
               const SizedBox(height: 12),
               
@@ -102,10 +120,10 @@ class _AdminScreenState extends State<AdminScreen> {
                   Expanded(
                     child: _buildMetricCard(
                       icon: Icons.people,
-                      title: 'Người dùng active',
+                      title: 'Active Sessions',
                       value: '145',
                       color: Colors.teal,
-                      subtext: 'Session hoạt động',
+                      subtext: 'Hoạt động liên tục',
                     ),
                   ),
                 ],
@@ -115,22 +133,23 @@ class _AdminScreenState extends State<AdminScreen> {
               // Microservices status list
               const Text(
                 'Quản Lý Các Microservices',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C)),
               ),
               const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))
                   ],
+                  border: Border.all(color: Colors.grey.shade100),
                 ),
                 child: ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _services.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
                   itemBuilder: (context, index) {
                     final svc = _services[index];
                     final isActive = svc['status'] == 'ACTIVE';
@@ -139,16 +158,16 @@ class _AdminScreenState extends State<AdminScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       title: Text(
                         svc['name'],
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E1E2C)),
                       ),
-                      subtitle: Text('Port: ${svc['port']}  •  Tải: ${svc['load']}'),
+                      subtitle: Text('Port: ${svc['port']}  •  CPU: ${svc['load']}', style: const TextStyle(fontSize: 12)),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: isActive ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
+                              color: isActive ? Colors.green.shade50 : Colors.red.shade50,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -156,7 +175,7 @@ class _AdminScreenState extends State<AdminScreen> {
                               style: TextStyle(
                                 color: isActive ? Colors.green : Colors.red,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: 10,
                               ),
                             ),
                           ),
@@ -164,7 +183,10 @@ class _AdminScreenState extends State<AdminScreen> {
                           Switch(
                             value: isActive,
                             onChanged: (val) => _toggleService(index),
-                            activeThumbColor: Colors.green,
+                            activeThumbColor: Colors.white,
+                            activeTrackColor: Colors.green,
+                            inactiveThumbColor: Colors.white,
+                            inactiveTrackColor: Colors.grey.shade300,
                           )
                         ],
                       ),
@@ -177,7 +199,7 @@ class _AdminScreenState extends State<AdminScreen> {
               // Registrations Pending Approval
               const Text(
                 'Phê Duyệt Tài Khoản Đăng Ký',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C)),
               ),
               const SizedBox(height: 12),
               ListView.builder(
@@ -187,8 +209,9 @@ class _AdminScreenState extends State<AdminScreen> {
                 itemBuilder: (context, index) {
                   final reg = _recentRegistrations[index];
                   return Card(
+                    color: Colors.white,
                     margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.grey.shade100)),
                     elevation: 1,
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
@@ -200,23 +223,25 @@ class _AdminScreenState extends State<AdminScreen> {
                             children: [
                               Text(
                                 reg['name']!,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E1E2C)),
                               ),
                               Text(
                                 reg['date']!,
-                                style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                style: const TextStyle(color: Colors.grey, fontSize: 11),
                               )
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text('Email: ${reg['email']}'),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
+                          Text('Email: ${reg['email']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                          const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Chip(
-                                label: Text(reg['role']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                backgroundColor: Colors.blue.shade50,
+                                label: Text(reg['role']!, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
+                                backgroundColor: const Color(0xFFF1F5F9),
+                                side: BorderSide.none,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               Row(
                                 children: [
@@ -226,10 +251,14 @@ class _AdminScreenState extends State<AdminScreen> {
                                         _recentRegistrations.removeAt(index);
                                       });
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Từ chối phê duyệt tài khoản')),
+                                        const SnackBar(
+                                          content: Text('Từ chối phê duyệt tài khoản.', style: TextStyle(fontWeight: FontWeight.bold)),
+                                          backgroundColor: Colors.red,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
                                       );
                                     },
-                                    child: const Text('Từ chối', style: TextStyle(color: Colors.red)),
+                                    child: const Text('Từ chối', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
                                   ),
                                   const SizedBox(width: 8),
                                   ElevatedButton(
@@ -238,15 +267,19 @@ class _AdminScreenState extends State<AdminScreen> {
                                         _recentRegistrations.removeAt(index);
                                       });
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Phê duyệt tài khoản thành công!')),
+                                        const SnackBar(
+                                          content: Text('Phê duyệt tài khoản thành công!', style: TextStyle(fontWeight: FontWeight.bold)),
+                                          backgroundColor: Colors.green,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
                                       );
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
+                                      backgroundColor: const Color(0xFF1E1E2C),
                                       foregroundColor: Colors.white,
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
-                                    child: const Text('Duyệt'),
+                                    child: const Text('Duyệt', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                   )
                                 ],
                               )
@@ -276,10 +309,11 @@ class _AdminScreenState extends State<AdminScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))
         ],
+        border: Border.all(color: Colors.grey.shade100),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,26 +325,26 @@ class _AdminScreenState extends State<AdminScreen> {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(icon, color: color, size: 20),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Text(
             title,
-            style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C)),
           ),
           const SizedBox(height: 4),
           Text(
             subtext,
-            style: const TextStyle(fontSize: 10, color: Colors.green),
+            style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold),
           ),
         ],
       ),

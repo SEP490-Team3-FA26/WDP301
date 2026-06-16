@@ -5,6 +5,7 @@ import 'admin_screen.dart';
 import 'director_screen.dart';
 import 'warehouse_screen.dart';
 import 'branch_screen.dart';
+import 'customer_screen.dart';
 import 'pharmacist_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -81,6 +82,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         break;
       case UserRole.pharmacist:
         targetScreen = const PharmacistScreen();
+        break;
+      case UserRole.customer:
+        targetScreen = const CustomerScreen();
         break;
     }
 
@@ -293,6 +297,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       break;
                                     case UserRole.pharmacist:
                                       color = const Color(0xFF0288D1);
+                                      break;
+                                    case UserRole.customer:
+                                      color = Colors.purple.shade700;
                                       break;
                                   }
                                   

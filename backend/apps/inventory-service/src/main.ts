@@ -4,7 +4,7 @@ import { InventoryServiceModule } from './inventory-service.module';
 
 async function bootstrap() {
   process.env.KAFKAJS_NO_PARTITIONER_WARNING = '1';
-  let retries = 10;
+  let retries = 20;
   while (retries > 0) {
     try {
       console.log('🔄 Đang kết nối tới Kafka...');
@@ -22,6 +22,10 @@ async function bootstrap() {
             },
             consumer: {
               groupId: (process.env.KAFKA_GROUP_ID || 'wdp301-consumers') + '-inventory',
+            },
+            producer: {
+              // Cho phép gửi message lớn hơn (10MB) để tránh MESSAGE_TOO_LARGE
+              maxInFlightRequests: 1,
             },
             subscribe: {
               allowAutoTopicCreation: true,

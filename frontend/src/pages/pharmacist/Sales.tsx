@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Search, AlertTriangle, ShieldAlert, Sparkles, Printer, XCircle, FileText,
   CheckCircle2, ChevronRight, Stethoscope, Building, UserSquare2, CreditCard,
   Banknote, QrCode, PlusCircle, Save, FileCheck, Info, Check, SearchIcon,
-  ArrowLeft, RefreshCw, ShoppingCart, Plus, Minus, Tag, Phone
+  ArrowLeft, RefreshCw, ShoppingCart, Plus, Minus, Tag, Phone, Mic, Square
 } from "lucide-react";
 
 export function Sales() {
@@ -1101,6 +1101,124 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [error, setError] = useState("");
 
+  // AI Voice Recording States for Counter Sales
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [timer, setTimer] = useState(0);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
+  const [aiResult, setAiResult] = useState<any>(null);
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const intervalRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (recording) {
+      intervalRef.current = setInterval(() => {
+        setTimer((prev) => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(intervalRef.current);
+      setTimer(0);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [recording]);
+
+  const startVoiceRecording = async () => {
+    setAiResult(null);
+    setVoiceBlob(null);
+    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      mediaRecorder.onstop = () => {
+        setVoiceBlob(new Blob(audioChunksRef.current, { type: "audio/webm" }));
+        stream.getTracks().forEach((track) => track.stop());
+      };
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setRecording(true);
+    } catch (err) {
+      console.error(err);
+      showToast("Không thể kết nối Microphone. Vui lòng cấp quyền micro!", "error");
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && recording) {
+      mediaRecorderRef.current.stop();
+      setRecording(false);
+    }
+  };
+
+  const handleSendVoiceToAI = async () => {
+    if (!voiceBlob) return;
+    setAiLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("audio", voiceBlob, "counter_recording.webm");
+
+      const res = await fetch("/api/prescriptions/recommend", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAiResult(data);
+      } else {
+        showToast(data.message || "Lỗi phân tích cuộc thoại từ AI.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Lỗi kết nối y tế AI", "error");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAddAiToCart = () => {
+    if (!aiResult?.prescription?.recommended_drugs || !aiResult?.inventory_status?.available) return;
+    const available = aiResult.inventory_status.available;
+    let newCart = [...cart];
+    let count = 0;
+
+    aiResult.prescription.recommended_drugs.forEach((drug: any) => {
+      const match = available.find((av: any) => av.name.toLowerCase() === drug.name.toLowerCase());
+      if (match && match.stock > 0) {
+        const medId = match.id || match._id;
+        const existing = newCart.find(it => (it.id || it._id) === medId);
+        if (existing) {
+          if (existing.quantity < match.stock) {
+            existing.quantity += 1;
+            count++;
+          }
+        } else {
+          newCart.push({
+            ...match,
+            id: medId,
+            quantity: 1,
+            active_ingredient: drug.active_ingredient
+          });
+          count++;
+        }
+      }
+    });
+
+    if (count > 0) {
+      setCart(newCart);
+      showToast(`Đã thêm ${count} thuốc đề xuất của AI vào giỏ hàng!`, "success");
+      setVoiceModalOpen(false);
+    } else {
+      showToast("Không tìm thấy thuốc khả dụng trong kho khớp với đề xuất!", "warning");
+    }
+  };
+
   // Debounce search query
   useEffect(() => {
     if (!searchQuery) {
@@ -1211,18 +1329,28 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
       {/* Cột trái: Tìm kiếm & Giỏ hàng */}
       <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-6 pb-6">
 
-        {/* Tìm kiếm */}
+        {/* Tìm kiếm & Tư vấn bằng giọng nói AI */}
         <div className="relative shrink-0">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-            <SearchIcon size={18} />
+          <div className="flex gap-3 items-center">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-4.5 flex items-center pointer-events-none text-slate-400">
+                <SearchIcon size={18} />
+              </div>
+              <input
+                type="text"
+                placeholder="Tìm kiếm nhanh theo tên thuốc hoặc hoạt chất để thêm vào giỏ hàng..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all shadow-sm"
+              />
+            </div>
+            <button
+              onClick={() => setVoiceModalOpen(true)}
+              className="px-5 py-3.5 bg-gradient-to-r from-purple-600 to-[#0057cd] hover:from-purple-700 hover:to-[#00419e] text-white font-extrabold rounded-[12px] flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer text-xs uppercase tracking-wider shrink-0"
+            >
+              <Sparkles size={15} /> Ghi âm & Tư vấn AI
+            </button>
           </div>
-          <input
-            type="text"
-            placeholder="Tìm kiếm nhanh theo tên thuốc hoặc hoạt chất để thêm vào giỏ hàng..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all shadow-sm"
-          />
 
           {/* Kết quả tìm kiếm dropdown */}
           {searchResults.length > 0 && (
@@ -1530,6 +1658,138 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
               >
                 Đóng / Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =======================================
+       * 🎙️ MODAL GHI ÂM CUỘC THOẠI & ĐỀ XUẤT AI
+       * ======================================= */}
+      {voiceModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col transform transition-all duration-300">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-2 uppercase tracking-wide">
+                <Sparkles className="text-purple-600 animate-pulse animate-duration-1000" /> Trợ Lý Tư Vấn Triệu Chứng AI
+              </h3>
+              <button 
+                onClick={() => { setVoiceModalOpen(false); setAiResult(null); setVoiceBlob(null); }} 
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <XCircle size={22} />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col md:flex-row gap-6 overflow-y-auto max-h-[70vh]">
+              {/* Cột trái: Ghi âm */}
+              <div className="flex-1 flex flex-col items-center justify-center border border-slate-100 p-5 rounded-2xl bg-slate-50/50 text-center gap-4.5">
+                <div className="relative w-24 h-24 flex items-center justify-center">
+                  {recording && (
+                    <>
+                      <div className="absolute inset-0 bg-purple-100 rounded-full animate-ping opacity-45"></div>
+                      <div className="absolute inset-3 bg-purple-100 rounded-full animate-pulse opacity-75"></div>
+                    </>
+                  )}
+                  <button
+                    onClick={recording ? stopVoiceRecording : startVoiceRecording}
+                    className={`relative z-10 w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer ${
+                      recording ? "bg-rose-500 text-white shadow-rose-200" : "bg-purple-600 text-white hover:bg-purple-700 shadow-purple-200"
+                    }`}
+                  >
+                    {recording ? <Square size={20} className="fill-white" /> : <Mic size={24} />}
+                  </button>
+                </div>
+                <div>
+                  <div className="text-lg font-black font-mono text-slate-800">
+                    {String(Math.floor(timer / 60)).padStart(2, "0")}:{String(timer % 60).padStart(2, "0")}
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                    {recording ? "Đang thu âm cuộc hội thoại..." : voiceBlob ? "Đã lưu bản ghi" : "Nhấp nút để ghi âm triệu chứng"}
+                  </span>
+                </div>
+
+                {voiceBlob && !recording && (
+                  <button
+                    onClick={handleSendVoiceToAI}
+                    disabled={aiLoading}
+                    className="w-full py-2.5 bg-[#0057cd] hover:bg-[#00419e] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow cursor-pointer disabled:opacity-50"
+                  >
+                    {aiLoading ? "Đang phân tích..." : "Gửi AI Phân Tích"}
+                  </button>
+                )}
+              </div>
+
+              {/* Cột phải: Đề xuất */}
+              <div className="flex-[1.4] flex flex-col gap-4">
+                {aiLoading && (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">AI đang bóc tách triệu chứng...</span>
+                  </div>
+                )}
+
+                {!aiLoading && !aiResult && (
+                  <div className="border border-dashed border-slate-200 rounded-2xl p-6 text-center flex flex-col items-center justify-center h-full">
+                    <Sparkles size={28} className="text-purple-300 mb-2 animate-bounce" />
+                    <span className="text-xs font-bold text-slate-700">Chờ kết quả AI</span>
+                    <p className="text-[10px] text-slate-400 mt-1 max-w-[200px] leading-normal">
+                      Hãy ghi âm giọng nói của khách hàng ở cột trái để bắt đầu phân tích.
+                    </p>
+                  </div>
+                )}
+
+                {aiResult && (
+                  <div className="flex flex-col gap-4">
+                    <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl text-[11px] leading-relaxed">
+                      <span className="font-bold text-slate-500">Khách hàng nói:</span>
+                      <p className="font-bold text-slate-800 mt-0.5">"{aiResult.transcribed_text}"</p>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Đơn thuốc AI gợi ý:</span>
+                      {aiResult.prescription?.recommended_drugs?.length > 0 ? (
+                        <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                          {aiResult.prescription.recommended_drugs.map((drug: any, idx: number) => {
+                            const match = aiResult.inventory_status?.available?.find(
+                              (av: any) => av.name.toLowerCase() === drug.name.toLowerCase()
+                            );
+                            
+                            return (
+                              <div key={idx} className="border border-slate-100 rounded-lg p-2.5 bg-slate-50/50 flex items-center justify-between gap-3 text-xs">
+                                <div>
+                                  <div className="font-bold text-slate-800">{drug.name}</div>
+                                  <div className="text-[10px] text-slate-500">{drug.dosage}</div>
+                                </div>
+                                {match && match.stock > 0 ? (
+                                  <span className="text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Còn kho</span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Hết/Không có</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 italic">Không có thuốc phù hợp.</div>
+                      )}
+                    </div>
+
+                    {aiResult.prescription?.warnings && (
+                      <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-[10px] leading-relaxed font-semibold">
+                        ⚠️ Cảnh báo: {aiResult.prescription.warnings}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleAddAiToCart}
+                      className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow"
+                    >
+                      Thêm vào đơn hàng
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

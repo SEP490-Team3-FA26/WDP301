@@ -4,6 +4,7 @@ enum UserRole {
   warehouse,  // Quản Lý Kho
   branch,     // Quản Lý Cơ Sở
   pharmacist, // Dược Sĩ Bán Hàng
+  customer,   // Khách Hàng
 }
 
 extension UserRoleExtension on UserRole {
@@ -19,6 +20,8 @@ extension UserRoleExtension on UserRole {
         return 'Quản Lý Cơ Sở';
       case UserRole.pharmacist:
         return 'Dược Sĩ Bán Hàng';
+      case UserRole.customer:
+        return 'Khách Hàng (Store)';
     }
   }
 }

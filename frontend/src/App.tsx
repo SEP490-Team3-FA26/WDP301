@@ -6,6 +6,7 @@ import { AdminLayout } from "./layouts/AdminLayout";
 import { WarehouseLayout } from "./layouts/WarehouseLayout";
 import { BranchLayout } from "./layouts/BranchLayout";
 import { PharmacistLayout } from "./layouts/PharmacistLayout";
+import { CustomerLayout } from "./layouts/CustomerLayout";
 
 // Auth Pages
 import { Landing } from "./pages/common/Landing";
@@ -19,6 +20,12 @@ import { DashboardHome } from "./pages/common/Dashboard";
 import { Profile } from "./pages/common/Profile";
 import { Settings } from "./pages/common/Settings";
 import { AIInsights } from "./pages/common/AIInsights";
+
+// Customer Pages
+import { CustomerShop } from "./pages/customer/CustomerShop";
+import { CustomerCart } from "./pages/customer/CustomerCart";
+import { CustomerCheckout } from "./pages/customer/CustomerCheckout";
+import { AIConsultant } from "./pages/customer/AIConsultant";
 
 // Master Data
 import { Products } from "./pages/master-data/Products";
@@ -128,3 +135,4 @@ export default function App() {
     </BrowserRouter>
   );
 }
+

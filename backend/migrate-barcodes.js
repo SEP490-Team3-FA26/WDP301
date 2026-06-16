@@ -1,6 +1,6 @@
 const { MongoClient } = require('mongodb');
 
-const MONGODB_URI = 'mongodb+srv://***:***@cluster0.ruhl6tb.mongodb.net/WDP201?appName=Cluster0';
+const MONGODB_URI = 'mongodb+srv://phuocthde180577_db_user:Phuoc12345@cluster0.ruhl6tb.mongodb.net/WDP201?appName=Cluster0';
 
 // Hàm tính checksum cho EAN-13
 function calculateEAN13Checksum(code12) {
