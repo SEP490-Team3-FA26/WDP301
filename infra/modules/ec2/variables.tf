@@ -1,11 +1,24 @@
 # ─────────────────────────────────────────────────────────────
 # EC2 Module — variables.tf
 # ─────────────────────────────────────────────────────────────
-variable "name"              { type = string }
-variable "instance_type"     { type = string }
-variable "key_name"          { type = string }
+variable "name" { type = string }
+variable "instance_type" { type = string }
+variable "key_name" { type = string }
 variable "security_group_id" { type = string }
-variable "environment"       { type = string }
+variable "environment" { type = string }
+
+# IAM instance profile (grants ECR/S3/SQS access without static keys)
+variable "instance_profile_name" {
+  type    = string
+  default = null
+}
+
+# AWS region — used by user-data to log docker into ECR
+variable "aws_region" {
+  type    = string
+  default = "ap-southeast-1"
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

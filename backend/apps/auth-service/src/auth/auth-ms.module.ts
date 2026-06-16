@@ -6,6 +6,7 @@ import { User, UserSchema } from './user.schema';
 import { VerificationToken, VerificationTokenSchema } from './verification-token.schema';
 import { AuthService } from './auth.service';
 import { AuthMsController } from './auth-ms.controller';
+import { SqsEmailService } from '../email/sqs-email.service';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { AuthMsController } from './auth-ms.controller';
     }),
   ],
   controllers: [AuthMsController],
-  providers: [AuthService],
+  providers: [AuthService, SqsEmailService],
   exports: [AuthService],
 })
 export class AuthMsModule {}

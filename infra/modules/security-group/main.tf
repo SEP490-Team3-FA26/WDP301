@@ -1,4 +1,4 @@
-variable "name"        { type = string }
+variable "name" { type = string }
 variable "environment" { type = string }
 variable "tags" {
   type    = map(string)
@@ -18,7 +18,7 @@ resource "aws_security_group" "this" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # TODO: replace with your office IP
+    cidr_blocks = ["0.0.0.0/0"] # TODO: replace with your office IP
   }
 
   # HTTP
