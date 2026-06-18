@@ -15,6 +15,7 @@ import { SalesController } from './controllers/sales.controller';
 import { UserController } from './controllers/user.controller';
 import { MedicineController } from './controllers/medicine.controller';
 import { AuthController } from './controllers/auth.controller';
+import { OrderController } from './controllers/order.controller';
 import { BranchController } from './controllers/branch.controller';
 import { MediaController } from './storage/media.controller';
 
@@ -120,19 +121,35 @@ import { S3StorageService } from './storage/s3-storage.service';
           producer: { allowAutoTopicCreation: true },
         },
       },
+      {
+        name: 'ORDER_SERVICE',
+        transport: Transport.KAFKA,
+        options: {
+          client: {
+            clientId: 'api-gw-order-client',
+            brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+            connectionTimeout: 10000,
+            retry: { initialRetryTime: 1000, retries: 10 },
+            logLevel: 0,
+          },
+          consumer: { groupId: 'api-gw-order-group' },
+          producer: { allowAutoTopicCreation: true },
+        },
+      },
     ]),
   ],
   controllers: [
-    SupplierController, 
+    SupplierController,
     PurchaseRequisitionController,
-    PurchaseOrderController, 
+    PurchaseOrderController,
     GoodsReceiptController,
     InventoryTransactionController,
-    PrescriptionController, 
+    PrescriptionController,
     SalesController,
     UserController,
     MedicineController,
     AuthController,
+    OrderController,
     BranchController,
     MediaController,
   ],
@@ -143,4 +160,4 @@ import { S3StorageService } from './storage/s3-storage.service';
     S3StorageService,
   ],
 })
-export class AppGatewayModule {}
+export class AppGatewayModule { }
