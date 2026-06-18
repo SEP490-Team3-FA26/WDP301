@@ -25,7 +25,7 @@ async function bootstrap() {
           subscribe: {
             allowAutoTopicCreation: true,
           },
-        },
+        } as any,
       });
 
       await app.startAllMicroservices();

@@ -98,12 +98,36 @@ export function Sales() {
   );
 }
 
+const hospitalPresets = [
+  { name: "Bệnh viện Bạch Mai", code: "BM-1029" },
+  { name: "Bệnh viện Chợ Rẫy", code: "CR-2045" },
+  { name: "Bệnh viện Trung ương Huế", code: "TWH-3012" },
+  { name: "Bệnh viện Đà Nẵng", code: "DNG-4089" },
+  { name: "Bệnh viện Hữu nghị Việt Đức", code: "VD-5076" },
+  { name: "Bệnh viện Gia Định", code: "GĐ-6011" },
+  { name: "Khác (Nhập thủ công)", code: "CUSTOM" }
+];
+
+const specialtyPresets = [
+  "Nội khoa",
+  "Ngoại khoa",
+  "Nhi khoa",
+  "Tim mạch",
+  "Tai Mũi Họng",
+  "Răng Hàm Mặt",
+  "Da liễu",
+  "Mắt",
+  "Thần kinh",
+  "Sản phụ khoa",
+  "Khác"
+];
+
 // ==========================================
 // 💊 PRESCRIPTION VIEW (BÁN THEO ĐƠN)
 // ==========================================
 function PrescriptionView({ showToast }: { showToast: (message: string, type?: "success" | "error" | "warning") => void }) {
   const [prescriptionMode, setPrescriptionMode] = useState<"QR" | "MANUAL">("QR");
-  const [prescriptionCode, setPrescriptionCode] = useState("RX-99281-HAN");
+  const [prescriptionCode, setPrescriptionCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isPatientInfoOpen, setIsPatientInfoOpen] = useState(false);
@@ -139,6 +163,34 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
   // Scan simulation states
   const [isScanning, setIsScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState("");
+
+  // Helper variables for presets
+  const matchedPreset = hospitalPresets.find(h => h.name === hospitalName);
+  const dropdownValue = matchedPreset ? hospitalName : (hospitalName ? "CUSTOM" : "");
+
+  const handleHospitalPresetChange = (val: string) => {
+    if (val === "CUSTOM") {
+      setHospitalName("");
+      setHospitalCode("");
+    } else {
+      const selected = hospitalPresets.find(h => h.name === val);
+      if (selected) {
+        setHospitalName(selected.name);
+        setHospitalCode(selected.code);
+      }
+    }
+  };
+
+  const matchedSpecialty = specialtyPresets.find(s => s === doctorSpecialty);
+  const specialtyDropdownValue = matchedSpecialty ? doctorSpecialty : (doctorSpecialty ? "CUSTOM" : "");
+
+  const handleSpecialtyChange = (val: string) => {
+    if (val === "CUSTOM") {
+      setDoctorSpecialty("");
+    } else {
+      setDoctorSpecialty(val);
+    }
+  };
 
   // Load prescriptions from DB
   const fetchDbPrescriptions = async () => {
@@ -181,10 +233,12 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
     }
   };
 
-  // Tự động load đơn điện tử đầu tiên để demo cho đẹp
+  // Tự động load đơn điện tử đầu tiên nếu có mã trên dòng nhập liệu
   useEffect(() => {
     if (prescriptionMode === "QR") {
-      fetchPrescription("RX-99281-HAN");
+      if (prescriptionCode) {
+        fetchPrescription(prescriptionCode);
+      }
     } else {
       // Clear forms for manual prescription
       setPatientName("");
@@ -277,40 +331,17 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
     setSearchResults([]);
   };
 
-  const handleCheckout = async () => {
-    if (prescriptionItems.length === 0) {
-      setError("Vui lòng thêm ít nhất một loại thuốc vào đơn kê.");
-      return;
-    }
-    if (!patientName || !doctorName) {
-      setError("Vui lòng điền tên bệnh nhân và tên bác sĩ kê đơn.");
-      return;
-    }
+  const [showPayOSModal, setShowPayOSModal] = useState(false);
+  const [payosCheckoutUrl, setPayosCheckoutUrl] = useState("");
+  const [payosQrCode, setPayosQrCode] = useState("");
+  const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
+  const [payosPolling, setPayosPolling] = useState(false);
+  const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
+
+  const finalizeSalesOrder = async (payload: any) => {
     setLoading(true);
     setError("");
     try {
-      const code = prescriptionMode === "QR" && prescriptionCode ? prescriptionCode : `PRX-HAND-${Math.floor(10000 + Math.random() * 90000)}`;
-      const payload = {
-        prescriptionCode: code,
-        type: "PRESCRIPTION",
-        isManualPrescription: prescriptionMode === "MANUAL",
-        items: prescriptionItems.map((it: any) => ({
-          medicineId: it.medicineId,
-          quantity: it.quantity,
-          dosage: it.dosage || "Ngày uống 2 lần, mỗi lần 1 viên sau ăn."
-        })),
-        paymentMethod,
-        patientName,
-        patientPhone,
-        patientAge: patientAge ? Number(patientAge) : 30,
-        patientGender,
-        doctorName,
-        doctorSpecialty,
-        hospitalName,
-        hospitalCode,
-        soldBy: "Dược sĩ Trần Thị A"
-      };
-
       const res = await fetch("/api/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -335,6 +366,122 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
       setHospitalCode("");
       setPrescriptionCode("");
       fetchDbPrescriptions();
+    } catch (err: any) {
+      setError(err.message || "Lỗi thanh toán");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let interval: any;
+    if (payosPolling && payosOrderCode) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "PAID") {
+              setPayosPolling(false);
+              setShowPayOSModal(false);
+              showToast("Thanh toán PayOS thành công!", "success");
+              await finalizeSalesOrder(pendingSalePayload);
+            }
+          }
+        } catch (err) {
+          console.error("Lỗi polling status thanh toán:", err);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [payosPolling, payosOrderCode, pendingSalePayload]);
+
+  const checkManualPayment = async () => {
+    if (!payosOrderCode) return;
+    try {
+      const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "PAID") {
+          setPayosPolling(false);
+          setShowPayOSModal(false);
+          showToast("Thanh toán PayOS thành công!", "success");
+          await finalizeSalesOrder(pendingSalePayload);
+        } else {
+          showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Lỗi kiểm tra trạng thái thanh toán.", "error");
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (prescriptionItems.length === 0) {
+      setError("Vui lòng thêm ít nhất một loại thuốc vào đơn kê.");
+      return;
+    }
+    if (!patientName || !doctorName) {
+      setError("Vui lòng điền tên bệnh nhân và tên bác sĩ kê đơn.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const code = prescriptionMode === "QR" && prescriptionCode ? prescriptionCode : `PRX-HAND-${Math.floor(10000 + Math.random() * 90000)}`;
+      const payload = {
+        prescriptionCode: code,
+        type: "PRESCRIPTION",
+        isManualPrescription: prescriptionMode === "MANUAL" || !prescriptionCode,
+        items: prescriptionItems.map((it: any) => ({
+          medicineId: it.medicineId,
+          quantity: it.quantity,
+          dosage: it.dosage || "Ngày uống 2 lần, mỗi lần 1 viên sau ăn."
+        })),
+        paymentMethod,
+        patientName,
+        patientPhone,
+        patientAge: patientAge ? Number(patientAge) : 30,
+        patientGender,
+        doctorName,
+        doctorSpecialty,
+        hospitalName,
+        hospitalCode,
+        soldBy: "Dược sĩ Trần Thị A"
+      };
+
+      if (paymentMethod === "QR_PAY") {
+        const payosRes = await fetch("/api/orders/payos-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patientName,
+            patientPhone: patientPhone || "0900000000",
+            totalAmount: total,
+            items: prescriptionItems.map(it => ({
+              medicineId: it.medicineId,
+              name: it.name,
+              quantity: it.quantity,
+              price: it.price,
+              unit: it.unit
+            }))
+          })
+        });
+        const payosResult = await payosRes.json();
+        if (!payosRes.ok) {
+          throw new Error(payosResult.message || "Không thể tạo link thanh toán PayOS");
+        }
+
+        setPayosCheckoutUrl(payosResult.checkoutUrl);
+        setPayosQrCode(payosResult.qrCode || "");
+        setPayosOrderCode(payosResult.orderCode);
+        setPendingSalePayload(payload);
+        setShowPayOSModal(true);
+        setPayosPolling(true);
+      } else {
+        await finalizeSalesOrder(payload);
+      }
     } catch (err: any) {
       setError(err.message || "Lỗi thanh toán");
     } finally {
@@ -488,32 +635,61 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Chuyên khoa</label>
-                  <input 
-                    type="text" 
-                    value={doctorSpecialty} 
-                    onChange={(e) => setDoctorSpecialty(e.target.value)}
-                    placeholder="Nội khoa" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
-                  />
+                  <select
+                    value={specialtyDropdownValue}
+                    onChange={(e) => handleSpecialtyChange(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
+                  >
+                    <option value="" disabled>-- Chọn chuyên khoa --</option>
+                    {specialtyPresets.map(spec => (
+                      <option key={spec} value={spec === "Khác" ? "CUSTOM" : spec}>{spec}</option>
+                    ))}
+                  </select>
+                  {specialtyDropdownValue === "CUSTOM" && (
+                    <input
+                      type="text"
+                      value={doctorSpecialty}
+                      onChange={(e) => setDoctorSpecialty(e.target.value)}
+                      placeholder="Nhập chuyên khoa khác..."
+                      className="w-full mt-2 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Bệnh viện / Phòng khám</label>
-                  <input 
-                    type="text" 
-                    value={hospitalName} 
-                    onChange={(e) => setHospitalName(e.target.value)}
-                    placeholder="Bệnh viện Bạch Mai" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
-                  />
+                  <select
+                    value={dropdownValue}
+                    onChange={(e) => handleHospitalPresetChange(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
+                  >
+                    <option value="" disabled>-- Chọn bệnh viện --</option>
+                    {hospitalPresets.map(h => (
+                      <option key={h.name} value={h.code === "CUSTOM" ? "CUSTOM" : h.name}>{h.name}</option>
+                    ))}
+                  </select>
+                  {dropdownValue === "CUSTOM" && (
+                    <input
+                      type="text"
+                      value={hospitalName}
+                      onChange={(e) => setHospitalName(e.target.value)}
+                      placeholder="Nhập tên bệnh viện khác..."
+                      className="w-full mt-2 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Mã cơ sở y tế</label>
-                  <input 
-                    type="text" 
-                    value={hospitalCode} 
+                  <input
+                    type="text"
+                    value={hospitalCode}
                     onChange={(e) => setHospitalCode(e.target.value)}
-                    placeholder="BM-1029" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+                    disabled={dropdownValue !== "CUSTOM" && dropdownValue !== ""}
+                    placeholder="BM-1029"
+                    className={`w-full p-2.5 rounded-lg text-sm font-semibold focus:outline-none focus:border-[#0057cd] ${
+                      dropdownValue !== "CUSTOM" && dropdownValue !== ""
+                        ? "bg-slate-100 text-slate-500 border-slate-250 cursor-not-allowed"
+                        : "bg-slate-50 border border-slate-200 focus:bg-white"
+                    }`}
                   />
                 </div>
               </div>
@@ -851,6 +1027,57 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
           </button>
         </div>
       </div>
+      {/* =======================================
+       * 💳 MODAL THANH TOÁN PAYOS VIETQR
+       * ======================================= */}
+      {showPayOSModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden flex flex-col transform transition-all duration-300">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-900 text-md flex items-center gap-2 uppercase tracking-wide">
+                <QrCode className="text-[#0057cd]" /> Khách quét mã VietQR thanh toán
+              </h3>
+              <button onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <XCircle size={22} />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-5 items-center text-center">
+              <div className="text-xs font-bold text-slate-500">
+                Hãy hướng dẫn khách hàng quét mã VietQR dưới đây bằng ứng dụng Ngân hàng (Mobile Banking) để thanh toán số tiền <span className="text-sm font-black text-[#0057cd]">{total.toLocaleString()}₫</span>.
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner flex items-center justify-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosQrCode || payosCheckoutUrl)}`}
+                  alt="VietQR PayOS"
+                  className="w-56 h-56 rounded-lg object-contain"
+                />
+              </div>
+
+              <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5 justify-center">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                Đang chờ khách chuyển khoản (Tự động cập nhật...)
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+              <button
+                onClick={checkManualPayment}
+                className="flex-1 py-3 bg-[#0057cd] hover:bg-[#00419e] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow"
+              >
+                Kiểm tra thanh toán
+              </button>
+              <button
+                onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }}
+                className="px-4 py-3 bg-slate-150 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =======================================
        * 🔎 MODAL QUÉT QR ĐIỆN TỬ GIẢ LẬP
@@ -1101,6 +1328,80 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [error, setError] = useState("");
 
+  const [showPayOSModal, setShowPayOSModal] = useState(false);
+  const [payosCheckoutUrl, setPayosCheckoutUrl] = useState("");
+  const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
+  const [payosPolling, setPayosPolling] = useState(false);
+  const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
+
+  const finalizeSalesOrder = async (payload: any) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.message || "Lỗi thanh toán");
+      }
+
+      setInvoiceData(result);
+      setShowInvoiceModal(true);
+      setCart([]); // Clear cart
+    } catch (err: any) {
+      setError(err.message || "Lỗi khi bán lẻ");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let interval: any;
+    if (payosPolling && payosOrderCode) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "PAID") {
+              setPayosPolling(false);
+              setShowPayOSModal(false);
+              showToast("Thanh toán PayOS thành công!", "success");
+              await finalizeSalesOrder(pendingSalePayload);
+            }
+          }
+        } catch (err) {
+          console.error("Lỗi polling status thanh toán:", err);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [payosPolling, payosOrderCode, pendingSalePayload]);
+
+  const checkManualPayment = async () => {
+    if (!payosOrderCode) return;
+    try {
+      const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "PAID") {
+          setPayosPolling(false);
+          setShowPayOSModal(false);
+          showToast("Thanh toán PayOS thành công!", "success");
+          await finalizeSalesOrder(pendingSalePayload);
+        } else {
+          showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Lỗi kiểm tra trạng thái thanh toán.", "error");
+    }
+  };
+
   // AI Voice Recording States for Counter Sales
   const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -1295,19 +1596,36 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
         soldBy: "Dược sĩ Trần Thị A"
       };
 
-      const res = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.message || "Lỗi thanh toán");
-      }
+      if (paymentMethod === "QR_PAY") {
+        const payosRes = await fetch("/api/orders/payos-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patientName: "Khách lẻ vãng lai",
+            patientPhone: "0900000000",
+            totalAmount: total,
+            items: cart.map(it => ({
+              medicineId: it.id || it._id,
+              name: it.name,
+              quantity: it.quantity,
+              price: it.price,
+              unit: it.unit
+            }))
+          })
+        });
+        const payosResult = await payosRes.json();
+        if (!payosRes.ok) {
+          throw new Error(payosResult.message || "Không thể tạo link thanh toán PayOS");
+        }
 
-      setInvoiceData(result);
-      setShowInvoiceModal(true);
-      setCart([]); // Clear cart
+        setPayosCheckoutUrl(payosResult.checkoutUrl);
+        setPayosOrderCode(payosResult.orderCode);
+        setPendingSalePayload(payload);
+        setShowPayOSModal(true);
+        setPayosPolling(true);
+      } else {
+        await finalizeSalesOrder(payload);
+      }
     } catch (err: any) {
       setError(err.message || "Lỗi khi bán lẻ");
     }
@@ -1657,6 +1975,57 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
                 className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
               >
                 Đóng / Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* =======================================
+       * 💳 MODAL THANH TOÁN PAYOS VIETQR
+       * ======================================= */}
+      {showPayOSModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden flex flex-col transform transition-all duration-300">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-900 text-md flex items-center gap-2 uppercase tracking-wide">
+                <QrCode className="text-[#0057cd]" /> Khách quét mã VietQR thanh toán
+              </h3>
+              <button onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <XCircle size={22} />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-5 items-center text-center">
+              <div className="text-xs font-bold text-slate-500">
+                Hãy hướng dẫn khách hàng quét mã VietQR dưới đây bằng ứng dụng Ngân hàng (Mobile Banking) để thanh toán số tiền <span className="text-sm font-black text-[#0057cd]">{total.toLocaleString()}₫</span>.
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner flex items-center justify-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosCheckoutUrl)}`}
+                  alt="VietQR PayOS"
+                  className="w-56 h-56 rounded-lg object-contain"
+                />
+              </div>
+
+              <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5 justify-center">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                Đang chờ khách chuyển khoản (Tự động cập nhật...)
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+              <button
+                onClick={checkManualPayment}
+                className="flex-1 py-3 bg-[#0057cd] hover:bg-[#00419e] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow"
+              >
+                Kiểm tra thanh toán
+              </button>
+              <button
+                onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }}
+                className="px-4 py-3 bg-slate-150 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+              >
+                Đóng
               </button>
             </div>
           </div>
