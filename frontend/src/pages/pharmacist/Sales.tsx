@@ -98,12 +98,36 @@ export function Sales() {
   );
 }
 
+const hospitalPresets = [
+  { name: "Bệnh viện Bạch Mai", code: "BM-1029" },
+  { name: "Bệnh viện Chợ Rẫy", code: "CR-2045" },
+  { name: "Bệnh viện Trung ương Huế", code: "TWH-3012" },
+  { name: "Bệnh viện Đà Nẵng", code: "DNG-4089" },
+  { name: "Bệnh viện Hữu nghị Việt Đức", code: "VD-5076" },
+  { name: "Bệnh viện Gia Định", code: "GĐ-6011" },
+  { name: "Khác (Nhập thủ công)", code: "CUSTOM" }
+];
+
+const specialtyPresets = [
+  "Nội khoa",
+  "Ngoại khoa",
+  "Nhi khoa",
+  "Tim mạch",
+  "Tai Mũi Họng",
+  "Răng Hàm Mặt",
+  "Da liễu",
+  "Mắt",
+  "Thần kinh",
+  "Sản phụ khoa",
+  "Khác"
+];
+
 // ==========================================
 // 💊 PRESCRIPTION VIEW (BÁN THEO ĐƠN)
 // ==========================================
 function PrescriptionView({ showToast }: { showToast: (message: string, type?: "success" | "error" | "warning") => void }) {
   const [prescriptionMode, setPrescriptionMode] = useState<"QR" | "MANUAL">("QR");
-  const [prescriptionCode, setPrescriptionCode] = useState("RX-99281-HAN");
+  const [prescriptionCode, setPrescriptionCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isPatientInfoOpen, setIsPatientInfoOpen] = useState(false);
@@ -139,6 +163,34 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
   // Scan simulation states
   const [isScanning, setIsScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState("");
+
+  // Helper variables for presets
+  const matchedPreset = hospitalPresets.find(h => h.name === hospitalName);
+  const dropdownValue = matchedPreset ? hospitalName : (hospitalName ? "CUSTOM" : "");
+
+  const handleHospitalPresetChange = (val: string) => {
+    if (val === "CUSTOM") {
+      setHospitalName("");
+      setHospitalCode("");
+    } else {
+      const selected = hospitalPresets.find(h => h.name === val);
+      if (selected) {
+        setHospitalName(selected.name);
+        setHospitalCode(selected.code);
+      }
+    }
+  };
+
+  const matchedSpecialty = specialtyPresets.find(s => s === doctorSpecialty);
+  const specialtyDropdownValue = matchedSpecialty ? doctorSpecialty : (doctorSpecialty ? "CUSTOM" : "");
+
+  const handleSpecialtyChange = (val: string) => {
+    if (val === "CUSTOM") {
+      setDoctorSpecialty("");
+    } else {
+      setDoctorSpecialty(val);
+    }
+  };
 
   // Load prescriptions from DB
   const fetchDbPrescriptions = async () => {
@@ -181,10 +233,12 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
     }
   };
 
-  // Tự động load đơn điện tử đầu tiên để demo cho đẹp
+  // Tự động load đơn điện tử đầu tiên nếu có mã trên dòng nhập liệu
   useEffect(() => {
     if (prescriptionMode === "QR") {
-      fetchPrescription("RX-99281-HAN");
+      if (prescriptionCode) {
+        fetchPrescription(prescriptionCode);
+      }
     } else {
       // Clear forms for manual prescription
       setPatientName("");
@@ -279,6 +333,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
 
   const [showPayOSModal, setShowPayOSModal] = useState(false);
   const [payosCheckoutUrl, setPayosCheckoutUrl] = useState("");
+  const [payosQrCode, setPayosQrCode] = useState("");
   const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
   const [payosPolling, setPayosPolling] = useState(false);
   const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
@@ -378,7 +433,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
       const payload = {
         prescriptionCode: code,
         type: "PRESCRIPTION",
-        isManualPrescription: prescriptionMode === "MANUAL",
+        isManualPrescription: prescriptionMode === "MANUAL" || !prescriptionCode,
         items: prescriptionItems.map((it: any) => ({
           medicineId: it.medicineId,
           quantity: it.quantity,
@@ -419,6 +474,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
         }
 
         setPayosCheckoutUrl(payosResult.checkoutUrl);
+        setPayosQrCode(payosResult.qrCode || "");
         setPayosOrderCode(payosResult.orderCode);
         setPendingSalePayload(payload);
         setShowPayOSModal(true);
@@ -579,32 +635,61 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Chuyên khoa</label>
-                  <input 
-                    type="text" 
-                    value={doctorSpecialty} 
-                    onChange={(e) => setDoctorSpecialty(e.target.value)}
-                    placeholder="Nội khoa" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
-                  />
+                  <select
+                    value={specialtyDropdownValue}
+                    onChange={(e) => handleSpecialtyChange(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
+                  >
+                    <option value="" disabled>-- Chọn chuyên khoa --</option>
+                    {specialtyPresets.map(spec => (
+                      <option key={spec} value={spec === "Khác" ? "CUSTOM" : spec}>{spec}</option>
+                    ))}
+                  </select>
+                  {specialtyDropdownValue === "CUSTOM" && (
+                    <input
+                      type="text"
+                      value={doctorSpecialty}
+                      onChange={(e) => setDoctorSpecialty(e.target.value)}
+                      placeholder="Nhập chuyên khoa khác..."
+                      className="w-full mt-2 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Bệnh viện / Phòng khám</label>
-                  <input 
-                    type="text" 
-                    value={hospitalName} 
-                    onChange={(e) => setHospitalName(e.target.value)}
-                    placeholder="Bệnh viện Bạch Mai" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
-                  />
+                  <select
+                    value={dropdownValue}
+                    onChange={(e) => handleHospitalPresetChange(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
+                  >
+                    <option value="" disabled>-- Chọn bệnh viện --</option>
+                    {hospitalPresets.map(h => (
+                      <option key={h.name} value={h.code === "CUSTOM" ? "CUSTOM" : h.name}>{h.name}</option>
+                    ))}
+                  </select>
+                  {dropdownValue === "CUSTOM" && (
+                    <input
+                      type="text"
+                      value={hospitalName}
+                      onChange={(e) => setHospitalName(e.target.value)}
+                      placeholder="Nhập tên bệnh viện khác..."
+                      className="w-full mt-2 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Mã cơ sở y tế</label>
-                  <input 
-                    type="text" 
-                    value={hospitalCode} 
+                  <input
+                    type="text"
+                    value={hospitalCode}
                     onChange={(e) => setHospitalCode(e.target.value)}
-                    placeholder="BM-1029" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+                    disabled={dropdownValue !== "CUSTOM" && dropdownValue !== ""}
+                    placeholder="BM-1029"
+                    className={`w-full p-2.5 rounded-lg text-sm font-semibold focus:outline-none focus:border-[#0057cd] ${
+                      dropdownValue !== "CUSTOM" && dropdownValue !== ""
+                        ? "bg-slate-100 text-slate-500 border-slate-250 cursor-not-allowed"
+                        : "bg-slate-50 border border-slate-200 focus:bg-white"
+                    }`}
                   />
                 </div>
               </div>
@@ -964,7 +1049,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
 
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner flex items-center justify-center">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosCheckoutUrl)}`}
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosQrCode || payosCheckoutUrl)}`}
                   alt="VietQR PayOS"
                   className="w-56 h-56 rounded-lg object-contain"
                 />

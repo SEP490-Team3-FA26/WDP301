@@ -30,7 +30,7 @@ async function bootstrap() {
             subscribe: {
               allowAutoTopicCreation: true,
             },
-          },
+          } as any,
           logger: ['error', 'warn'],
         },
       );

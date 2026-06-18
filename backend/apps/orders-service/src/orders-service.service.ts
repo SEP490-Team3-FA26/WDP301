@@ -79,6 +79,7 @@ export class OrdersServiceService implements OnModuleInit {
           orderCode,
           paymentMethod: 'QR_PAY',
           checkoutUrl: paymentLinkRes.checkoutUrl,
+          qrCode: paymentLinkRes.qrCode,
           order: newOrder,
         };
       } catch (err) {

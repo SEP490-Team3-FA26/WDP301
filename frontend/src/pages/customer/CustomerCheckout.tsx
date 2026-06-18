@@ -73,8 +73,7 @@ export function CustomerCheckout() {
   const total = subtotal - memberDiscount + vat;
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
-    const handleSubmitOrder = async (e: React.FormEvent) => {
-      e.preventDefault();
+    e.preventDefault();
       if (!fullname || !phone || !address) {
         alert("Vui lòng điền đầy đủ các thông tin giao hàng!");
         return;
@@ -431,5 +430,4 @@ export function CustomerCheckout() {
         )}
       </div>
     );
-  }
 }
