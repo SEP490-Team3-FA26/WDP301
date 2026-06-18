@@ -47,6 +47,7 @@ export class AuthController implements OnModuleInit {
     await subscribeToKafkaTopics(this.kafkaClient, [
       'auth.login',
       'auth.register',
+      'auth.google.login',
       'auth.validate.token',
       'auth.get.user.by.id',
       'auth.forgot.password',
