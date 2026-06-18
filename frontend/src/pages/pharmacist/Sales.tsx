@@ -277,6 +277,91 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
     setSearchResults([]);
   };
 
+  const [showPayOSModal, setShowPayOSModal] = useState(false);
+  const [payosCheckoutUrl, setPayosCheckoutUrl] = useState("");
+  const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
+  const [payosPolling, setPayosPolling] = useState(false);
+  const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
+
+  const finalizeSalesOrder = async (payload: any) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.message || "Lỗi khi xử lý thanh toán");
+      }
+
+      setInvoiceData(result);
+      setShowInvoiceModal(true);
+      
+      // Clear forms
+      setPrescriptionItems([]);
+      setPatientName("");
+      setPatientAge("");
+      setPatientPhone("");
+      setDoctorName("");
+      setDoctorSpecialty("");
+      setHospitalName("");
+      setHospitalCode("");
+      setPrescriptionCode("");
+      fetchDbPrescriptions();
+    } catch (err: any) {
+      setError(err.message || "Lỗi thanh toán");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let interval: any;
+    if (payosPolling && payosOrderCode) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "PAID") {
+              setPayosPolling(false);
+              setShowPayOSModal(false);
+              showToast("Thanh toán PayOS thành công!", "success");
+              await finalizeSalesOrder(pendingSalePayload);
+            }
+          }
+        } catch (err) {
+          console.error("Lỗi polling status thanh toán:", err);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [payosPolling, payosOrderCode, pendingSalePayload]);
+
+  const checkManualPayment = async () => {
+    if (!payosOrderCode) return;
+    try {
+      const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "PAID") {
+          setPayosPolling(false);
+          setShowPayOSModal(false);
+          showToast("Thanh toán PayOS thành công!", "success");
+          await finalizeSalesOrder(pendingSalePayload);
+        } else {
+          showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Lỗi kiểm tra trạng thái thanh toán.", "error");
+    }
+  };
+
   const handleCheckout = async () => {
     if (prescriptionItems.length === 0) {
       setError("Vui lòng thêm ít nhất một loại thuốc vào đơn kê.");
@@ -311,30 +396,36 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
         soldBy: "Dược sĩ Trần Thị A"
       };
 
-      const res = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.message || "Lỗi khi xử lý thanh toán");
-      }
+      if (paymentMethod === "QR_PAY") {
+        const payosRes = await fetch("/api/orders/payos-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patientName,
+            patientPhone: patientPhone || "0900000000",
+            totalAmount: total,
+            items: prescriptionItems.map(it => ({
+              medicineId: it.medicineId,
+              name: it.name,
+              quantity: it.quantity,
+              price: it.price,
+              unit: it.unit
+            }))
+          })
+        });
+        const payosResult = await payosRes.json();
+        if (!payosRes.ok) {
+          throw new Error(payosResult.message || "Không thể tạo link thanh toán PayOS");
+        }
 
-      setInvoiceData(result);
-      setShowInvoiceModal(true);
-      
-      // Clear forms
-      setPrescriptionItems([]);
-      setPatientName("");
-      setPatientAge("");
-      setPatientPhone("");
-      setDoctorName("");
-      setDoctorSpecialty("");
-      setHospitalName("");
-      setHospitalCode("");
-      setPrescriptionCode("");
-      fetchDbPrescriptions();
+        setPayosCheckoutUrl(payosResult.checkoutUrl);
+        setPayosOrderCode(payosResult.orderCode);
+        setPendingSalePayload(payload);
+        setShowPayOSModal(true);
+        setPayosPolling(true);
+      } else {
+        await finalizeSalesOrder(payload);
+      }
     } catch (err: any) {
       setError(err.message || "Lỗi thanh toán");
     } finally {
@@ -851,6 +942,57 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
           </button>
         </div>
       </div>
+      {/* =======================================
+       * 💳 MODAL THANH TOÁN PAYOS VIETQR
+       * ======================================= */}
+      {showPayOSModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden flex flex-col transform transition-all duration-300">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-900 text-md flex items-center gap-2 uppercase tracking-wide">
+                <QrCode className="text-[#0057cd]" /> Khách quét mã VietQR thanh toán
+              </h3>
+              <button onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <XCircle size={22} />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-5 items-center text-center">
+              <div className="text-xs font-bold text-slate-500">
+                Hãy hướng dẫn khách hàng quét mã VietQR dưới đây bằng ứng dụng Ngân hàng (Mobile Banking) để thanh toán số tiền <span className="text-sm font-black text-[#0057cd]">{total.toLocaleString()}₫</span>.
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner flex items-center justify-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosCheckoutUrl)}`}
+                  alt="VietQR PayOS"
+                  className="w-56 h-56 rounded-lg object-contain"
+                />
+              </div>
+
+              <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5 justify-center">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                Đang chờ khách chuyển khoản (Tự động cập nhật...)
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+              <button
+                onClick={checkManualPayment}
+                className="flex-1 py-3 bg-[#0057cd] hover:bg-[#00419e] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow"
+              >
+                Kiểm tra thanh toán
+              </button>
+              <button
+                onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }}
+                className="px-4 py-3 bg-slate-150 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =======================================
        * 🔎 MODAL QUÉT QR ĐIỆN TỬ GIẢ LẬP
@@ -1101,6 +1243,80 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [error, setError] = useState("");
 
+  const [showPayOSModal, setShowPayOSModal] = useState(false);
+  const [payosCheckoutUrl, setPayosCheckoutUrl] = useState("");
+  const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
+  const [payosPolling, setPayosPolling] = useState(false);
+  const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
+
+  const finalizeSalesOrder = async (payload: any) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.message || "Lỗi thanh toán");
+      }
+
+      setInvoiceData(result);
+      setShowInvoiceModal(true);
+      setCart([]); // Clear cart
+    } catch (err: any) {
+      setError(err.message || "Lỗi khi bán lẻ");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let interval: any;
+    if (payosPolling && payosOrderCode) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "PAID") {
+              setPayosPolling(false);
+              setShowPayOSModal(false);
+              showToast("Thanh toán PayOS thành công!", "success");
+              await finalizeSalesOrder(pendingSalePayload);
+            }
+          }
+        } catch (err) {
+          console.error("Lỗi polling status thanh toán:", err);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [payosPolling, payosOrderCode, pendingSalePayload]);
+
+  const checkManualPayment = async () => {
+    if (!payosOrderCode) return;
+    try {
+      const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "PAID") {
+          setPayosPolling(false);
+          setShowPayOSModal(false);
+          showToast("Thanh toán PayOS thành công!", "success");
+          await finalizeSalesOrder(pendingSalePayload);
+        } else {
+          showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Lỗi kiểm tra trạng thái thanh toán.", "error");
+    }
+  };
+
   // AI Voice Recording States for Counter Sales
   const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -1295,19 +1511,36 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
         soldBy: "Dược sĩ Trần Thị A"
       };
 
-      const res = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.message || "Lỗi thanh toán");
-      }
+      if (paymentMethod === "QR_PAY") {
+        const payosRes = await fetch("/api/orders/payos-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patientName: "Khách lẻ vãng lai",
+            patientPhone: "0900000000",
+            totalAmount: total,
+            items: cart.map(it => ({
+              medicineId: it.id || it._id,
+              name: it.name,
+              quantity: it.quantity,
+              price: it.price,
+              unit: it.unit
+            }))
+          })
+        });
+        const payosResult = await payosRes.json();
+        if (!payosRes.ok) {
+          throw new Error(payosResult.message || "Không thể tạo link thanh toán PayOS");
+        }
 
-      setInvoiceData(result);
-      setShowInvoiceModal(true);
-      setCart([]); // Clear cart
+        setPayosCheckoutUrl(payosResult.checkoutUrl);
+        setPayosOrderCode(payosResult.orderCode);
+        setPendingSalePayload(payload);
+        setShowPayOSModal(true);
+        setPayosPolling(true);
+      } else {
+        await finalizeSalesOrder(payload);
+      }
     } catch (err: any) {
       setError(err.message || "Lỗi khi bán lẻ");
     }
@@ -1657,6 +1890,57 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
                 className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
               >
                 Đóng / Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* =======================================
+       * 💳 MODAL THANH TOÁN PAYOS VIETQR
+       * ======================================= */}
+      {showPayOSModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden flex flex-col transform transition-all duration-300">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-900 text-md flex items-center gap-2 uppercase tracking-wide">
+                <QrCode className="text-[#0057cd]" /> Khách quét mã VietQR thanh toán
+              </h3>
+              <button onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <XCircle size={22} />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-5 items-center text-center">
+              <div className="text-xs font-bold text-slate-500">
+                Hãy hướng dẫn khách hàng quét mã VietQR dưới đây bằng ứng dụng Ngân hàng (Mobile Banking) để thanh toán số tiền <span className="text-sm font-black text-[#0057cd]">{total.toLocaleString()}₫</span>.
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner flex items-center justify-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosCheckoutUrl)}`}
+                  alt="VietQR PayOS"
+                  className="w-56 h-56 rounded-lg object-contain"
+                />
+              </div>
+
+              <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5 justify-center">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                Đang chờ khách chuyển khoản (Tự động cập nhật...)
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+              <button
+                onClick={checkManualPayment}
+                className="flex-1 py-3 bg-[#0057cd] hover:bg-[#00419e] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow"
+              >
+                Kiểm tra thanh toán
+              </button>
+              <button
+                onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }}
+                className="px-4 py-3 bg-slate-150 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+              >
+                Đóng
               </button>
             </div>
           </div>

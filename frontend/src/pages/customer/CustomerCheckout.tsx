@@ -13,14 +13,57 @@ export function CustomerCheckout() {
   const [orderId, setOrderId] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+
   useEffect(() => {
-    try {
-      const data = localStorage.getItem("customer_cart");
-      if (data) {
-        setCartItems(JSON.parse(data));
+    // Check if redirecting back from PayOS
+    const queryParams = new URLSearchParams(window.location.search);
+    const isSuccess = queryParams.get("success") === "true";
+    const orderCode = queryParams.get("orderCode");
+
+    if (orderCode) {
+      setCheckingPayment(true);
+      setOrderId(`PayOS Code: ${orderCode}`);
+      
+      // Call endpoint to verify payment status and trigger stock deduction
+      fetch(`/api/orders/check/${orderCode}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setCheckingPayment(false);
+          if (data && data.status === "PAID") {
+            setFullname(data.order.patientName);
+            setPhone(data.order.patientPhone);
+            setAddress(data.order.shippingAddress);
+            setPaymentMethod(data.order.paymentMethod);
+            // Populate items for invoice preview
+            setCartItems(data.order.items);
+            setShowSuccessModal(true);
+            
+            // Clear cart
+            localStorage.removeItem("customer_cart");
+            window.dispatchEvent(new Event("cartUpdated"));
+            
+            // Remove search params from URL
+            navigate("/customer/checkout", { replace: true });
+          } else {
+            setPaymentError(`Đơn hàng #${orderCode} chưa thanh toán thành công hoặc đã bị hủy.`);
+          }
+        })
+        .catch((err) => {
+          setCheckingPayment(false);
+          setPaymentError("Lỗi kết nối khi xác thực thanh toán đơn hàng.");
+          console.error(err);
+        });
+    } else {
+      try {
+        const data = localStorage.getItem("customer_cart");
+        if (data) {
+          setCartItems(JSON.parse(data));
+        }
+      } catch (err) {
+        console.error(err);
       }
-    } catch (err) {
-      console.error(err);
     }
   }, []);
 
@@ -29,7 +72,7 @@ export function CustomerCheckout() {
   const vat = Math.round((subtotal - memberDiscount) * 0.08);
   const total = subtotal - memberDiscount + vat;
 
-  const handleSubmitOrder = (e: React.FormEvent) => {
+  const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullname || !phone || !address) {
       alert("Vui lòng điền đầy đủ các thông tin giao hàng!");
@@ -37,18 +80,54 @@ export function CustomerCheckout() {
     }
     
     setIsSubmitting(true);
+    setPaymentError("");
 
-    // Simulate database insertion and stock allocation delay
-    setTimeout(() => {
-      setIsSubmitting(false);
-      const generatedId = `SP-ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-      setOrderId(generatedId);
-      setShowSuccessModal(true);
+    try {
+      const payload = {
+        patientName: fullname,
+        patientPhone: phone,
+        shippingAddress: address,
+        paymentMethod: paymentMethod,
+        totalAmount: total,
+        type: "ONLINE",
+        items: cartItems.map(it => ({
+          medicineId: it.id || it._id,
+          name: it.name,
+          quantity: it.quantity,
+          price: it.price,
+          unit: it.unit
+        }))
+      };
+
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
       
-      // Clear cart
-      localStorage.removeItem("customer_cart");
-      window.dispatchEvent(new Event("cartUpdated"));
-    }, 1200);
+      setIsSubmitting(false);
+
+      if (!res.ok) {
+        throw new Error(result.message || "Lỗi tạo đơn hàng");
+      }
+
+      if (paymentMethod === "QR_PAY" && result.checkoutUrl) {
+        // Redirect to PayOS checkout page
+        window.location.href = result.checkoutUrl;
+      } else {
+        // Cash or card payment completes instantly
+        setOrderId(`SP-ORD-${result.orderCode || Math.floor(100000 + Math.random() * 900000)}`);
+        setShowSuccessModal(true);
+        
+        // Clear cart
+        localStorage.removeItem("customer_cart");
+        window.dispatchEvent(new Event("cartUpdated"));
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      alert(err.message || "Lỗi hệ thống khi gửi đơn hàng!");
+    }
   };
 
   return (
@@ -63,7 +142,25 @@ export function CustomerCheckout() {
         </div>
       </div>
 
-      {cartItems.length > 0 || showSuccessModal ? (
+      {checkingPayment && (
+        <div className="bg-white border border-slate-200 rounded-[24px] p-16 flex flex-col items-center justify-center text-center">
+          <div className="w-12 h-12 border-4 border-[#0d6efd] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <h3 className="font-bold text-slate-700 text-md">Đang kiểm tra giao dịch PayOS...</h3>
+          <p className="text-slate-400 text-xs mt-1.5 max-w-xs">
+            Hệ thống đang đối chiếu dữ liệu thanh toán từ PayOS, vui lòng giữ nguyên trình duyệt.
+          </p>
+        </div>
+      )}
+
+      {paymentError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4.5 rounded-2xl font-bold text-xs uppercase flex items-center gap-3">
+          <XCircle className="text-red-500 shrink-0" size={18} />
+          <span>{paymentError}</span>
+          <button onClick={() => setPaymentError("")} className="ml-auto text-red-400 hover:text-red-700 text-[16px]">×</button>
+        </div>
+      )}
+
+      {!checkingPayment && (cartItems.length > 0 || showSuccessModal) ? (
         <div className="flex flex-col xl:flex-row gap-8 items-start">
           {/* Left: Form Giao Hàng */}
           <div className="flex-1 w-full bg-white border border-slate-200 rounded-[20px] p-6 shadow-sm">

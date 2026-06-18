@@ -13,6 +13,7 @@ import { SalesController } from './controllers/sales.controller';
 import { UserController } from './controllers/user.controller';
 import { MedicineController } from './controllers/medicine.controller';
 import { AuthController } from './controllers/auth.controller';
+import { OrderController } from './controllers/order.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -115,6 +116,21 @@ import { GoogleStrategy } from './strategies/google.strategy';
           producer: { allowAutoTopicCreation: true },
         },
       },
+      {
+        name: 'ORDER_SERVICE',
+        transport: Transport.KAFKA,
+        options: {
+          client: {
+            clientId: 'api-gw-order-client',
+            brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+            connectionTimeout: 10000,
+            retry: { initialRetryTime: 1000, retries: 10 },
+            logLevel: 0,
+          },
+          consumer: { groupId: 'api-gw-order-group' },
+          producer: { allowAutoTopicCreation: true },
+        },
+      },
     ]),
   ],
   controllers: [
@@ -126,6 +142,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
     UserController,
     MedicineController,
     AuthController,
+    OrderController,
   ],
   providers: [
     JwtAuthGuard,
