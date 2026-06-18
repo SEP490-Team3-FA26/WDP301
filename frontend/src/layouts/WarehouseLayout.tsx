@@ -9,6 +9,7 @@ export function WarehouseLayout() {
       icon: <PackageSearch size={20} />,
       subItems: [
         { name: "Tổng quan kho", href: "/warehouse/inventory" },
+        { name: "Yêu cầu mua hàng (PR)", href: "/warehouse/inventory/requisitions" },
         { name: "Nhập / Xuất kho", href: "/warehouse/inventory/import" },
         { name: "Kiểm kê kho", href: "/warehouse/inventory/dispose" },
       ]

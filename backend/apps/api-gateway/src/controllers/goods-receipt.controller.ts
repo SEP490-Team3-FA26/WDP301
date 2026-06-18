@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Inject, OnModuleInit } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 
@@ -12,6 +12,7 @@ export class GoodsReceiptController implements OnModuleInit {
     await subscribeToKafkaTopics(this.inventoryClient, [
       'inventory.grn.create',
       'inventory.grn.list',
+      'inventory.grn.get_by_id',
     ]);
   }
 
@@ -23,5 +24,10 @@ export class GoodsReceiptController implements OnModuleInit {
   @Get()
   async listGoodsReceiptNotes() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.list', {});
+  }
+
+  @Get(':id')
+  async getGoodsReceiptNoteById(@Param('id') id: string) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.get_by_id', { id });
   }
 }

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Mail, Lock, User } from "lucide-react";
+import { authService } from "../../services/auth.service";
 
 export function Register() {
   const navigate = useNavigate();
@@ -19,21 +20,11 @@ export function Register() {
     setSuccess("");
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email, password, role: 'user' }),
-      });
+      await authService.register(fullName, email, password);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Đăng ký thất bại');
-      }
-
-      setSuccess("Đăng ký thành công! Đang chuyển hướng...");
+      setSuccess("Đăng ký thành công! Đang chuyển hướng sang trang xác thực OTP...");
       setTimeout(() => {
-        navigate("/login");
+        navigate(`/auth/verify-email?email=${encodeURIComponent(email)}`);
       }, 2000);
     } catch (err: any) {
       setError(err.message);

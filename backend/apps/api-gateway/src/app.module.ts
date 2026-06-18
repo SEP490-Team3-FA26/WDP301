@@ -6,18 +6,23 @@ import { JwtModule } from '@nestjs/jwt';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 
 import { SupplierController } from './controllers/supplier.controller';
+import { PurchaseRequisitionController } from './controllers/purchase-requisition.controller';
 import { PurchaseOrderController } from './controllers/purchase-order.controller';
 import { GoodsReceiptController } from './controllers/goods-receipt.controller';
+import { InventoryTransactionController } from './controllers/inventory-transaction.controller';
 import { PrescriptionController } from './controllers/prescription.controller';
 import { SalesController } from './controllers/sales.controller';
 import { UserController } from './controllers/user.controller';
 import { MedicineController } from './controllers/medicine.controller';
 import { AuthController } from './controllers/auth.controller';
 import { OrderController } from './controllers/order.controller';
+import { BranchController } from './controllers/branch.controller';
+import { MediaController } from './storage/media.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
+import { S3StorageService } from './storage/s3-storage.service';
 
 /**
  * Root Module của API Gateway
@@ -134,21 +139,25 @@ import { GoogleStrategy } from './strategies/google.strategy';
     ]),
   ],
   controllers: [
-    SupplierController, 
-    PurchaseOrderController, 
-    GoodsReceiptController, 
-    PrescriptionController, 
+    SupplierController,
+    PurchaseRequisitionController,
+    PurchaseOrderController,
+    GoodsReceiptController,
+    InventoryTransactionController,
+    PrescriptionController,
     SalesController,
     UserController,
     MedicineController,
     AuthController,
     OrderController,
+    BranchController,
+    MediaController,
   ],
   providers: [
     JwtAuthGuard,
     JwtStrategy,
     GoogleStrategy,
+    S3StorageService,
   ],
 })
-export class AppGatewayModule {}
-
+export class AppGatewayModule { }

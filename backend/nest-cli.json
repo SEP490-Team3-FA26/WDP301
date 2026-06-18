@@ -1,19 +1,28 @@
 {
   "monorepo": true,
-  "root": "apps/wdp301-backend",
-  "sourceRoot": "apps/wdp301-backend/src",
+  "root": "apps/api-gateway",
+  "sourceRoot": "apps/api-gateway/src",
   "compilerOptions": {
     "webpack": true,
-    "tsConfigPath": "apps/wdp301-backend/tsconfig.app.json"
+    "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
   },
   "projects": {
-    "wdp301-backend": {
+    "api-gateway": {
       "type": "application",
-      "root": "apps/wdp301-backend",
+      "root": "apps/api-gateway",
       "entryFile": "main",
-      "sourceRoot": "apps/wdp301-backend/src",
+      "sourceRoot": "apps/api-gateway/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/wdp301-backend/tsconfig.app.json"
+        "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
+      }
+    },
+    "auth-service": {
+      "type": "application",
+      "root": "apps/auth-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/auth-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/auth-service/tsconfig.app.json"
       }
     },
     "user-service": {
