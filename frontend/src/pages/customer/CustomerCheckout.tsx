@@ -16,6 +16,12 @@ export function CustomerCheckout() {
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState("");
 
+  const [showPayOSModal, setShowPayOSModal] = useState(false);
+  const [payosCheckoutUrl, setPayosCheckoutUrl] = useState("");
+  const [payosQrCode, setPayosQrCode] = useState("");
+  const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
+  const [payosPolling, setPayosPolling] = useState(false);
+
   useEffect(() => {
     // Check if redirecting back from PayOS
     const queryParams = new URLSearchParams(window.location.search);
@@ -66,6 +72,72 @@ export function CustomerCheckout() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    let interval: any;
+    if (payosPolling && payosOrderCode) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "PAID") {
+              setPayosPolling(false);
+              setShowPayOSModal(false);
+              
+              setOrderId(`SP-ORD-${payosOrderCode}`);
+              if (data.order) {
+                setFullname(data.order.patientName);
+                setPhone(data.order.patientPhone);
+                setAddress(data.order.shippingAddress);
+                setPaymentMethod(data.order.paymentMethod);
+                setCartItems(data.order.items);
+              }
+              setShowSuccessModal(true);
+
+              localStorage.removeItem("customer_cart");
+              window.dispatchEvent(new Event("cartUpdated"));
+            }
+          }
+        } catch (err) {
+          console.error("Lỗi polling status thanh toán:", err);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [payosPolling, payosOrderCode]);
+
+  const checkManualPayment = async () => {
+    if (!payosOrderCode) return;
+    try {
+      const res = await fetch(`/api/orders/check/${payosOrderCode}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "PAID") {
+          setPayosPolling(false);
+          setShowPayOSModal(false);
+          
+          setOrderId(`SP-ORD-${payosOrderCode}`);
+          if (data.order) {
+            setFullname(data.order.patientName);
+            setPhone(data.order.patientPhone);
+            setAddress(data.order.shippingAddress);
+            setPaymentMethod(data.order.paymentMethod);
+            setCartItems(data.order.items);
+          }
+          setShowSuccessModal(true);
+
+          localStorage.removeItem("customer_cart");
+          window.dispatchEvent(new Event("cartUpdated"));
+        } else {
+          alert("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi kiểm tra trạng thái thanh toán.");
+    }
+  };
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const memberDiscount = Math.round(subtotal * 0.05);
@@ -119,8 +191,12 @@ export function CustomerCheckout() {
         }
 
         if (paymentMethod === "QR_PAY" && result.checkoutUrl) {
-          // Redirect to PayOS checkout page
-          window.location.href = result.checkoutUrl;
+          // Show PayOS Modal instead of redirecting
+          setPayosCheckoutUrl(result.checkoutUrl);
+          setPayosQrCode(result.qrCode || "");
+          setPayosOrderCode(result.orderCode);
+          setShowPayOSModal(true);
+          setPayosPolling(true);
         } else {
           // Cash or card payment completes instantly
           setOrderId(`SP-ORD-${result.orderCode || Math.floor(100000 + Math.random() * 900000)}`);
@@ -423,6 +499,56 @@ export function CustomerCheckout() {
                   className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl"
                 >
                   Về Cửa Hàng
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PAYOS MODAL FOR DIRECT CUSTOMER QR PAY */}
+        {showPayOSModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[24px] border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden flex flex-col transform transition-all duration-300">
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <h3 className="font-black text-slate-900 text-md flex items-center gap-2 uppercase tracking-wide">
+                  <QrCode className="text-[#0d6efd]" /> quét mã VietQR thanh toán
+                </h3>
+                <button onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                  <XCircle size={22} />
+                </button>
+              </div>
+
+              <div className="p-6 flex flex-col gap-5 items-center text-center">
+                <div className="text-xs font-bold text-slate-500">
+                  Hãy quét mã VietQR dưới đây bằng ứng dụng Ngân hàng (Mobile Banking) để thanh toán số tiền <span className="text-sm font-black text-[#0d6efd]">{total.toLocaleString()}₫</span>.
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner flex items-center justify-center">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosQrCode || payosCheckoutUrl)}`}
+                    alt="VietQR PayOS"
+                    className="w-56 h-56 rounded-lg object-contain"
+                  />
+                </div>
+
+                <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5 justify-center">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                  Đang chờ bạn chuyển khoản (Tự động cập nhật...)
+                </div>
+              </div>
+
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+                <button
+                  onClick={checkManualPayment}
+                  className="flex-1 py-3 bg-[#0d6efd] hover:bg-[#0a58ca] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow"
+                >
+                  Kiểm tra thanh toán
+                </button>
+                <button
+                  onClick={() => { setShowPayOSModal(false); setPayosPolling(false); }}
+                  className="px-4 py-3 bg-slate-150 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+                >
+                  Đóng
                 </button>
               </div>
             </div>
