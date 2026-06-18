@@ -4,6 +4,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://api.abcpharmacy.store/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
