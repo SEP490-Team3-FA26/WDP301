@@ -8,6 +8,9 @@ import { BranchLayout } from "./layouts/BranchLayout";
 import { PharmacistLayout } from "./layouts/PharmacistLayout";
 import { CustomerLayout } from "./layouts/CustomerLayout";
 
+// Protected Route Guard
+import { ProtectedRoute } from "./components/ProtectedRoute";
+
 // Auth Pages
 import { Landing } from "./pages/common/Landing";
 import { Login } from "./pages/auth/Login";
@@ -73,70 +76,82 @@ export default function App() {
         <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
 
         {/* --- Customer Routes --- */}
-        <Route path="/customer" element={<CustomerLayout />}>
-          <Route index element={<Navigate to="shop" replace />} />
-          <Route path="shop" element={<CustomerShop />} />
-          <Route path="cart" element={<CustomerCart />} />
-          <Route path="checkout" element={<CustomerCheckout />} />
-          <Route path="ai-consult" element={<AIConsultant />} />
+        <Route element={<ProtectedRoute allowedRoles={["user"]} />}>
+          <Route path="/customer" element={<CustomerLayout />}>
+            <Route index element={<Navigate to="shop" replace />} />
+            <Route path="shop" element={<CustomerShop />} />
+            <Route path="cart" element={<CustomerCart />} />
+            <Route path="checkout" element={<CustomerCheckout />} />
+            <Route path="ai-consult" element={<AIConsultant />} />
+          </Route>
         </Route>
 
         {/* --- Admin / HQ Routes --- */}
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<DashboardHome />} />
-          <Route path="branches" element={<Branches />} />
-          <Route path="approvals" element={<HQApproval />} />
-          <Route path="finance" element={<Finance />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="ai-insights" element={<AIInsights />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="settings" element={<Settings />} />
+        <Route element={<ProtectedRoute allowedRoles={["admin", "head_branch"]} />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<DashboardHome />} />
+            <Route path="branches" element={<Branches />} />
+            <Route path="approvals" element={<HQApproval />} />
+            <Route path="finance" element={<Finance />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="ai-insights" element={<AIInsights />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="settings" element={<Settings />} />
 
-          <Route path="inventory" element={<Inventory />} />
-          <Route path="inventory/import" element={<InventoryHistory type="import" />} />
-          <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
-          <Route path="inventory/export" element={<InventoryHistory type="export" />} />
-          <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
+            <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory/import" element={<InventoryHistory type="import" />} />
+            <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
+            <Route path="inventory/export" element={<InventoryHistory type="export" />} />
+            <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
 
-          <Route path="master-data/products" element={<Products />} />
-          <Route path="master-data/suppliers" element={<Suppliers />} />
+            <Route path="master-data/products" element={<Products />} />
+            <Route path="master-data/suppliers" element={<Suppliers />} />
+          </Route>
         </Route>
 
         {/* --- Warehouse / Quản lý Kho Routes --- */}
-        <Route path="/warehouse" element={<WarehouseLayout />}>
-          <Route index element={<DashboardHome />} />
-          <Route path="inventory" element={<Inventory />} />
-          <Route path="inventory/requisitions" element={<PurchaseRequisition />} />
-          <Route path="inventory/import" element={<InventoryHistory type="import" />} />
-          <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
-          <Route path="inventory/export" element={<InventoryHistory type="export" />} />
-          <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
-          <Route path="ai-insights" element={<AIInsights />} />
-          <Route path="profile" element={<Profile />} />
+        <Route element={<ProtectedRoute allowedRoles={["warehouse"]} />}>
+          <Route path="/warehouse" element={<WarehouseLayout />}>
+            <Route index element={<DashboardHome />} />
+            <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory/requisitions" element={<PurchaseRequisition />} />
+            <Route path="inventory/import" element={<InventoryHistory type="import" />} />
+            <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
+            <Route path="inventory/export" element={<InventoryHistory type="export" />} />
+            <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
+            <Route path="ai-insights" element={<AIInsights />} />
+            <Route path="profile" element={<Profile />} />
 
-          <Route path="master-data/products" element={<Products />} />
-          <Route path="master-data/suppliers" element={<Suppliers />} />
+            <Route path="master-data/products" element={<Products />} />
+            <Route path="master-data/suppliers" element={<Suppliers />} />
+          </Route>
         </Route>
 
         {/* --- Branch / Quản lý Chi nhánh Routes --- */}
-        <Route path="/branch" element={<BranchLayout />}>
-          <Route index element={<DashboardHome />} />
-          <Route path="sales" element={<Sales />} />
-          <Route path="requisitions" element={<BranchRequisition />} />
-          <Route path="finance" element={<Finance />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="profile" element={<Profile />} />
+        <Route element={<ProtectedRoute allowedRoles={["branch"]} />}>
+          <Route path="/branch" element={<BranchLayout />}>
+            <Route index element={<DashboardHome />} />
+            <Route path="sales" element={<Sales />} />
+            <Route path="requisitions" element={<BranchRequisition />} />
+            <Route path="finance" element={<Finance />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="profile" element={<Profile />} />
+          </Route>
         </Route>
 
         {/* --- Pharmacist Routes --- */}
-        <Route path="/pharmacist" element={<PharmacistLayout />}>
-          <Route index element={<DashboardHome />} />
-          <Route path="sales" element={<Sales />} />
-          <Route path="profile" element={<Profile />} />
+        <Route element={<ProtectedRoute allowedRoles={["pharmacist"]} />}>
+          <Route path="/pharmacist" element={<PharmacistLayout />}>
+            <Route index element={<DashboardHome />} />
+            <Route path="sales" element={<Sales />} />
+            <Route path="profile" element={<Profile />} />
+          </Route>
         </Route>
 
         {/* Profile riêng lẻ cho user thường */}
-        <Route path="/profile" element={<Profile />} />
+        <Route element={<ProtectedRoute allowedRoles={["admin", "head_branch", "warehouse", "branch", "pharmacist", "user"]} />}>
+          <Route path="/profile" element={<Profile />} />
+        </Route>
 
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -144,4 +159,5 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
 

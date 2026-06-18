@@ -15,6 +15,7 @@ import { SalesController } from './controllers/sales.controller';
 import { UserController } from './controllers/user.controller';
 import { MedicineController } from './controllers/medicine.controller';
 import { AuthController } from './controllers/auth.controller';
+import { BranchController } from './controllers/branch.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -130,6 +131,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
     UserController,
     MedicineController,
     AuthController,
+    BranchController,
   ],
   providers: [
     JwtAuthGuard,

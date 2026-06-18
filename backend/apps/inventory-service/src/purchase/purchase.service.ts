@@ -22,7 +22,7 @@ export class PurchaseService {
     @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     this.supplierClient.subscribeToResponseOf('supplier.get_by_id');
@@ -275,7 +275,7 @@ export class PurchaseService {
       }
 
       if (medicine.expiry_date && new Date(medicine.expiry_date) < today) {
-         throw new RpcException({ message: `Số đăng ký của thuốc "${medicine.name}" đã hết hạn vào ngày ${new Date(medicine.expiry_date).toLocaleDateString()}. Không thể lên đơn nhập!` });
+        throw new RpcException({ message: `Số đăng ký của thuốc "${medicine.name}" đã hết hạn vào ngày ${new Date(medicine.expiry_date).toLocaleDateString()}. Không thể lên đơn nhập!` });
       }
     }
 

@@ -44,6 +44,7 @@ async function bootstrap() {
         { email: 'warehouse@vinapharmacy.com', role: UserRole.WAREHOUSE, fullName: 'Quản Lý Kho' },
         { email: 'manager@vinapharmacy.com', role: UserRole.BRANCH, fullName: 'Quản Lý Cơ Sở' },
         { email: 'pharmacist@vinapharmacy.com', role: UserRole.PHARMACIST, fullName: 'Dược Sĩ Bán Hàng' },
+        { email: 'user@vinapharmacy.com', role: UserRole.USER, fullName: 'Khách Hàng' },
       ];
 
       const passwordHash = await bcrypt.hash('123456', 10);

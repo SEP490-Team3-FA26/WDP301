@@ -14,14 +14,25 @@ export function CustomerCheckout() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    try {
-      const data = localStorage.getItem("customer_cart");
-      if (data) {
-        setCartItems(JSON.parse(data));
+    const fetchCart = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      try {
+        const res = await fetch("/api/users/cart", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCartItems(data.items || []);
+        }
+      } catch (err) {
+        console.error("Error loading cart on checkout:", err);
       }
-    } catch (err) {
-      console.error(err);
-    }
+    };
+    fetchCart();
   }, []);
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -29,27 +40,70 @@ export function CustomerCheckout() {
   const vat = Math.round((subtotal - memberDiscount) * 0.08);
   const total = subtotal - memberDiscount + vat;
 
-  const handleSubmitOrder = (e: React.FormEvent) => {
+  const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullname || !phone || !address) {
       alert("Vui lòng điền đầy đủ các thông tin giao hàng!");
       return;
     }
     
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Vui lòng đăng nhập để thực hiện đặt hàng!");
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate database insertion and stock allocation delay
-    setTimeout(() => {
+    try {
+      // Create Sales Order via Gateway api/sales
+      const response = await fetch("/api/sales", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          type: "RETAIL",
+          items: cartItems.map((item) => ({
+            medicineId: item.id,
+            quantity: item.quantity
+          })),
+          paymentMethod: paymentMethod,
+          patientName: fullname,
+          patientPhone: phone,
+          soldBy: "Khách hàng"
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || "Đặt hàng thất bại. Vui lòng kiểm tra lại tồn kho của thuốc!");
+      }
+
+      if (resData.success) {
+        // Clear server-side cart
+        await fetch("/api/users/cart/clear", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        setOrderId(resData.data._id || `SP-ORD-${Math.floor(100000 + Math.random() * 900000)}`);
+        setShowSuccessModal(true);
+        window.dispatchEvent(new Event("cartUpdated"));
+      } else {
+        throw new Error(resData.message || "Đặt hàng không thành công");
+      }
+    } catch (err: any) {
+      alert(err.message || "Lỗi kết nối máy chủ");
+      console.error(err);
+    } finally {
       setIsSubmitting(false);
-      const generatedId = `SP-ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-      setOrderId(generatedId);
-      setShowSuccessModal(true);
-      
-      // Clear cart
-      localStorage.removeItem("customer_cart");
-      window.dispatchEvent(new Event("cartUpdated"));
-    }, 1200);
+    }
   };
+
 
   return (
     <div className="flex flex-col gap-6 flex-1 relative">

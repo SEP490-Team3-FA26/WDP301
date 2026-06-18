@@ -22,12 +22,12 @@ export function BranchRequisition() {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
-      
+
       const [prRes, medRes] = await Promise.all([
         fetch("/api/purchase-requisitions", { signal: controller.signal }).then(r => r.json()).catch(() => []),
         fetch("/api/medicines?limit=500", { signal: controller.signal }).then(r => r.json()).then(d => d.data || d).catch(() => []),
       ]);
-      
+
       clearTimeout(timeoutId);
       setPrList(prRes);
       setMedicines(medRes);
@@ -343,9 +343,8 @@ function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; on
                     <div className="mt-2 text-xs font-semibold text-slate-500 bg-blue-50/50 p-2.5 rounded-lg border border-blue-100 flex justify-between items-center">
                       <span>Tồn kho hiện tại:</span>
                       <span
-                        className={`font-bold ${
-                          (getMedDetails(selMed)?.stock ?? 0) <= 50 ? "text-amber-600" : "text-slate-700"
-                        }`}
+                        className={`font-bold ${(getMedDetails(selMed)?.stock ?? 0) <= 50 ? "text-amber-600" : "text-slate-700"
+                          }`}
                       >
                         {getMedDetails(selMed)?.stock ?? 0} {getMedDetails(selMed)?.unit || "Hộp"}
                       </span>
@@ -387,11 +386,10 @@ function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; on
                         key={q}
                         type="button"
                         onClick={() => setSelQty(q)}
-                        className={`flex-1 py-1 text-[11px] font-bold rounded border transition-all ${
-                          selQty === q
+                        className={`flex-1 py-1 text-[11px] font-bold rounded border transition-all ${selQty === q
                             ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                             : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                        }`}
+                          }`}
                       >
                         {q}
                       </button>
