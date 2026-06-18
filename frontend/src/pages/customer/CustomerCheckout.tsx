@@ -224,8 +224,8 @@ export function CustomerCheckout() {
                       type="button"
                       onClick={() => setPaymentMethod("CASH")}
                       className={`flex flex-col items-center justify-center gap-2 py-4 rounded-xl border-2 transition-all relative ${paymentMethod === "CASH"
-                          ? "border-[#0d6efd] bg-[#f2f3ff] text-[#0d6efd] font-bold"
-                          : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                        ? "border-[#0d6efd] bg-[#f2f3ff] text-[#0d6efd] font-bold"
+                        : "border-slate-200 text-slate-500 hover:bg-slate-50"
                         }`}
                     >
                       <Banknote size={20} />
@@ -236,8 +236,8 @@ export function CustomerCheckout() {
                       type="button"
                       onClick={() => setPaymentMethod("CARD")}
                       className={`flex flex-col items-center justify-center gap-2 py-4 rounded-xl border-2 transition-all relative ${paymentMethod === "CARD"
-                          ? "border-[#0d6efd] bg-[#f2f3ff] text-[#0d6efd] font-bold"
-                          : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                        ? "border-[#0d6efd] bg-[#f2f3ff] text-[#0d6efd] font-bold"
+                        : "border-slate-200 text-slate-500 hover:bg-slate-50"
                         }`}
                     >
                       <CreditCard size={20} />
@@ -248,8 +248,8 @@ export function CustomerCheckout() {
                       type="button"
                       onClick={() => setPaymentMethod("QR_PAY")}
                       className={`flex flex-col items-center justify-center gap-2 py-4 rounded-xl border-2 transition-all relative ${paymentMethod === "QR_PAY"
-                          ? "border-[#0d6efd] bg-[#f2f3ff] text-[#0d6efd] font-bold"
-                          : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                        ? "border-[#0d6efd] bg-[#f2f3ff] text-[#0d6efd] font-bold"
+                        : "border-slate-200 text-slate-500 hover:bg-slate-50"
                         }`}
                     >
                       <QrCode size={20} />
@@ -432,3 +432,4 @@ export function CustomerCheckout() {
       </div>
     );
   }
+}
