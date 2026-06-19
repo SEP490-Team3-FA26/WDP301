@@ -558,7 +558,7 @@ export function Inventory() {
                             const importPath = isWarehouse ? '/warehouse/inventory/import/new' : '/admin/inventory/import/new';
                             navigate(importPath, {
                               state: {
-                                prefilledMedicineId: item.id
+                                prefillPrItems: [{ medicineId: item.id, quantity: Math.max(20, (item.minStock || 50) * 2 - item.stock) }]
                               }
                             });
                           }}
@@ -866,7 +866,7 @@ export function Inventory() {
                             const importPath = isWarehouse ? '/warehouse/inventory/import/new' : '/admin/inventory/import/new';
                             navigate(importPath, {
                               state: {
-                                prefilledMedicineId: item.id
+                                prefillPrItems: [{ medicineId: item.id, quantity: Math.max(20, (item.minStock || 50) * 2 - item.stock) }]
                               }
                             });
                           }}

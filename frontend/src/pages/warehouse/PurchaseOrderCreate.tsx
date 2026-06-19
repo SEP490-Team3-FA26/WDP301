@@ -155,9 +155,9 @@ export function PurchaseOrderCreate() {
   const totalAmount = cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
 
   return (
-    <div className="flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-y-auto">
+    <div className="flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-6 shrink-0">
         <button
           onClick={() => navigate(-1)}
           className="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
@@ -172,9 +172,9 @@ export function PurchaseOrderCreate() {
 
 
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
         {/* CỘT TRÁI: THÔNG TIN NCC & THÊM THUỐC */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
+        <div className="lg:col-span-1 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
 
 
 
@@ -245,14 +245,14 @@ export function PurchaseOrderCreate() {
         </div>
 
         {/* CỘT PHẢI: CHI TIẾT ĐƠN HÀNG */}
-        <div className="lg:col-span-2 flex flex-col h-full min-h-[500px]">
+        <div className="lg:col-span-2 flex flex-col h-full min-h-0">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full overflow-hidden">
             <div className="p-5 border-b border-slate-100 bg-slate-50/50">
               <h2 className="text-base font-bold text-slate-800">Chi Tiết Đơn Nhập Hàng</h2>
               <p className="text-xs text-slate-500 mt-1">Danh sách các sản phẩm thuốc dự kiến nhập kho</p>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-0">
+            <div className="flex-1 overflow-y-auto p-0 custom-scrollbar">
               {isPrefilling ? (
                 <div className="h-full flex flex-col items-center justify-center text-emerald-600 gap-3 py-16">
                   <Loader2 size={28} className="animate-spin" />
