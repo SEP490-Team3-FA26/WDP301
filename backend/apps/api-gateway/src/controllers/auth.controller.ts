@@ -47,6 +47,7 @@ export class AuthController implements OnModuleInit {
     await subscribeToKafkaTopics(this.kafkaClient, [
       'auth.login',
       'auth.register',
+      'auth.google.login',
       'auth.validate.token',
       'auth.get.user.by.id',
       'auth.forgot.password',
@@ -119,12 +120,13 @@ export class AuthController implements OnModuleInit {
       this.kafkaClient.send('auth.google.login', req.user)
     );
 
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     if (result.error) {
-      return res.redirect(`http://localhost:3000/login?error=${encodeURIComponent(result.message)}`);
+      return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(result.message)}`);
     }
 
     // Redirect về Frontend kèm JWT Token
-    return res.redirect(`http://localhost:3000/login?token=${result.access_token}`);
+    return res.redirect(`${frontendUrl}/login?token=${result.access_token}`);
   }
 
   // ============================================================

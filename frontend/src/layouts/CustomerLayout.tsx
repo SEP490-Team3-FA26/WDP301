@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingCart, BrainCircuit, HeartPulse, Menu, X, LogOut } from "lucide-react";
+import { ShoppingCart, BrainCircuit, HeartPulse, Menu, X, LogOut, ShieldAlert } from "lucide-react";
 
 export function CustomerLayout() {
   const location = useLocation();
@@ -17,7 +17,13 @@ export function CustomerLayout() {
   const updateCartCount = async () => {
     try {
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) {
+        const guestCartStr = localStorage.getItem("guest_cart");
+        const items = guestCartStr ? JSON.parse(guestCartStr) : [];
+        const count = items.reduce((acc: number, item: any) => acc + item.quantity, 0);
+        setCartCount(count);
+        return;
+      }
 
       const res = await fetch("/api/users/cart", {
         headers: {
@@ -51,10 +57,12 @@ export function CustomerLayout() {
     };
   }, []);
 
+  const hasToken = !!localStorage.getItem("token");
   const navItems = [
     { name: "Cửa Hàng Dược Phẩm", href: "/customer/shop", icon: <ShoppingCart size={18} /> },
     { name: "Tư Vấn AI (Giọng Nói)", href: "/customer/ai-consult", icon: <BrainCircuit size={18} /> },
-  ];
+    { name: "Tương Tác Thuốc AI", href: "/customer/interactions", icon: <ShieldAlert size={18} /> },
+  ].filter(Boolean) as any[];
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
@@ -109,23 +117,32 @@ export function CustomerLayout() {
               )}
             </Link>
 
-            {/* Profile */}
-            <div className="hidden sm:flex items-center gap-2.5 pl-2 border-l border-slate-200">
-              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-xs uppercase shadow-inner">
-                KH
+            {/* Profile / Login */}
+            {hasToken ? (
+              <div className="hidden sm:flex items-center gap-2.5 pl-2 border-l border-slate-200">
+                <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-xs uppercase shadow-inner">
+                  KH
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-800">Khách Hàng</span>
+                  <span className="text-[10px] font-medium text-slate-400">Thành viên thân thiết</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="p-2 text-slate-400 hover:text-red-500 rounded-lg transition-colors ml-1 cursor-pointer"
+                  title="Đăng xuất"
+                >
+                  <LogOut size={16} />
+                </button>
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-800">Khách Hàng</span>
-                <span className="text-[10px] font-medium text-slate-400">Thành viên thân thiết</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="p-2 text-slate-400 hover:text-red-500 rounded-lg transition-colors ml-1"
-                title="Đăng xuất"
+            ) : (
+              <Link
+                to="/auth/login"
+                className="bg-gradient-to-r from-[#0d6efd] to-[#0b5ed7] hover:from-[#0b5ed7] hover:to-[#0d6efd] text-white px-5 py-2.5 rounded-full font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-blue-500/15"
               >
-                <LogOut size={16} />
-              </button>
-            </div>
+                Đăng Nhập
+              </Link>
+            )}
 
             {/* Mobile Menu Button */}
             <button
@@ -158,23 +175,35 @@ export function CustomerLayout() {
                 </Link>
               );
             })}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
-                  KH
+            {hasToken ? (
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
+                    KH
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-800">Khách Hàng</span>
+                    <span className="text-[10px] text-slate-400">Thành viên thân thiết</span>
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-slate-800">Khách Hàng</span>
-                  <span className="text-[10px] text-slate-400">Thành viên thân thiết</span>
-                </div>
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-2 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <LogOut size={14} /> Đăng xuất
+                </button>
               </div>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-100 transition-colors flex items-center gap-1.5"
-              >
-                <LogOut size={14} /> Đăng xuất
-              </button>
-            </div>
+            ) : (
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-center">
+                <Link
+                  to="/auth/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full bg-[#0d6efd] hover:bg-[#0b5ed7] text-white text-center py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all"
+                >
+                  Đăng Nhập
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </header>

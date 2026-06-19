@@ -22,8 +22,10 @@ async function bootstrap() {
           consumer: {
             groupId: 'supplier-consumer-group',
           },
-          subscribe: {},
-        },
+          subscribe: {
+            allowAutoTopicCreation: true,
+          },
+        } as any,
       });
 
       await app.startAllMicroservices();

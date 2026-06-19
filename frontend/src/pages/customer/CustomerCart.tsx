@@ -13,7 +13,16 @@ export function CustomerCart() {
 
   const loadCart = async () => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      try {
+        const guestCartStr = localStorage.getItem("guest_cart");
+        const items = guestCartStr ? JSON.parse(guestCartStr) : [];
+        setCartItems(items);
+      } catch (err) {
+        console.error("Error loading guest cart:", err);
+      }
+      return;
+    }
     
     try {
       const res = await fetch("/api/users/cart", {
@@ -36,7 +45,31 @@ export function CustomerCart() {
 
   const updateQuantity = async (id: string, newQty: number) => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      if (newQty <= 0) {
+        handleDelete(id);
+        return;
+      }
+      const item = cartItems.find((it) => it.id === id || it._id === id);
+      if (item && newQty > item.stock) {
+        alert(`Chỉ còn ${item.stock} sản phẩm khả dụng trong kho!`);
+        return;
+      }
+      try {
+        const guestCartStr = localStorage.getItem("guest_cart");
+        const cart = guestCartStr ? JSON.parse(guestCartStr) : [];
+        const cartItem = cart.find((it: any) => it.id === id || it._id === id);
+        if (cartItem) {
+          cartItem.quantity = newQty;
+        }
+        localStorage.setItem("guest_cart", JSON.stringify(cart));
+        setCartItems(cart);
+        window.dispatchEvent(new Event("cartUpdated"));
+      } catch (err) {
+        console.error("Error updating guest cart item quantity:", err);
+      }
+      return;
+    }
 
     if (newQty <= 0) {
       handleDelete(id);
@@ -74,7 +107,21 @@ export function CustomerCart() {
 
   const handleDelete = async (id: string) => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      try {
+        const guestCartStr = localStorage.getItem("guest_cart");
+        const cart = guestCartStr ? JSON.parse(guestCartStr) : [];
+        const filtered = cart.filter((it: any) => it.id !== id && it._id !== id);
+        localStorage.setItem("guest_cart", JSON.stringify(filtered));
+        setCartItems(filtered);
+        window.dispatchEvent(new Event("cartUpdated"));
+        setInteractionResult(null);
+        setShowInteractionBox(false);
+      } catch (err) {
+        console.error("Error deleting guest cart item:", err);
+      }
+      return;
+    }
 
     try {
       const response = await fetch(`/api/users/cart/${id}`, {
@@ -96,6 +143,11 @@ export function CustomerCart() {
     } catch (err: any) {
       alert(err.message || "Lỗi xóa sản phẩm");
     }
+  };
+
+  const handleProceedToCheckout = () => {
+    localStorage.setItem("customer_cart", JSON.stringify(cartItems));
+    navigate("/customer/checkout");
   };
 
   // Check drug interactions using the API Gateway
@@ -395,7 +447,7 @@ export function CustomerCart() {
               </div>
 
               <button
-                onClick={() => navigate("/customer/checkout")}
+                onClick={handleProceedToCheckout}
                 className="w-full mt-2.5 bg-[#0d6efd] hover:bg-[#0a58ca] text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-blue-150 transition-all active:scale-98"
               >
                 Tiến hành đặt hàng <ArrowRight size={14} />
