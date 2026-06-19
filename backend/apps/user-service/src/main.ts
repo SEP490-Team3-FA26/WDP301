@@ -23,9 +23,7 @@ async function bootstrap() {
             consumer: {
               groupId: (process.env.KAFKA_GROUP_ID || 'wdp301-consumers') + '-user',
             },
-            subscribe: {
-              allowAutoTopicCreation: true,
-            },
+            subscribe: {},
           },
           logger: ['error', 'warn'],
         },

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Building2, AlertTriangle, Search, Plus, Trash2, CheckCircle2, ShieldAlert, PackagePlus, ClipboardList, Loader2 } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Search, Plus, Trash2, CheckCircle2, PackagePlus, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 
 export function PurchaseOrderCreate() {
@@ -8,9 +8,8 @@ export function PurchaseOrderCreate() {
   const location = useLocation();
   const state = location.state as { prefilledMedicineId?: string, prefillPrItems?: any[] } | null;
 
-  const [suppliers, setSuppliers] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
-  const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
+  const [suppliers, setSuppliers] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [selectedMedicineId, setSelectedMedicineId] = useState<string>("");
   const [quantity, setQuantity] = useState<number>(1);
@@ -18,8 +17,6 @@ export function PurchaseOrderCreate() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [approvedPrs, setApprovedPrs] = useState<any[]>([]);
-  const [selectedPrId, setSelectedPrId] = useState<string>("");
   const [isPrefilling, setIsPrefilling] = useState(false);
   const prefillDone = useRef(false);
 
@@ -40,7 +37,6 @@ export function PurchaseOrderCreate() {
     prefillDone.current = true;
     setIsPrefilling(true);
 
-    // 1. Consolidate PR items by medicineId
     const itemMap = new Map<string, any>();
     state.prefillPrItems.forEach(item => {
       if (!item || !item.medicineId) return;
@@ -61,7 +57,6 @@ export function PurchaseOrderCreate() {
       }
     });
 
-    // 2. Fetch only the needed medicines by ID (parallel, very fast)
     const uniqueIds = [...itemMap.keys()];
     Promise.all(uniqueIds.map(id => fetchMedicineById(id)))
       .then(results => {
@@ -90,9 +85,6 @@ export function PurchaseOrderCreate() {
 
         if (newCart.length > 0) {
           setCart(newCart);
-          if (newCart[0].supplierId) {
-            setSelectedSupplierId(newCart[0].supplierId);
-          }
         }
       })
       .catch(err => console.error('Prefill error:', err))
@@ -100,129 +92,20 @@ export function PurchaseOrderCreate() {
   }, [state]);
 
   useEffect(() => {
-    // Fetch Suppliers
-    fetch('/api/suppliers')
-      .then(res => res.json())
-      .then(data => setSuppliers(data))
-      .catch(err => console.error(err));
-
-    // Fetch Medicines for dropdown (lazy — not needed for prefill)
-    fetch('/api/medicines?limit=10000')
-      .then(res => res.json())
-      .then(data => setMedicines(data.data || data))
-      .catch(err => console.error(err));
-
-    // Fetch Approved PRs
-    fetch('/api/purchase-requisitions?status=APPROVED')
-      .then(res => res.json())
-      .then(data => {
-        const list = data.value || data || [];
-        setApprovedPrs(list.filter((pr: any) => !pr.linkedPoId));
-      })
-      .catch(err => console.error(err));
+    Promise.all([
+      fetch('/api/medicines?limit=10000').then(res => res.json()),
+      fetch('/api/suppliers').then(res => res.json())
+    ]).then(([medData, supData]) => {
+      setMedicines(medData.data || medData);
+      setSuppliers(supData);
+    }).catch(err => console.error(err));
   }, []);
 
-  // Prefill effect for single medicine (e.g. from low-stock alert)
-  useEffect(() => {
-    if (state?.prefilledMedicineId && medicines.length > 0) {
-      const med = medicines.find(m => m.id === state.prefilledMedicineId);
-      if (med) {
-        setSelectedMedicineId(state.prefilledMedicineId);
-        setUnitPrice(med.price || 0);
-        setQuantity(100); // Prefill a sensible restock quantity
-        if (med.supplierId) {
-          setSelectedSupplierId(med.supplierId);
-        }
-      }
-    }
-  }, [state, medicines]);
-
-  const handlePrSelect = async (prId: string) => {
-    setSelectedPrId(prId);
-    if (!prId) {
-      setCart([]);
-      setSelectedSupplierId("");
-      return;
-    }
-
-    const selectedPr = approvedPrs.find(pr => pr._id === prId);
-    if (!selectedPr) return;
-
-    setIsPrefilling(true);
-
-    const prItems = (selectedPr.items || []).map((item: any) => ({
-      medicineId: item.medicineId,
-      medicineName: item.medicineName,
-      requestedQuantity: item.requestedQuantity || item.quantity || 0,
-      unit: item.unit || "Hộp",
-      prId: selectedPr._id,
-      prCode: selectedPr.prCode,
-    }));
-
-    const itemMap = new Map();
-    prItems.forEach(item => {
-      if (!item || !item.medicineId) return;
-      if (itemMap.has(item.medicineId)) {
-        const existing = itemMap.get(item.medicineId);
-        if (existing) {
-          existing.quantity += item.requestedQuantity || 0;
-          existing.prIds = [...(existing.prIds || []), item.prId];
-        }
-      } else {
-        itemMap.set(item.medicineId, {
-          ...item,
-          quantity: item.requestedQuantity,
-          prIds: [item.prId]
-        });
-      }
-    });
-
-    try {
-      // Fetch only the medicines referenced in this PR (fast parallel fetch)
-      const uniqueIds = [...itemMap.keys()];
-      const results = await Promise.all(uniqueIds.map(id => fetchMedicineById(id)));
-      
-      const medMap = new Map<string, any>();
-      results.forEach(med => {
-        if (med) {
-          const id = med.id || med._id;
-          medMap.set(id, med);
-        }
-      });
-
-      const newCart: any[] = [];
-      itemMap.forEach((item, medicineId) => {
-        const med = medMap.get(medicineId);
-        if (med) {
-          newCart.push({
-            ...med,
-            id: med.id || med._id,
-            quantity: item.quantity,
-            unitPrice: med.price || 0,
-            prId: item.prId,
-            prIds: item.prIds || []
-          });
-        }
-      });
-
-      if (newCart.length > 0) {
-        setCart(newCart);
-        if (newCart[0].supplierId) {
-          setSelectedSupplierId(newCart[0].supplierId);
-        }
-      }
-    } catch (err) {
-      console.error('PR select prefill error:', err);
-    } finally {
-      setIsPrefilling(false);
-    }
+  const getSupplierName = (id: string) => {
+    if (!id) return "Không có thông tin";
+    const s = suppliers.find(sup => sup._id === id || sup.id === id);
+    return s ? s.name : id;
   };
-
-  // Lấy thông tin NCC đang chọn
-  const supplier = suppliers.find(s => s._id === selectedSupplierId);
-
-  // Kiểm tra hạn GDP
-  const isGdpExpired = supplier ? new Date(supplier.gdp_expiry_date) < new Date() : false;
 
   const handleAddMedicine = () => {
     setErrorMsg(null);
@@ -282,111 +165,24 @@ export function PurchaseOrderCreate() {
           <ArrowLeft size={20} />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tạo Đơn Nhập Hàng (PO)</h1>
-          <p className="text-slate-500 mt-1 text-sm">Kiểm tra pháp lý tự động & Lên đơn nhập hàng từ Nhà cung cấp</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tạo Đơn Nhập Hàng (PO) - Auto Routing</h1>
+          <p className="text-slate-500 mt-1 text-sm">Hệ thống sẽ tự động tách nhóm thuốc theo từng Nhà Cung Cấp</p>
         </div>
       </div>
 
-      {/* Selector for Approved PRs */}
-      {approvedPrs.length > 0 && (
-        <div className="mb-6 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
-          <h2 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <ClipboardList size={18} className="text-emerald-600" />
-            Nhập nhanh từ Yêu cầu thuốc (PR) đã duyệt
-          </h2>
-          <div className="flex flex-col sm:flex-row gap-3 items-end">
-            <div className="flex-1">
-              <label className="text-sm font-semibold text-slate-700 block mb-1.5">Chọn phiếu yêu cầu (PR)</label>
-              <select
-                value={selectedPrId}
-                onChange={(e) => handlePrSelect(e.target.value)}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
-              >
-                <option value="">-- Chọn phiếu PR để tự động điền đơn --</option>
-                {approvedPrs.map(pr => (
-                  <option key={pr._id} value={pr._id}>
-                    {pr.prCode} ({pr.branchName}) - {pr.items?.length || 0} sản phẩm
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedPrId && (
-              <button
-                onClick={() => {
-                  setSelectedPrId("");
-                  setCart([]);
-                  setSelectedSupplierId("");
-                }}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-colors cursor-pointer"
-              >
-                Xóa điền tự động
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* CỘT TRÁI: THÔNG TIN NCC & THÊM THUỐC */}
         <div className="lg:col-span-1 flex flex-col gap-6">
 
-          {/* Box Chọn Nhà Cung Cấp */}
+
+
+          {/* Box Thêm Thuốc */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Building2 size={18} className="text-[#0057cd]" />
-              1. Chọn Nhà Cung Cấp
-            </h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-semibold text-slate-700 block mb-1.5">Nhà cung cấp</label>
-                <select
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
-                  value={selectedSupplierId}
-                  onChange={(e) => setSelectedSupplierId(e.target.value)}
-                >
-
-                  <option value="">-- Chọn Nhà cung cấp --</option>
-                  {suppliers.map(s => (
-                    <option key={s._id} value={s._id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Thông tin thẩm định NCC */}
-              {supplier && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`p-4 rounded-xl border ${isGdpExpired ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}
-                >
-                  <div className="flex items-start gap-3">
-                    {isGdpExpired ? (
-                      <ShieldAlert size={20} className="text-rose-600 shrink-0 mt-0.5" />
-                    ) : (
-                      <CheckCircle2 size={20} className="text-emerald-600 shrink-0 mt-0.5" />
-                    )}
-                    <div>
-                      <h3 className={`font-bold text-sm ${isGdpExpired ? 'text-rose-800' : 'text-emerald-800'}`}>
-                        {isGdpExpired ? 'LỖI THẨM ĐỊNH PHÁP LÝ' : 'Hồ sơ pháp lý hợp lệ'}
-                      </h3>
-                      <p className={`text-xs mt-1 leading-relaxed ${isGdpExpired ? 'text-rose-700' : 'text-emerald-700'}`}>
-                        {isGdpExpired
-                          ? `Giấy chứng nhận GDP của "${supplier.name}" đã hết hạn vào ngày ${new Date(supplier.gdp_expiry_date).toLocaleDateString()}. Yêu cầu bộ phận R&D gia hạn hồ sơ trước khi nhập hàng!`
-                          : `Giấy chứng nhận GDP còn hạn đến ${new Date(supplier.gdp_expiry_date).toLocaleDateString()}. Đủ điều kiện tạo đơn.`}
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-          </div>
-
-          {/* Box Thêm Thuốc (Chỉ hiện khi NCC hợp lệ) */}
-          <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-6 transition-opacity ${(!supplier || isGdpExpired) ? 'opacity-50 pointer-events-none' : ''}`}>
-            <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
               <PackagePlus size={18} className="text-[#0057cd]" />
-              2. Thêm Thuốc Vào Đơn
+              Thêm Thuốc Bổ Sung
             </h2>
 
             <div className="space-y-4">
@@ -475,7 +271,8 @@ export function PurchaseOrderCreate() {
                   <thead className="bg-white border-b border-slate-100 text-slate-900 font-medium uppercase text-[11px] tracking-wider sticky top-0 z-10">
                     <tr>
                       <th className="px-5 py-3">Mã Thuốc</th>
-                      <th className="px-5 py-3 w-[40%]">Tên Thuốc</th>
+                      <th className="px-5 py-3 w-[25%]">Tên Thuốc</th>
+                      <th className="px-5 py-3 w-[25%]">Nhà Cung Cấp</th>
                       <th className="px-5 py-3 text-right">Đơn giá</th>
                       <th className="px-5 py-3 text-center">Số lượng</th>
                       <th className="px-5 py-3 text-right">Thành tiền</th>
@@ -492,6 +289,7 @@ export function PurchaseOrderCreate() {
                       >
                         <td className="px-5 py-3 font-mono text-xs text-slate-400 max-w-[80px] truncate" title={item.id}>{item.id?.slice(-6)}</td>
                         <td className="px-5 py-3 font-bold text-slate-800">{item.name}</td>
+                        <td className="px-5 py-3 font-medium text-slate-600 max-w-[150px] truncate" title={getSupplierName(item.supplierId)}>{getSupplierName(item.supplierId)}</td>
                         <td className="px-5 py-3 text-right">{item.unitPrice.toLocaleString('vi-VN')}đ</td>
                         <td className="px-5 py-3 text-center font-bold text-[#0057cd]">{item.quantity}</td>
                         <td className="px-5 py-3 text-right font-bold text-slate-800">
@@ -533,14 +331,12 @@ export function PurchaseOrderCreate() {
                   setIsSubmitting(true);
                   setErrorMsg(null);
                   try {
-                    const res = await fetch('/api/purchase-orders', {
+                    const res = await fetch('/api/purchase-orders/auto-route', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        supplierId: selectedSupplierId,
                         items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
-                        linkedPrId: cart[0]?.prId || "",
-                        requisitionIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
+                        prIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
                       })
                     });
                     const resData = await res.json();
@@ -557,9 +353,9 @@ export function PurchaseOrderCreate() {
                     setIsSubmitting(false);
                   }
                 }}
-                disabled={cart.length === 0 || isSubmitting || isGdpExpired}
+                disabled={cart.length === 0 || isSubmitting}
                 className={`w-full py-3.5 font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm
-                  ${cart.length > 0 && !isSubmitting && !isGdpExpired
+                  ${cart.length > 0 && !isSubmitting
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
                 `}

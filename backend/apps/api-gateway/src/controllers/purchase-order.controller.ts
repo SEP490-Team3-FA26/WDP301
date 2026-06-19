@@ -10,15 +10,29 @@ export class PurchaseOrderController implements OnModuleInit {
 
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
-      'inventory.po.create',
+      'inventory.po.auto_route',
+      'inventory.po.approve_pay',
+      'inventory.po.reject_delivery',
       'inventory.po.list',
       'inventory.po.get_by_id',
     ]);
   }
 
-  @Post()
-  async createPurchaseOrder(@Body() data: any) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.create', data);
+
+
+  @Post('auto-route')
+  async createAutoRoutedPurchaseOrders(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.auto_route', data);
+  }
+
+  @Post('approve-pay')
+  async approveAndPayPurchaseOrder(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.approve_pay', data);
+  }
+
+  @Post('reject-delivery')
+  async rejectPurchaseOrderDelivery(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.reject_delivery', data);
   }
 
   @Get()

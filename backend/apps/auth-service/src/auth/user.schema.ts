@@ -38,6 +38,9 @@ export class User extends Document {
 
   @Prop({ default: null })
   branchId?: string;
+
+  @Prop({ default: false })
+  isTwoFactorEnabled: boolean;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

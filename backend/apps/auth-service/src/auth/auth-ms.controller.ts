@@ -120,6 +120,95 @@ export class AuthMsController {
     }
   }
 
+  /**
+   * Topic: auth.2fa.generate
+   */
+  @MessagePattern('auth.2fa.generate')
+  async handleGenerate2fa(@Payload() userId: string) {
+    try {
+      console.log(`📨 [Auth MS] Yêu cầu sinh mã 2FA Secret cho user: ${userId}`);
+      return await this.authService.generateTwoFactorSecret(userId);
+    } catch (error) {
+      console.error(`❌ [Auth MS] Lỗi sinh mã 2FA:`, error.message);
+      return { error: true, message: error.message, statusCode: error.status || 400 };
+    }
+  }
+
+  /**
+   * Topic: auth.2fa.enable
+   */
+  @MessagePattern('auth.2fa.enable')
+  async handleEnable2fa(@Payload() data: string) {
+    try {
+      const { userId, token } = typeof data === 'string' ? JSON.parse(data) : data;
+      console.log(`📨 [Auth MS] Yêu cầu kích hoạt 2FA cho user: ${userId}`);
+      return await this.authService.enableTwoFactor(userId, token);
+    } catch (error) {
+      console.error(`❌ [Auth MS] Lỗi kích hoạt 2FA:`, error.message);
+      return { error: true, message: error.message, statusCode: error.status || 400 };
+    }
+  }
+
+  /**
+   * Topic: auth.2fa.disable
+   */
+  @MessagePattern('auth.2fa.disable')
+  async handleDisable2fa(@Payload() data: string) {
+    try {
+      const { userId, token } = typeof data === 'string' ? JSON.parse(data) : data;
+      console.log(`📨 [Auth MS] Yêu cầu hủy kích hoạt 2FA cho user: ${userId}`);
+      return await this.authService.disableTwoFactor(userId, token);
+    } catch (error) {
+      console.error(`❌ [Auth MS] Lỗi hủy 2FA:`, error.message);
+      return { error: true, message: error.message, statusCode: error.status || 400 };
+    }
+  }
+
+  /**
+   * Topic: auth.2fa.authenticate
+   */
+  @MessagePattern('auth.2fa.authenticate')
+  async handleAuthenticate2fa(@Payload() data: string) {
+    try {
+      const { tempToken, token } = typeof data === 'string' ? JSON.parse(data) : data;
+      console.log(`📨 [Auth MS] Đăng nhập bước 2: Xác thực 2FA OTP`);
+      return await this.authService.authenticateTwoFactor(tempToken, token);
+    } catch (error) {
+      console.error(`❌ [Auth MS] Lỗi xác thực 2FA OTP:`, error.message);
+      return { error: true, message: error.message, statusCode: error.status || 401 };
+    }
+  }
+
+  /**
+   * Topic: auth.verify.email
+   */
+  @MessagePattern('auth.verify.email')
+  async handleVerifyEmail(@Payload() data: string) {
+    try {
+      const { email, token } = typeof data === 'string' ? JSON.parse(data) : data;
+      console.log(`📨 [Auth MS] Nhận yêu cầu xác thực email cho: ${email}`);
+      return await this.authService.verifyEmail(email, token);
+    } catch (error) {
+      console.error(`❌ [Auth MS] Lỗi xác thực email:`, error.message);
+      return { error: true, message: error.message, statusCode: error.status || 400 };
+    }
+  }
+
+  /**
+   * Topic: auth.resend.verification
+   */
+  @MessagePattern('auth.resend.verification')
+  async handleResendVerification(@Payload() data: string) {
+    try {
+      const { email } = typeof data === 'string' ? JSON.parse(data) : data;
+      console.log(`📨 [Auth MS] Yêu cầu gửi lại mã kích hoạt cho: ${email}`);
+      return await this.authService.resendVerificationOtp(email);
+    } catch (error) {
+      console.error(`❌ [Auth MS] Lỗi gửi lại mã kích hoạt:`, error.message);
+      return { error: true, message: error.message, statusCode: error.status || 400 };
+    }
+  }
+
   // =========================================================================
   // EVENT-DRIVEN PATTERN (Dùng kafkaClient.emit())
   // Gateway bắn event bất đồng bộ, không cần chờ phản hồi

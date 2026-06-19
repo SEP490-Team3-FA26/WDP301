@@ -27,9 +27,7 @@ async function bootstrap() {
               // Cho phép gửi message lớn hơn (10MB) để tránh MESSAGE_TOO_LARGE
               maxInFlightRequests: 1,
             },
-            subscribe: {
-              allowAutoTopicCreation: true,
-            },
+            subscribe: {},
           },
           logger: ['error', 'warn'],
         },

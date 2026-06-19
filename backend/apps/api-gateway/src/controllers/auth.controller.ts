@@ -24,6 +24,8 @@ import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { VerifyTwoFactorDto, AuthenticateTwoFactorDto } from '../dto/two-factor.dto';
+import { VerifyEmailDto, ResendVerificationDto } from '../dto/verify-email.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @ApiTags('🔐 Authentication')
@@ -49,6 +51,12 @@ export class AuthController implements OnModuleInit {
       'auth.get.user.by.id',
       'auth.forgot.password',
       'auth.reset.password',
+      'auth.2fa.generate',
+      'auth.2fa.enable',
+      'auth.2fa.disable',
+      'auth.2fa.authenticate',
+      'auth.verify.email',
+      'auth.resend.verification',
     ]);
     console.log('✅ [API Gateway] Đã kết nối tới Kafka và đăng ký Reply Topics');
   }
@@ -139,11 +147,13 @@ export class AuthController implements OnModuleInit {
     console.log(`📤 [API Gateway] Gửi yêu cầu đăng nhập tới Kafka: ${dto.email}`);
 
     // Cache Miss -> Gửi qua Kafka -> Auth Microservice để xác thực
-    const result = await sendKafkaMessage(this.kafkaClient, 'auth.login', JSON.stringify(dto));
+    const result: any = await sendKafkaMessage(this.kafkaClient, 'auth.login', JSON.stringify(dto));
 
-    // Lưu kết quả vào Redis (TTL 1 giờ) để lần sau đăng nhập nhanh hơn
-    await this.cacheManager.set(cacheKey, result, this.CACHE_TTL);
-    console.log(`💾 [Cache Set] Lưu session của ${dto.email} vào Redis (TTL: 1h)`);
+    // Chỉ lưu kết quả vào Redis khi không yêu cầu xác thực 2 lớp (2FA)
+    if (result && !result.is2faRequired) {
+      await this.cacheManager.set(cacheKey, result, this.CACHE_TTL);
+      console.log(`💾 [Cache Set] Lưu session của ${dto.email} vào Redis (TTL: 1h)`);
+    }
 
     return result;
   }
@@ -195,5 +205,112 @@ export class AuthController implements OnModuleInit {
     // Lưu vào cache
     await this.cacheManager.set(cacheKey, profile, this.CACHE_TTL);
     return profile;
+  }
+
+  // ============================================================
+  // POST /api/auth/2fa/generate — Sinh mã 2FA QR Code
+  // ============================================================
+  @Post('2fa/generate')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sinh mã QR Code và Secret Key để thiết lập 2FA' })
+  async generate2fa(@Request() req) {
+    const { sub: userId } = req.user;
+    return await sendKafkaMessage(this.kafkaClient, 'auth.2fa.generate', userId);
+  }
+
+  // ============================================================
+  // POST /api/auth/2fa/enable — Kích hoạt 2FA
+  // ============================================================
+  @Post('2fa/enable')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Kích hoạt xác thực 2 lớp (2FA)' })
+  async enable2fa(@Request() req, @Body() dto: VerifyTwoFactorDto) {
+    const { sub: userId } = req.user;
+    const result = await sendKafkaMessage(
+      this.kafkaClient,
+      'auth.2fa.enable',
+      JSON.stringify({ userId, token: dto.token }),
+    );
+
+    // Xóa cache session cũ của user nếu có để cập nhật thông tin mới
+    await this.cacheManager.del(`auth:session:${req.user.email}`);
+    await this.cacheManager.del(`auth:profile:${userId}`);
+    return result;
+  }
+
+  // ============================================================
+  // POST /api/auth/2fa/disable — Hủy kích hoạt 2FA
+  // ============================================================
+  @Post('2fa/disable')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Hủy kích hoạt xác thực 2 lớp (2FA)' })
+  async disable2fa(@Request() req, @Body() dto: VerifyTwoFactorDto) {
+    const { sub: userId } = req.user;
+    const result = await sendKafkaMessage(
+      this.kafkaClient,
+      'auth.2fa.disable',
+      JSON.stringify({ userId, token: dto.token }),
+    );
+
+    await this.cacheManager.del(`auth:session:${req.user.email}`);
+    await this.cacheManager.del(`auth:profile:${userId}`);
+    return result;
+  }
+
+  // ============================================================
+  // POST /api/auth/2fa/authenticate — Đăng nhập bước 2 (Xác thực OTP)
+  // ============================================================
+  @Post('2fa/authenticate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Xác thực OTP 2FA hoàn tất đăng nhập' })
+  async authenticate2fa(@Body() dto: AuthenticateTwoFactorDto) {
+    const result: any = await sendKafkaMessage(
+      this.kafkaClient,
+      'auth.2fa.authenticate',
+      JSON.stringify({ tempToken: dto.tempToken, token: dto.token }),
+    );
+
+    // Lưu phiên đăng nhập thành công vào Redis cache
+    if (result && result.access_token && result.user) {
+      const cacheKey = `auth:session:${result.user.email}`;
+      await this.cacheManager.set(cacheKey, result, this.CACHE_TTL);
+      console.log(`💾 [Cache Set] Lưu session của ${result.user.email} vào Redis sau 2FA`);
+    }
+
+    return result;
+  }
+
+  // ============================================================
+  // POST /api/auth/verify-email — Xác thực email đăng ký tài khoản
+  // ============================================================
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Xác thực địa chỉ email bằng mã OTP khi đăng ký' })
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    return await sendKafkaMessage(
+      this.kafkaClient,
+      'auth.verify.email',
+      JSON.stringify(dto),
+    );
+  }
+
+  // ============================================================
+  // POST /api/auth/resend-verification — Gửi lại mã OTP kích hoạt tài khoản
+  // ============================================================
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Gửi lại mã OTP xác thực email kích hoạt tài khoản' })
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    return await sendKafkaMessage(
+      this.kafkaClient,
+      'auth.resend.verification',
+      JSON.stringify(dto),
+    );
   }
 }

@@ -1,0 +1,82 @@
+# ============================================================
+# Production stack — runs on the EC2 instance.
+# Images are PULLED from ECR (built & pushed by GitHub Actions).
+#
+# Required env (provided via the .env file next to this file on EC2):
+#   ECR_REGISTRY   e.g. 264144511221.dkr.ecr.ap-southeast-1.amazonaws.com
+#   IMAGE_TAG      e.g. git short SHA, or "latest"
+#   + all backend runtime vars (Mongo, JWT, AWS, SQS, S3, SES ...)
+#
+# Usage on EC2:
+#   ecr-login                                  # docker login to ECR (helper from user-data)
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+# ============================================================
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: wdp301-redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    networks: [wdp301-network]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: wdp301-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG4J_ROOT_LOGLEVEL: 'ERROR'
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 45s
+    # Không mount named volume: KRaft log dir /tmp/kraft-combined-logs do
+    # appuser (uid 1000) ghi — named volume thuộc root sẽ gây Permission denied.
+    networks: [wdp301-network]
+
+  backend:
+    image: ${ECR_REGISTRY}/wdp301-backend:${IMAGE_TAG:-latest}
+    container_name: wdp301-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:29092
+    ports:
+      - "4000:4000"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks: [wdp301-network]
+
+  # Frontend chạy trên Vercel (không deploy trên EC2 nữa).
+
+networks:
+  wdp301-network:
+    driver: bridge
+
+volumes:
+  redis_data:

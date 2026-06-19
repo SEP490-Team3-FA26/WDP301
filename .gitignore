@@ -16,4 +16,5 @@ backend/supabase/.temp/
 # Terraform
 infra/.terraform*
 infra/terraform.tfstate*
+infra/**/.build/
 
