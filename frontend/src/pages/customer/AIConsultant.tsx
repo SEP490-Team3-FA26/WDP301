@@ -100,49 +100,84 @@ export function AIConsultant() {
     }
   };
 
-  const handleAddAllToCart = () => {
+  const handleAddAllToCart = async () => {
     if (!result?.prescription?.recommended_drugs || !result?.inventory_status?.available) return;
 
     try {
       const availableList = result.inventory_status.available;
-      const cartData = localStorage.getItem("customer_cart");
-      let cart = cartData ? JSON.parse(cartData) : [];
+      const token = localStorage.getItem("token");
       let addedCount = 0;
 
-      result.prescription.recommended_drugs.forEach((drug: any) => {
-        // Find if this recommended drug exists in available inventory list
-        const invMatch = availableList.find((av: any) => av.name.toLowerCase() === drug.name.toLowerCase());
-        
-        if (invMatch && invMatch.stock > 0) {
-          const medId = invMatch.id || invMatch._id || `MED-AI-${Math.floor(100 + Math.random() * 900)}`;
-          const existingIndex = cart.findIndex((c: any) => c.id === medId || c.name.toLowerCase() === drug.name.toLowerCase());
-          
-          if (existingIndex > -1) {
-            if (cart[existingIndex].quantity < invMatch.stock) {
-              cart[existingIndex].quantity += 1;
+      if (!token) {
+        // Guest mode: update guest_cart
+        const guestCartStr = localStorage.getItem("guest_cart");
+        let cart = guestCartStr ? JSON.parse(guestCartStr) : [];
+
+        result.prescription.recommended_drugs.forEach((drug: any) => {
+          const invMatch = availableList.find((av: any) => av.name.toLowerCase() === drug.name.toLowerCase());
+          if (invMatch && invMatch.stock > 0) {
+            const medId = invMatch.id || invMatch._id;
+            const existing = cart.find((it: any) => it.id === medId || it._id === medId);
+            if (existing) {
+              if (existing.quantity < invMatch.stock) {
+                existing.quantity += 1;
+                addedCount++;
+              }
+            } else {
+              cart.push({
+                id: medId,
+                _id: medId,
+                name: invMatch.name,
+                category: invMatch.category || "Chưa phân loại",
+                price: invMatch.price,
+                quantity: 1,
+                unit: invMatch.unit || "Viên",
+                stock: invMatch.stock,
+                active_ingredient: drug.active_ingredient || "",
+                image: invMatch.image || ""
+              });
               addedCount++;
             }
-          } else {
-            cart.push({
-              id: medId,
-              name: invMatch.name,
-              active_ingredient: drug.active_ingredient || "",
-              price: invMatch.price,
-              unit: "Hộp",
-              stock: invMatch.stock,
-              quantity: 1
-            });
-            addedCount++;
+          }
+        });
+
+        if (addedCount > 0) {
+          localStorage.setItem("guest_cart", JSON.stringify(cart));
+          window.dispatchEvent(new Event("cartUpdated"));
+          setSuccessMessage(`Đã thêm thành công ${addedCount} loại thuốc khả dụng vào giỏ hàng!`);
+        } else {
+          setError("Không có loại thuốc đề xuất nào khả dụng hoặc còn hàng trong kho.");
+        }
+      } else {
+        // Logged-in mode: call API POST /api/users/cart for each drug
+        for (const drug of result.prescription.recommended_drugs) {
+          const invMatch = availableList.find((av: any) => av.name.toLowerCase() === drug.name.toLowerCase());
+          if (invMatch && invMatch.stock > 0) {
+            const medId = invMatch.id || invMatch._id;
+            try {
+              const res = await fetch("/api/users/cart", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ medicineId: medId, quantity: 1 })
+              });
+              if (res.ok) {
+                addedCount++;
+              }
+            } catch (err) {
+              console.error("Error adding drug to cart:", err);
+            }
           }
         }
-      });
 
-      if (addedCount > 0) {
-        localStorage.setItem("customer_cart", JSON.stringify(cart));
-        window.dispatchEvent(new Event("cartUpdated"));
-        setSuccessMessage(`Đã thêm thành công ${addedCount} loại thuốc khả dụng vào giỏ hàng!`);
-      } else {
-        setError("Không có loại thuốc đề xuất nào khả dụng hoặc còn hàng trong kho.");
+        if (addedCount > 0) {
+          window.dispatchEvent(new Event("cartUpdated"));
+          setSuccessMessage(`Đã thêm thành công ${addedCount} loại thuốc khả dụng vào giỏ hàng!`);
+        } else {
+          setError("Không thể thêm thuốc đề xuất vào giỏ hàng.");
+        }
       }
     } catch (err) {
       console.error(err);
@@ -167,7 +202,7 @@ export function AIConsultant() {
   return (
     <div className="flex flex-col gap-6 flex-1 max-w-4xl mx-auto w-full">
       <div className="flex items-center gap-3 border-b border-slate-150 pb-4">
-        <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
+        <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
           <Sparkles size={22} />
         </div>
         <div>
@@ -179,7 +214,7 @@ export function AIConsultant() {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
         {/* Left: Recording Widget */}
         <div className="md:col-span-5 bg-white border border-slate-200 rounded-[24px] p-6 shadow-sm flex flex-col items-center justify-center text-center gap-6">
-          <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
+          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
             <Volume2 size={24} />
           </div>
 
@@ -194,8 +229,8 @@ export function AIConsultant() {
           <div className="relative flex items-center justify-center w-36 h-36">
             {recording && (
               <>
-                <div className="absolute inset-0 bg-purple-100 rounded-full animate-ping opacity-45"></div>
-                <div className="absolute inset-4 bg-purple-100 rounded-full animate-pulse opacity-75"></div>
+                <div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-45"></div>
+                <div className="absolute inset-4 bg-blue-100 rounded-full animate-pulse opacity-75"></div>
               </>
             )}
             <button
@@ -203,7 +238,7 @@ export function AIConsultant() {
               className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer ${
                 recording 
                   ? "bg-rose-500 text-white shadow-rose-200" 
-                  : "bg-purple-600 text-white hover:bg-purple-700 shadow-purple-200"
+                  : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200"
               }`}
             >
               {recording ? <Square size={28} className="fill-white" /> : <Mic size={32} />}
@@ -231,7 +266,7 @@ export function AIConsultant() {
             <button
               onClick={sendToAI}
               disabled={loading}
-              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-purple-150 transition-all cursor-pointer"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-blue-100 transition-all cursor-pointer"
             >
               <Sparkles size={14} />
               {loading ? "Đang gửi lên Trợ lý AI..." : "Phân tích và gợi ý thuốc"}
@@ -256,7 +291,7 @@ export function AIConsultant() {
           {/* Loading state */}
           {loading && (
             <div className="bg-white border border-slate-200 rounded-[24px] p-12 text-center flex flex-col items-center justify-center min-h-[360px] gap-4">
-              <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
               <div className="flex flex-col gap-1.5">
                 <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">AI Đang Xử Lý Dữ Liệu</h3>
                 <p className="text-slate-400 text-xs max-w-xs leading-normal">
@@ -290,14 +325,14 @@ export function AIConsultant() {
               <div className="bg-white border border-slate-200 rounded-[20px] p-6 shadow-sm flex flex-col gap-5">
                 <div className="flex justify-between items-start gap-4 border-b border-slate-100 pb-3">
                   <div>
-                    <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest block mb-0.5">Lời khuyên AI</span>
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest block mb-0.5">Lời khuyên AI</span>
                     <h3 className="font-black text-slate-900 text-sm">Toa Thuốc Do Trợ Lý AI Đề Xuất</h3>
                   </div>
                   
                   {result.prescription?.recommended_drugs?.length > 0 && (
                     <button
                       onClick={handleAddAllToCart}
-                      className="px-4.5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                      className="px-4.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1.5"
                     >
                       <ShoppingCart size={13} /> Thêm Tất Cả Vào Giỏ
                     </button>
@@ -305,19 +340,10 @@ export function AIConsultant() {
                 </div>
 
                 {/* Patient Summary */}
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 font-sans">
                   <div className="text-xs text-slate-600 font-semibold">
                     <span className="text-slate-400 font-bold">Chẩn đoán triệu chứng:</span> {result.prescription?.patient_symptoms || "N/A"}
                   </div>
-                  {result.prescription?.warnings && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-amber-800 text-[11px] font-bold leading-normal flex items-start gap-2.5">
-                      <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="uppercase text-[9px] tracking-wider block font-black mb-0.5">Cảnh Báo Chống Chỉ Định</span>
-                        {result.prescription.warnings}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Suggested Drugs List */}
@@ -336,7 +362,7 @@ export function AIConsultant() {
                             key={idx}
                             className={`border rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all ${
                               isAvailable && hasStock
-                                ? "bg-purple-50/20 border-purple-100 hover:border-purple-200"
+                                ? "bg-blue-50/20 border-blue-100 hover:border-blue-200"
                                 : "bg-slate-50 border-slate-200/80 opacity-70"
                             }`}
                           >
@@ -358,38 +384,70 @@ export function AIConsultant() {
                               {isAvailable && (
                                 <div>
                                   <span className="text-xs font-bold text-slate-500 block">Tồn: {stockInfo.stock}</span>
-                                  <span className="font-black text-xs text-purple-600">{stockInfo.price.toLocaleString()}₫</span>
+                                  <span className="font-black text-xs text-blue-600">{stockInfo.price.toLocaleString()}₫</span>
                                 </div>
                               )}
                               
                               {isAvailable && hasStock && (
                                 <button
-                                  onClick={() => {
-                                    const cartData = localStorage.getItem("customer_cart");
-                                    let cart = cartData ? JSON.parse(cartData) : [];
-                                    const existing = cart.find((c: any) => c.id === stockInfo.id || c.name.toLowerCase() === drug.name.toLowerCase());
-                                    
-                                    if (existing) {
-                                      if (existing.quantity < stockInfo.stock) {
-                                        existing.quantity += 1;
-                                      }
-                                    } else {
-                                      cart.push({
-                                        id: stockInfo.id || stockInfo._id || `MED-AI-${idx}`,
-                                        name: stockInfo.name,
-                                        active_ingredient: drug.active_ingredient || "",
-                                        price: stockInfo.price,
-                                        unit: "Hộp",
-                                        stock: stockInfo.stock,
-                                        quantity: 1
-                                      });
-                                    }
+                                  onClick={async () => {
+                                    const medId = stockInfo.id || stockInfo._id;
+                                    const token = localStorage.getItem("token");
 
-                                    localStorage.setItem("customer_cart", JSON.stringify(cart));
-                                    window.dispatchEvent(new Event("cartUpdated"));
-                                    setSuccessMessage(`Đã thêm thuốc ${drug.name} vào giỏ hàng!`);
+                                    if (!token) {
+                                      const guestCartStr = localStorage.getItem("guest_cart");
+                                      let cart = guestCartStr ? JSON.parse(guestCartStr) : [];
+                                      const existing = cart.find((c: any) => c.id === medId || c._id === medId);
+                                      
+                                      if (existing) {
+                                        if (existing.quantity < stockInfo.stock) {
+                                          existing.quantity += 1;
+                                        } else {
+                                          alert(`Chỉ còn ${stockInfo.stock} sản phẩm khả dụng trong kho!`);
+                                          return;
+                                        }
+                                      } else {
+                                        cart.push({
+                                          id: medId,
+                                          _id: medId,
+                                          name: stockInfo.name,
+                                          category: stockInfo.category || "Chưa phân loại",
+                                          price: stockInfo.price,
+                                          unit: stockInfo.unit || "Hộp",
+                                          stock: stockInfo.stock,
+                                          quantity: 1,
+                                          active_ingredient: drug.active_ingredient || "",
+                                          image: stockInfo.image || ""
+                                        });
+                                      }
+
+                                      localStorage.setItem("guest_cart", JSON.stringify(cart));
+                                      window.dispatchEvent(new Event("cartUpdated"));
+                                      setSuccessMessage(`Đã thêm thuốc ${drug.name} vào giỏ hàng!`);
+                                    } else {
+                                      try {
+                                        const res = await fetch("/api/users/cart", {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                            "Authorization": `Bearer ${token}`
+                                          },
+                                          body: JSON.stringify({ medicineId: medId, quantity: 1 })
+                                        });
+                                        if (res.ok) {
+                                          window.dispatchEvent(new Event("cartUpdated"));
+                                          setSuccessMessage(`Đã thêm thuốc ${drug.name} vào giỏ hàng!`);
+                                        } else {
+                                          const data = await res.json();
+                                          alert(data.message || "Không thể thêm thuốc vào giỏ hàng.");
+                                        }
+                                      } catch (err) {
+                                        console.error(err);
+                                        alert("Lỗi kết nối máy chủ");
+                                      }
+                                    }
                                   }}
-                                  className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer"
+                                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer"
                                 >
                                   <ShoppingCart size={11} /> Thêm
                                 </button>

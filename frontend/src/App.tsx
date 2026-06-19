@@ -85,14 +85,13 @@ export default function App() {
         <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
 
         {/* --- Customer Routes --- */}
-        <Route element={<ProtectedRoute allowedRoles={["user"]} />}>
-          <Route path="/customer" element={<CustomerLayout />}>
-            <Route index element={<Navigate to="shop" replace />} />
-            <Route path="shop" element={<CustomerShop />} />
-            <Route path="cart" element={<CustomerCart />} />
-            <Route path="checkout" element={<CustomerCheckout />} />
-            <Route path="ai-consult" element={<AIConsultant />} />
-          </Route>
+        <Route path="/customer" element={<CustomerLayout />}>
+          <Route index element={<Navigate to="shop" replace />} />
+          <Route path="shop" element={<CustomerShop />} />
+          <Route path="cart" element={<CustomerCart />} />
+          <Route path="checkout" element={<CustomerCheckout />} />
+          <Route path="interactions" element={<DrugInteractions />} />
+          <Route path="ai-consult" element={<AIConsultant />} />
         </Route>
 
         {/* --- Admin Routes --- */}

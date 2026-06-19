@@ -47,8 +47,7 @@ export function CustomerCheckout() {
             setShowSuccessModal(true);
 
             // Clear cart
-            localStorage.removeItem("customer_cart");
-            window.dispatchEvent(new Event("cartUpdated"));
+            clearAllCarts();
 
             // Remove search params from URL
             navigate("/customer/checkout", { replace: true });
@@ -95,8 +94,7 @@ export function CustomerCheckout() {
               }
               setShowSuccessModal(true);
 
-              localStorage.removeItem("customer_cart");
-              window.dispatchEvent(new Event("cartUpdated"));
+              clearAllCarts();
             }
           }
         } catch (err) {
@@ -127,8 +125,7 @@ export function CustomerCheckout() {
           }
           setShowSuccessModal(true);
 
-          localStorage.removeItem("customer_cart");
-          window.dispatchEvent(new Event("cartUpdated"));
+          clearAllCarts();
         } else {
           alert("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.");
         }
@@ -137,6 +134,19 @@ export function CustomerCheckout() {
       console.error(err);
       alert("Lỗi kiểm tra trạng thái thanh toán.");
     }
+  };
+
+  const clearAllCarts = () => {
+    localStorage.removeItem("customer_cart");
+    localStorage.removeItem("guest_cart");
+    const token = localStorage.getItem("token");
+    if (token) {
+      fetch("/api/users/cart/clear", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      }).catch((err) => console.error("Error clearing DB cart:", err));
+    }
+    window.dispatchEvent(new Event("cartUpdated"));
   };
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -148,12 +158,6 @@ export function CustomerCheckout() {
     e.preventDefault();
       if (!fullname || !phone || !address) {
         alert("Vui lòng điền đầy đủ các thông tin giao hàng!");
-        return;
-      }
-
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("Vui lòng đăng nhập để thực hiện đặt hàng!");
         return;
       }
 
@@ -203,8 +207,7 @@ export function CustomerCheckout() {
           setShowSuccessModal(true);
 
           // Clear cart
-          localStorage.removeItem("customer_cart");
-          window.dispatchEvent(new Event("cartUpdated"));
+          clearAllCarts();
         }
       } catch (err: any) {
         setIsSubmitting(false);

@@ -1,13 +1,19 @@
 import { useState, useEffect } from "react";
-import { Search, ShoppingCart, Star, Heart, Info, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Search, ShoppingCart, Star, Heart, Info, Check, ChevronLeft, ChevronRight, XCircle, Activity, ShieldAlert } from "lucide-react";
 
 export function CustomerShop() {
+  const [searchParams] = useSearchParams();
   const [medicines, setMedicines] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedClassification, setSelectedClassification] = useState("");
   const [addedItems, setAddedItems] = useState<{ [key: string]: boolean }>({});
+
+  // Modal states
+  const [selectedMedicineForModal, setSelectedMedicineForModal] = useState<any | null>(null);
+  const [modalQuantity, setModalQuantity] = useState<number>(1);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -16,12 +22,15 @@ export function CustomerShop() {
   const [limit] = useState(16); // 4x4 layout
 
   const categories = [
-    "Kháng sinh / Antibiotics",
-    "Giảm đau / Giảm sốt",
-    "Hô hấp / Cough & Cold",
-    "Dạ dày / Digestion",
-    "Kháng viêm / Anti-inflammatory",
-    "Vitamin & TPCN"
+    "Thuốc kháng sinh",
+    "Thuốc giảm đau hạ sốt",
+    "Thuốc trị ho cảm",
+    "Thuốc dạ dày",
+    "Thuốc bổ",
+    "Miếng dán giảm đau",
+    "Thuốc tim mạch huyết áp",
+    "Thuốc tiêu hoá",
+    "Thuốc dị ứng"
   ];
 
   const classifications = [
@@ -52,6 +61,12 @@ export function CustomerShop() {
     }
   };
 
+  // Sync search query from URL search params if it changes
+  useEffect(() => {
+    const q = searchParams.get("search") || "";
+    setSearchQuery(q);
+  }, [searchParams]);
+
   // Trigger fetch when pagination or dropdown filters change
   useEffect(() => {
     fetchMedicines();
@@ -76,11 +91,50 @@ export function CustomerShop() {
     return () => clearTimeout(delay);
   }, [searchQuery]);
 
-  const handleAddToCart = async (med: any) => {
+  const handleAddToCart = async (med: any, customQty: number = 1) => {
     const medId = med.id || med._id;
     const token = localStorage.getItem("token");
     if (!token) {
-      alert("Vui lòng đăng nhập để thực hiện thêm sản phẩm vào giỏ hàng!");
+      // Guest cart fallback logic
+      try {
+        const guestCartStr = localStorage.getItem("guest_cart");
+        const cart = guestCartStr ? JSON.parse(guestCartStr) : [];
+        const existingItem = cart.find((it: any) => it.id === medId || it._id === medId);
+        
+        if (existingItem) {
+          if (existingItem.quantity + customQty > med.stock) {
+            alert(`Chỉ còn ${med.stock} sản phẩm khả dụng trong kho!`);
+            return;
+          }
+          existingItem.quantity += customQty;
+        } else {
+          if (med.stock <= 0) {
+            alert("Sản phẩm đã hết hàng!");
+            return;
+          }
+          cart.push({
+            id: medId,
+            _id: medId,
+            name: med.name,
+            category: med.category,
+            price: med.price,
+            quantity: customQty,
+            unit: med.unit || "Viên",
+            stock: med.stock,
+            active_ingredient: med.active_ingredient || "",
+            image: med.image || ""
+          });
+        }
+        localStorage.setItem("guest_cart", JSON.stringify(cart));
+        window.dispatchEvent(new Event("cartUpdated"));
+        
+        setAddedItems((prev) => ({ ...prev, [medId]: true }));
+        setTimeout(() => {
+          setAddedItems((prev) => ({ ...prev, [medId]: false }));
+        }, 1500);
+      } catch (err) {
+        console.error("Error updating guest cart:", err);
+      }
       return;
     }
 
@@ -91,7 +145,7 @@ export function CustomerShop() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ medicineId: medId, quantity: 1 })
+        body: JSON.stringify({ medicineId: medId, quantity: customQty })
       });
 
       const resData = await response.json();
@@ -198,7 +252,11 @@ export function CustomerShop() {
                 return (
                   <div
                     key={medId}
-                    className="bg-white rounded-[20px] border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col overflow-hidden group"
+                    onClick={() => {
+                      setSelectedMedicineForModal(med);
+                      setModalQuantity(1);
+                    }}
+                    className="bg-white rounded-[20px] border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col overflow-hidden group cursor-pointer"
                   >
                     {/* Visual Image Container with overlay badge */}
                     <div className="w-full h-48 bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden border-b border-slate-100">
@@ -219,7 +277,12 @@ export function CustomerShop() {
                         {isRx ? "Kê đơn (Rx)" : "Thực phẩm bổ sung"}
                       </span>
                       {/* Wishlist Button Overlay */}
-                      <button className="absolute top-3 right-3 p-2 bg-white/80 hover:bg-white text-slate-400 hover:text-rose-500 rounded-full transition-all shadow-sm">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="absolute top-3 right-3 p-2 bg-white/80 hover:bg-white text-slate-400 hover:text-rose-500 rounded-full transition-all shadow-sm"
+                      >
                         <Heart size={14} className="fill-current text-transparent hover:text-rose-500" />
                       </button>
                     </div>
@@ -251,7 +314,10 @@ export function CustomerShop() {
 
                         {/* Add to Cart button */}
                         <button
-                          onClick={() => handleAddToCart(med)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddToCart(med);
+                          }}
                           disabled={isOutOfStock}
                           className={`w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm ${
                             isOutOfStock
@@ -315,6 +381,218 @@ export function CustomerShop() {
           </div>
         )}
       </div>
+
+      {/* MEDICINE DETAILS MODAL */}
+      {selectedMedicineForModal && (() => {
+        const med = selectedMedicineForModal;
+        const medId = med.id || med._id;
+        const isRx = med.drug_classification === "PRESCRIPTION_ANTIBIOTIC";
+        const isOutOfStock = med.stock <= 0;
+        
+        return (
+          <div 
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 cursor-pointer"
+            onClick={() => {
+              setSelectedMedicineForModal(null);
+              setModalQuantity(1);
+            }}
+          >
+            {/* Modal Box */}
+            <div 
+              className="bg-white rounded-[32px] border border-slate-100 shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col relative animate-in fade-in zoom-in-95 duration-300 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-slate-100 flex items-start justify-between bg-slate-50/50">
+                <div className="flex flex-col gap-1.5 text-left">
+                  <div className="flex items-center gap-2.5">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                      isRx ? "bg-rose-50 text-rose-700 border-rose-100" : "bg-blue-50 text-blue-700 border-blue-100"
+                    }`}>
+                      {isRx ? "Thuốc kê đơn (Rx)" : "Không kê đơn"}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Mã: {med.sku || med.barcode || medId.substring(0, 8).toUpperCase()}
+                    </span>
+                  </div>
+                  <h3 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">
+                    {med.name}
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => {
+                    setSelectedMedicineForModal(null);
+                    setModalQuantity(1);
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
+                >
+                  <XCircle size={24} />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="p-6 md:p-8 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-12 gap-8 custom-scrollbar">
+                {/* Left Column: Image & Add-to-cart */}
+                <div className="md:col-span-5 flex flex-col gap-6">
+                  <div className="w-full aspect-square bg-slate-50 rounded-2xl flex items-center justify-center p-6 border border-slate-100 shadow-inner relative group overflow-hidden">
+                    <img 
+                      src={med.image || "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=500&auto=format&fit=crop&q=60"}
+                      alt={med.name}
+                      className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                    />
+                  </div>
+
+                  <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 flex flex-col gap-4 text-left">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">Đơn giá</span>
+                      <span className="text-2xl font-black text-[#0d6efd]">
+                        {med.price.toLocaleString()}₫
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-200/60 pt-4">
+                      <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">Số lượng mua</span>
+                      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+                        <button 
+                          onClick={() => setModalQuantity(q => Math.max(1, q - 1))}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-slate-500 hover:bg-slate-100 active:scale-95 transition-all"
+                          disabled={isOutOfStock}
+                        >
+                          -
+                        </button>
+                        <span className="w-10 text-center font-black text-slate-800 text-sm">
+                          {modalQuantity}
+                        </span>
+                        <button 
+                          onClick={() => setModalQuantity(q => Math.min(med.stock, q + 1))}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-slate-500 hover:bg-slate-100 active:scale-95 transition-all"
+                          disabled={isOutOfStock || modalQuantity >= med.stock}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 border-t border-slate-200/60 pt-4">
+                      <div className="flex justify-between text-[11px] font-bold text-slate-400">
+                        <span>Trạng thái kho:</span>
+                        <span className={isOutOfStock ? "text-rose-600" : "text-emerald-600"}>
+                          {isOutOfStock ? "Hết hàng" : `Còn ${med.stock} ${med.unit || "Viên"}`}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px] font-bold text-slate-400">
+                        <span>Đơn vị tính:</span>
+                        <span className="text-slate-600">{med.unit || "Viên"}</span>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={(e) => {
+                        handleAddToCart(med, modalQuantity);
+                      }}
+                      disabled={isOutOfStock}
+                      className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md ${
+                        isOutOfStock
+                          ? "bg-slate-200 text-slate-400 border border-slate-200 cursor-not-allowed"
+                          : addedItems[medId]
+                          ? "bg-emerald-500 text-white"
+                          : "bg-[#0d6efd] hover:bg-[#0b5ed7] text-white active:scale-95"
+                      }`}
+                    >
+                      {isOutOfStock ? (
+                        "Hết hàng trong kho"
+                      ) : addedItems[medId] ? (
+                        <>
+                          <Check size={14} /> Đã thêm thành công!
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingCart size={14} /> Thêm vào giỏ hàng
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right Column: Detailed Medical Specs */}
+                <div className="md:col-span-7 flex flex-col gap-6 text-left">
+                  {/* Active Ingredients & Manufacturer Micro-cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-1">
+                      <span className="text-[10px] font-black text-[#0d6efd] uppercase tracking-widest">Hoạt chất chính</span>
+                      <span className="font-extrabold text-slate-800 text-sm leading-snug">
+                        {med.active_ingredient || "N/A"}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-1">
+                      <span className="text-[10px] font-black text-[#0d6efd] uppercase tracking-widest">Nhóm điều trị</span>
+                      <span className="font-extrabold text-slate-800 text-sm leading-snug">
+                        {med.category || "N/A"}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-1">
+                      <span className="text-[10px] font-black text-[#0d6efd] uppercase tracking-widest">Dạng bào chế</span>
+                      <span className="font-extrabold text-slate-800 text-sm leading-snug">
+                        {med.dosage_form || "N/A"}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-1">
+                      <span className="text-[10px] font-black text-[#0d6efd] uppercase tracking-widest">Nhà sản xuất</span>
+                      <span className="font-extrabold text-slate-800 text-sm leading-snug">
+                        {med.manufacturer || "N/A"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Indications, Usage, Side effects */}
+                  <div className="flex flex-col gap-5">
+                    <div className="border-b border-slate-100 pb-4">
+                      <h4 className="font-black text-slate-900 text-sm uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Info size={16} className="text-[#0d6efd]" /> Công dụng / Chỉ định
+                      </h4>
+                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                        {med.cong_dung || "Chưa có thông tin công dụng & chỉ định cụ thể. Vui lòng tham khảo ý kiến của bác sĩ điều trị hoặc dược sĩ trước khi sử dụng."}
+                      </p>
+                    </div>
+
+                    <div className="border-b border-slate-100 pb-4">
+                      <h4 className="font-black text-slate-900 text-sm uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Activity size={16} className="text-[#0d6efd]" /> Hướng dẫn & Liều dùng
+                      </h4>
+                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                        {med.cach_dung || "Chưa có thông tin hướng dẫn sử dụng chi tiết. Tham khảo ý kiến chuyên gia y tế trước khi dùng."}
+                      </p>
+                    </div>
+
+                    <div className="pb-2">
+                      <h4 className="font-black text-slate-900 text-sm uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <ShieldAlert size={16} className="text-[#0d6efd]" /> Tác dụng phụ khuyến cáo
+                      </h4>
+                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                        {med.tac_dung_phu || "Tác dụng phụ tùy thuộc vào cơ địa người bệnh. Ngưng sử dụng thuốc và thông báo ngay cho bác sĩ hoặc cơ sở y tế gần nhất nếu gặp phản ứng không mong muốn."}
+                      </p>
+                    </div>
+
+                    {med.thong_tin_chi_tiet && typeof med.thong_tin_chi_tiet === 'object' && Object.keys(med.thong_tin_chi_tiet).length > 0 && (
+                      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mt-2">
+                        <h4 className="font-black text-slate-900 text-[11px] uppercase tracking-widest mb-3">Thông số kỹ thuật bổ sung</h4>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[11px] font-bold text-slate-500">
+                          {Object.entries(med.thong_tin_chi_tiet).map(([key, val]: [string, any]) => (
+                            <div key={key} className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                              <span className="text-slate-400 capitalize">{key.replace(/_/g, ' ')}:</span>
+                              <span className="text-slate-700 text-right">{String(val)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
