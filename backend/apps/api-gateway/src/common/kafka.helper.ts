@@ -1,5 +1,5 @@
 import { ClientKafka } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
+import { lastValueFrom, timeout } from 'rxjs';
 import { HttpException } from '@nestjs/common';
 
 
@@ -44,7 +44,9 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
  */
 export async function sendKafkaMessage(client: ClientKafka, topic: string, data: any) {
   try {
-    const result: any = await lastValueFrom(client.send(topic, data));
+    const result: any = await lastValueFrom(
+      client.send(topic, data).pipe(timeout(15000))
+    );
     // Trường hợp microservice trả về object lỗi thông thường (không phải throw)
     if (result?.error) {
       throw new HttpException(result.message || 'Internal Microservice Error', result.statusCode || 400);

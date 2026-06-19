@@ -9,7 +9,7 @@ async function bootstrap() {
     try {
       console.log('🔄 Đang kết nối tới Kafka...');
       const app = await NestFactory.create(SupplierServiceModule, { logger: ['error', 'warn'] });
-      
+
       app.connectMicroservice<MicroserviceOptions>({
         transport: Transport.KAFKA,
         options: {

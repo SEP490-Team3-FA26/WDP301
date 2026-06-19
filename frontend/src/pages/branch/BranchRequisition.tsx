@@ -20,13 +20,22 @@ export function BranchRequisition() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
       const [prRes, medRes] = await Promise.all([
-        fetch("/api/purchase-requisitions").then(r => r.json()).catch(() => []),
-        fetch("/api/medicines?limit=500").then(r => r.json()).then(d => d.data || d).catch(() => []),
+        fetch("/api/purchase-requisitions", { signal: controller.signal }).then(r => r.json()).catch(() => []),
+        fetch("/api/medicines?limit=500", { signal: controller.signal }).then(r => r.json()).then(d => d.data || d).catch(() => []),
       ]);
+
+      clearTimeout(timeoutId);
       setPrList(prRes);
       setMedicines(medRes);
-    } catch { }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        console.error('Fetch timed out after 20s');
+      }
+    }
     finally { setLoading(false); }
   };
 
@@ -77,11 +86,11 @@ export function BranchRequisition() {
         <div className="flex items-center gap-2 flex-wrap text-xs font-bold">
           <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg">1. Bạn tạo PR</span>
           <ChevronRight size={14} className="text-slate-400" />
-          <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg">2. Quản lý Kho gom đơn</span>
+          <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg">2. Kho tạo Đơn hàng</span>
           <ChevronRight size={14} className="text-slate-400" />
-          <span className="px-3 py-1.5 bg-violet-100 text-violet-700 rounded-lg">3. HQ phê duyệt</span>
+          <span className="px-3 py-1.5 bg-violet-100 text-violet-700 rounded-lg">3. Admin thanh toán</span>
           <ChevronRight size={14} className="text-slate-400" />
-          <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg">4. Nhập kho & Điều phối</span>
+          <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg">4. Kho nhận hàng</span>
         </div>
       </div>
 
@@ -172,6 +181,7 @@ export function BranchRequisition() {
 function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; onClose: () => void; onSuccess: (msg: string) => void }) {
   const [branchName, setBranchName] = useState("Chi nhánh Quận 1");
   const [reason, setReason] = useState("");
+  const [isUrgent, setIsUrgent] = useState(false);
   const [items, setItems] = useState<{ medicineId: string; quantity: number }[]>([]);
   const [selMed, setSelMed] = useState("");
   const [selQty, setSelQty] = useState(20);
@@ -222,6 +232,7 @@ function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; on
         body: JSON.stringify({
           branchName,
           reason,
+          isUrgent,
           items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity })),
         }),
       });
@@ -299,6 +310,19 @@ function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; on
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm resize-none"
                   />
                 </div>
+
+                <div className="flex items-center gap-2 mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="isUrgent"
+                    checked={isUrgent}
+                    onChange={(e) => setIsUrgent(e.target.checked)}
+                    className="w-4 h-4 text-rose-600 rounded focus:ring-rose-500"
+                  />
+                  <label htmlFor="isUrgent" className="text-sm font-bold text-rose-700 cursor-pointer">
+                    Đánh dấu là Yêu Cầu Hỏa Tốc
+                  </label>
+                </div>
               </div>
 
               {/* Form Thêm thuốc */}
@@ -334,9 +358,8 @@ function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; on
                     <div className="mt-2 text-xs font-semibold text-slate-500 bg-blue-50/50 p-2.5 rounded-lg border border-blue-100 flex justify-between items-center">
                       <span>Tồn kho hiện tại:</span>
                       <span
-                        className={`font-bold ${
-                          (getMedDetails(selMed)?.stock ?? 0) <= 50 ? "text-amber-600" : "text-slate-700"
-                        }`}
+                        className={`font-bold ${(getMedDetails(selMed)?.stock ?? 0) <= 50 ? "text-amber-600" : "text-slate-700"
+                          }`}
                       >
                         {getMedDetails(selMed)?.stock ?? 0} {getMedDetails(selMed)?.unit || "Hộp"}
                       </span>
@@ -378,11 +401,10 @@ function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; on
                         key={q}
                         type="button"
                         onClick={() => setSelQty(q)}
-                        className={`flex-1 py-1 text-[11px] font-bold rounded border transition-all ${
-                          selQty === q
+                        className={`flex-1 py-1 text-[11px] font-bold rounded border transition-all ${selQty === q
                             ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                             : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                        }`}
+                          }`}
                       >
                         {q}
                       </button>

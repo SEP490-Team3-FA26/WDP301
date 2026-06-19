@@ -37,10 +37,13 @@ export class PurchaseRequisition extends Document {
   @Prop({ type: String })
   notes: string; // Ghi chú thêm
 
+  @Prop({ type: Boolean, default: false })
+  isUrgent: boolean; // Flag hỏa tốc
+
   @Prop({
     type: String,
     default: 'SUBMITTED',
-    enum: ['DRAFT', 'SUBMITTED', 'CONSOLIDATED', 'APPROVED', 'REJECTED', 'CANCELLED'],
+    enum: ['DRAFT', 'SUBMITTED', 'CONSOLIDATED', 'URGENT_PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'],
   })
   status: string;
 

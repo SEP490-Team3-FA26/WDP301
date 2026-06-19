@@ -219,7 +219,7 @@ export class MedicineService {
           ];
 
           const [data, total] = await Promise.all([
-            this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).lean().exec(),
+            this.medicineModel.find(filterQuery).select('-thong_tin_chi_tiet -cong_dung -luu_y -cach_dung').skip(skip).limit(Number(limit)).lean().exec(),
             this.medicineModel.countDocuments(filterQuery).exec(),
           ]);
 
@@ -290,7 +290,7 @@ export class MedicineService {
         if (classification) filterQuery.drug_classification = classification;
 
         const [data, total] = await Promise.all([
-          this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).lean().exec(),
+          this.medicineModel.find(filterQuery).select('-thong_tin_chi_tiet -cong_dung -luu_y -cach_dung').skip(skip).limit(Number(limit)).lean().exec(),
           this.medicineModel.countDocuments(filterQuery).exec(),
         ]);
 

@@ -25,9 +25,11 @@ export function Inventory() {
   // Custom stats and reports states
   const [stats, setStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"inventory" | "expiration">("inventory");
+  const [activeTab, setActiveTab] = useState<"inventory" | "expiration" | "low_stock">("inventory");
   const [expirationReport, setExpirationReport] = useState<any[]>([]);
   const [expirationLoading, setExpirationLoading] = useState(false);
+  const [lowStockReport, setLowStockReport] = useState<any[]>([]);
+  const [lowStockLoading, setLowStockLoading] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   const fetchMedicineDetails = async (id: string) => {
@@ -93,6 +95,23 @@ export function Inventory() {
     }
   };
 
+  const fetchLowStockReport = async () => {
+    setLowStockLoading(true);
+    try {
+      const res = await fetch("/api/medicines?limit=5000");
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.data || data;
+        const filtered = items.filter((m: any) => m.stock <= (m.minStock || 50));
+        setLowStockReport(filtered);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLowStockLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
   }, [inventory]);
@@ -100,6 +119,8 @@ export function Inventory() {
   useEffect(() => {
     if (activeTab === "expiration") {
       fetchExpirationReport();
+    } else if (activeTab === "low_stock") {
+      fetchLowStockReport();
     }
   }, [activeTab]);
 
@@ -313,6 +334,22 @@ export function Inventory() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setActiveTab("low_stock")}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${
+            activeTab === "low_stock"
+              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+          }`}
+        >
+          <AlertCircle size={13} />
+          Thuốc Cần Bổ Sung
+          {(stats?.lowStockCount + stats?.outOfStockCount) > 0 && (
+            <span className="bg-amber-500 text-white text-[9px] font-black rounded-full px-1.5 py-0.5 shadow-sm shadow-amber-500/20">
+              {stats.lowStockCount + stats.outOfStockCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {activeTab === "inventory" ? (
@@ -521,7 +558,7 @@ export function Inventory() {
                             const importPath = isWarehouse ? '/warehouse/inventory/import/new' : '/admin/inventory/import/new';
                             navigate(importPath, {
                               state: {
-                                prefilledMedicineId: item.id
+                                prefillPrItems: [{ medicineId: item.id, quantity: Math.max(20, (item.minStock || 50) * 2 - item.stock) }]
                               }
                             });
                           }}
@@ -582,7 +619,7 @@ export function Inventory() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === "expiration" ? (
         /* Expiration Report View */
         <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-100/40 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/30 animate-in fade-in duration-200">
           <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white flex items-center gap-2">
@@ -644,6 +681,220 @@ export function Inventory() {
             {!expirationLoading && expirationReport.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-slate-500 font-semibold">Tuyệt vời! Không có lô thuốc nào bị hết hạn hoặc sắp hết hạn.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Low Stock Report View */
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-100/40 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/30 animate-in fade-in duration-200">
+          <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="text-amber-500" size={16} />
+              <h3 className="font-extrabold text-slate-800 text-xs sm:text-sm">Danh sách thuốc hết hàng hoặc sắp hết hàng (Dưới mức tối thiểu)</h3>
+            </div>
+            {!lowStockLoading && lowStockReport.length > 0 && (
+              <button
+                onClick={() => {
+                  const isWarehouse = window.location.pathname.startsWith('/warehouse');
+                  const importPath = isWarehouse ? '/warehouse/inventory/import/new' : '/admin/inventory/import/new';
+                  navigate(importPath, {
+                    state: {
+                      prefillPrItems: lowStockReport.map(item => ({ medicineId: item.id, quantity: Math.max(20, (item.minStock || 50) * 2 - item.stock) }))
+                    }
+                  });
+                }}
+                className="px-4 py-2 bg-[#0057cd] hover:bg-[#004bb1] text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm transition-all"
+              >
+                <Truck size={14} />
+                Nhập Tất Cả Thuốc Này
+              </button>
+            )}
+          </div>
+          
+          <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
+            {lowStockLoading ? (
+              <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
+                <Loader2 className="animate-spin text-[#0057cd]" size={32} />
+                <p className="text-sm font-semibold text-slate-500">Đang tải danh sách thuốc...</p>
+              </div>
+            ) : null}
+ 
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="text-[10px] text-slate-400 uppercase bg-slate-50/60 border-b border-slate-100/80 tracking-wider">
+                <tr>
+                  <th scope="col" className="px-4 py-2 font-bold">Mã & Tên Thuốc</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Danh Mục & Hoạt Chất</th>
+                  <th scope="col" className="px-4 py-2 font-bold text-right">Giá Bán</th>
+                  <th scope="col" className="px-4 py-2 font-bold text-center">Tồn Kho</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Trạng Thái</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Hạn Sử Dụng</th>
+                  <th scope="col" className="px-4 py-2 font-bold text-right">Hành động</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100/80">
+                {!lowStockLoading && lowStockReport.map((item) => (
+                  <tr key={item.id} className="group bg-white hover:bg-slate-50/40 hover:shadow-[inset_4px_0_0_0_#f59e0b] transition-all duration-200">
+                    <td className="px-4 py-2.5">
+                      <div className="font-semibold text-slate-900 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200/40 shadow-sm overflow-hidden flex-shrink-0 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform duration-200">
+                          {item.image ? (
+                            <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                          ) : (
+                            <Package className="text-slate-400 w-4 h-4" />
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <div className="font-bold text-slate-800 max-w-xs truncate text-xs sm:text-sm" title={item.name}>{item.name}</div>
+                          <div className="mt-1 font-mono text-[9px] text-slate-400 bg-slate-50 border border-slate-100/80 px-1.5 py-0.5 rounded-md w-fit">{item.id}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 max-w-[180px]">
+                      <div className="truncate font-bold text-slate-700 text-xs sm:text-sm" title={item.category}>{item.category}</div>
+                      {item.active_ingredient && (
+                        <div className="text-[10px] text-[#0057cd] font-black truncate mt-1 bg-blue-50/60 px-2 py-0.5 rounded-md inline-block max-w-full border border-blue-100/40" title={item.active_ingredient}>
+                          {item.active_ingredient}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-900 font-black text-right whitespace-nowrap text-xs">
+                      {item.price?.toLocaleString("vi-VN")} ₫ <span className="text-slate-400 text-[10px] font-normal">/ {item.unit || 'Hộp'}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-col items-center justify-center gap-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className={`font-black text-xs sm:text-sm ${item.stock <= item.minStock ? 'text-rose-600' : 'text-slate-800'}`}>
+                            {item.stock}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">{item.unit || 'Hộp'}</span>
+                        </div>
+                        {/* Miniature progress bar */}
+                        <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden shadow-inner">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              item.stock === 0 ? 'bg-rose-500 w-0' :
+                              item.stock <= item.minStock ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`} 
+                            style={{ width: `${Math.min(100, (item.stock / (item.minStock || 50)) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-slate-400 font-semibold">Min: {item.minStock}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {(() => {
+                        const isOutOfStock = item.stock === 0;
+                        const isLowStock = item.stock > 0 && item.stock <= item.minStock;
+                        if (isOutOfStock) return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-100">
+                            <AlertCircle size={12} className="text-rose-500" />
+                            Hết hàng
+                          </span>
+                        );
+                        if (isLowStock) return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                            <AlertCircle size={12} className="text-amber-500" />
+                            Sắp hết
+                          </span>
+                        );
+                        return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                            <CheckCircle2 size={12} className="text-emerald-500" />
+                            Sẵn sàng
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 relative">
+                      {item.batches && item.batches.length > 1 ? (
+                        <div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenDropdownId(openDropdownId === item.id ? null : item.id);
+                            }}
+                            className="flex items-center gap-1.5 bg-blue-50/60 text-[#0057cd] hover:bg-blue-50 hover:text-blue-700 text-xs font-extrabold rounded-lg px-3 py-1.5 transition-all border border-blue-100/50 shadow-sm whitespace-nowrap"
+                          >
+                            <span>{item.batches.length} Lô</span>
+                            <span className="text-[9px]">▼</span>
+                          </button>
+                          {openDropdownId === item.id && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-20" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdownId(null);
+                                }}
+                              />
+                              <div className="absolute left-6 mt-1 w-64 rounded-xl bg-white border border-slate-200 shadow-xl z-30 p-2 py-3 space-y-2 text-xs divide-y divide-slate-100 text-left animate-in fade-in zoom-in-95 duration-100">
+                                <div className="font-extrabold text-slate-700 px-2 pb-1 bg-slate-50 rounded">Hạn sử dụng chi tiết:</div>
+                                <div className="pt-2 max-h-40 overflow-y-auto space-y-1 px-1 custom-scrollbar">
+                                  {item.batches.map((b: any) => (
+                                    <div key={b.batchNo} className="flex flex-col py-1 px-1 justify-between hover:bg-slate-50 rounded">
+                                      <div className="flex justify-between font-bold text-slate-800">
+                                        <span>Lô: {b.batchNo}</span>
+                                        <span className={b.status === 'EXPIRED' ? 'text-rose-600' : 'text-slate-600'}>
+                                          {b.stock} {item.unit || 'Hộp'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between text-[11px] text-slate-500 mt-0.5">
+                                        <span>Hạn: {new Date(b.expDate).toLocaleDateString("vi-VN")}</span>
+                                        <span className={`font-semibold ${b.status === 'EXPIRED' ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                          {b.status === 'EXPIRED' ? 'Hết hạn' : 'Hoạt động'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="font-extrabold text-slate-700 text-xs sm:text-sm">
+                          {item.expiry ? new Date(item.expiry).toLocaleDateString("vi-VN") : 'N/A'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right flex justify-end gap-1">
+                      {item.stock <= item.minStock && (
+                        <button
+                          onClick={() => {
+                            const isWarehouse = window.location.pathname.startsWith('/warehouse');
+                            const importPath = isWarehouse ? '/warehouse/inventory/import/new' : '/admin/inventory/import/new';
+                            navigate(importPath, {
+                              state: {
+                                prefillPrItems: [{ medicineId: item.id, quantity: Math.max(20, (item.minStock || 50) * 2 - item.stock) }]
+                              }
+                            });
+                          }}
+                          className="text-amber-600 hover:text-amber-800 transition-colors p-1.5 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-100"
+                          title="Nhập hàng ngay"
+                        >
+                          <Truck size={15} />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => fetchMedicineDetails(item.id)}
+                        className="text-[#0057cd] hover:text-[#00419e] transition-colors p-1.5 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-100"
+                        title="Xem chi tiết"
+                      >
+                        <Eye size={15} />
+                      </button>
+                      <button className="text-slate-400 hover:text-slate-700 transition-colors p-1.5 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200">
+                        <MoreHorizontal size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {!lowStockLoading && lowStockReport.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-slate-500 font-semibold">Tất cả các loại thuốc đều đủ số lượng tồn kho an toàn.</p>
               </div>
             )}
           </div>
