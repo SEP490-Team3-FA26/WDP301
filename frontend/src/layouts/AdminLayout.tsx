@@ -1,5 +1,5 @@
 import { BaseDashboardLayout } from "./BaseDashboardLayout";
-import { LayoutDashboard, Settings, Building2, Banknote, BarChart3, Sparkles, PackageSearch, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Settings, Building2, Banknote, BarChart3, Sparkles, PackageSearch, ShieldCheck, Tag } from "lucide-react";
 
 export function AdminLayout() {
   const adminNavItems = [

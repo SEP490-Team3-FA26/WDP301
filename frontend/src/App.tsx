@@ -47,6 +47,7 @@ import { Finance } from "./pages/admin/Finance";
 import { Reports } from "./pages/admin/Reports";
 import { Branches } from "./pages/admin/Branches";
 import { HQApproval } from "./pages/admin/HQApproval";
+import { PriceManagement } from "./pages/admin/PriceManagement";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
@@ -143,6 +144,7 @@ export default function App() {
           <Route path="/branch" element={<BranchLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="sales" element={<Sales />} />
+            <Route path="pricing" element={<PriceManagement />} />
             <Route path="requisitions" element={<BranchRequisition />} />
             <Route path="finance" element={<Finance />} />
             <Route path="reports" element={<Reports />} />
