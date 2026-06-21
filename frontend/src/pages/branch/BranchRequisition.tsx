@@ -402,8 +402,8 @@ function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; on
                         type="button"
                         onClick={() => setSelQty(q)}
                         className={`flex-1 py-1 text-[11px] font-bold rounded border transition-all ${selQty === q
-                            ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                           }`}
                       >
                         {q}

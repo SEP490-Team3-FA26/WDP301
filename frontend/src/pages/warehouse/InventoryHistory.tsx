@@ -652,7 +652,7 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
 
     try {
       const resData = await goodsReceiptService.createGoodsReceipt({
-        purchaseOrderId: po._id,
+        poId: po._id,
         receivedBy: "Thủ kho chính",
         items: itemsData.map(it => ({
           medicineId: it.medicineId,
