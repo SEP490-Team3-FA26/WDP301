@@ -21,3 +21,5 @@ infra/**/.build/
 **/.codewhale/*
 !**/.codewhale/constitution.json
 .deepseek/
+phuc/
+agents.md

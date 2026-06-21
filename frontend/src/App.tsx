@@ -117,7 +117,6 @@ export default function App() {
 
             <Route path="master-data/products" element={<Products />} />
             <Route path="master-data/suppliers" element={<Suppliers />} />
-            <Route path="pricing" element={<PriceManagement />} />
           </Route>
         </Route>
 
@@ -145,6 +144,7 @@ export default function App() {
           <Route path="/branch" element={<BranchLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="sales" element={<Sales />} />
+            <Route path="pricing" element={<PriceManagement />} />
             <Route path="requisitions" element={<BranchRequisition />} />
             <Route path="finance" element={<Finance />} />
             <Route path="reports" element={<Reports />} />

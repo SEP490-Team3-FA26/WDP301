@@ -48,9 +48,22 @@ const formatVND = (val: number | null | undefined) => {
 };
 
 export function PriceManagement() {
+  // Decode JWT to get user role and branchId
+  const getAuthInfo = () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return { role: "", branchId: "" };
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      return { role: payload.role || "", branchId: payload.branchId || "" };
+    } catch {
+      return { role: "", branchId: "" };
+    }
+  };
+  const { role: userRole, branchId: userBranchId } = getAuthInfo();
+
   // State
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "");
   const [priceList, setPriceList] = useState<PriceEntry[]>([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [search, setSearch] = useState("");
@@ -84,7 +97,9 @@ export function PriceManagement() {
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
         setBranches(list);
-        if (list.length > 0) setSelectedBranch(list[0]._id);
+        if (!selectedBranch && list.length > 0) {
+          setSelectedBranch(list[0]._id);
+        }
       })
       .catch(() => setBranches([]));
   }, []);
@@ -269,7 +284,8 @@ export function PriceManagement() {
                 setSelectedBranch(e.target.value);
                 setPagination((p) => ({ ...p, page: 1 }));
               }}
-              className="w-full pl-10 pr-10 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-[#0057cd]/20 focus:border-[#0057cd] transition-all cursor-pointer"
+              disabled={userRole === "branch"}
+              className={`w-full pl-10 pr-10 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0057cd]/20 focus:border-[#0057cd] transition-all ${userRole === "branch" ? "bg-slate-100 cursor-not-allowed opacity-80" : "bg-white cursor-pointer"}`}
             >
               {branches.map((b) => (
                 <option key={b._id} value={b._id}>
@@ -662,10 +678,10 @@ export function PriceManagement() {
                     />
                   </div>
                   <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
-                    {medicines.map((m) => (
+                    {medicines.map((m, index) => (
                       <button
-                        key={m._id}
-                        onClick={() => setAddMedicineId(m._id)}
+                        key={m._id || m.id || index}
+                        onClick={() => setAddMedicineId(m._id || m.id)}
                         className={`w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between ${addMedicineId === m._id ? "bg-blue-50 text-[#0057cd] font-medium" : "text-slate-700"}`}
                       >
                         <span className="truncate">{m.name}</span>

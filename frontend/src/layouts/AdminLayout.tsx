@@ -24,7 +24,6 @@ export function AdminLayout() {
         { name: "Hồ sơ Nhà cung cấp", href: "/admin/master-data/suppliers" },
       ]
     },
-    { name: "Bảng giá chi nhánh", href: "/admin/pricing", icon: <Tag size={20} /> },
     { name: "Tài chính", href: "/admin/finance", icon: <Banknote size={20} /> },
     { name: "Báo cáo thống kê", href: "/admin/reports", icon: <BarChart3 size={20} /> },
     { name: "AI Insights", href: "/admin/ai-insights", icon: <Sparkles size={20} /> },
