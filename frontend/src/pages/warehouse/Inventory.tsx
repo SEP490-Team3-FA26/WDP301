@@ -10,7 +10,7 @@ export function Inventory() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedClassification, setSelectedClassification] = useState("");
   const [filterOptions, setFilterOptions] = useState<{ categories: string[], classifications: string[] }>({ categories: [], classifications: [] });
-  
+
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -267,11 +267,10 @@ export function Inventory() {
           key={p}
           onClick={() => setPage(p)}
           disabled={loading}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            page === p
-              ? "bg-[#0057cd] text-white shadow-sm"
-              : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-          }`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${page === p
+            ? "bg-[#0057cd] text-white shadow-sm"
+            : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
         >
           {p}
         </button>
@@ -301,7 +300,7 @@ export function Inventory() {
               <p className="text-lg font-extrabold text-slate-900">{stats.totalMedicines}</p>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
             <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
               <TrendingUp size={18} />
@@ -346,22 +345,20 @@ export function Inventory() {
       <div className="flex bg-slate-100/70 p-1 rounded-xl w-fit border border-slate-200/40 backdrop-blur-sm gap-1">
         <button
           onClick={() => setActiveTab("inventory")}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 ${
-            activeTab === "inventory"
-              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
-              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
-          }`}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 ${activeTab === "inventory"
+            ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+            : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+            }`}
         >
           <Package size={13} />
           Danh Sách Tồn Kho
         </button>
         <button
           onClick={() => setActiveTab("expiration")}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${
-            activeTab === "expiration"
-              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
-              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
-          }`}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${activeTab === "expiration"
+            ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+            : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+            }`}
         >
           <Calendar size={13} />
           Báo Cáo Hết Hạn
@@ -373,11 +370,10 @@ export function Inventory() {
         </button>
         <button
           onClick={() => setActiveTab("low_stock")}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${
-            activeTab === "low_stock"
-              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
-              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
-          }`}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${activeTab === "low_stock"
+            ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+            : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+            }`}
         >
           <AlertCircle size={13} />
           Thuốc Cần Bổ Sung
@@ -390,11 +386,10 @@ export function Inventory() {
 
         <button
           onClick={() => setActiveTab("report")}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${
-            activeTab === "report"
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${activeTab === "report"
               ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
               : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
-          }`}
+            }`}
         >
           <TrendingDown size={13} />
           Báo Cáo Nhập - Xuất - Tồn
@@ -417,7 +412,7 @@ export function Inventory() {
                 className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200/80 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:ring-4 focus:ring-blue-500/10 focus:border-[#0057cd] outline-none transition-all shadow-sm"
               />
             </div>
-            
+
             <div className="flex items-center gap-2 w-full md:w-auto">
               <div className="relative w-full sm:w-auto">
                 <select
@@ -428,8 +423,8 @@ export function Inventory() {
                   <option value="">Tất cả phân loại</option>
                   {filterOptions.classifications.map(c => (
                     <option key={c} value={c}>
-                      {c === 'PRESCRIPTION_ANTIBIOTIC' ? 'Kê đơn / Kháng sinh' : 
-                       c === 'COMMON_SUPPLEMENT' ? 'Không kê đơn / TPCN' : c}
+                      {c === 'PRESCRIPTION_ANTIBIOTIC' ? 'Kê đơn / Kháng sinh' :
+                        c === 'COMMON_SUPPLEMENT' ? 'Không kê đơn / TPCN' : c}
                     </option>
                   ))}
                 </select>
@@ -512,11 +507,10 @@ export function Inventory() {
                         </div>
                         {/* Miniature progress bar */}
                         <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden shadow-inner">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              item.stock === 0 ? 'bg-rose-500 w-0' :
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${item.stock === 0 ? 'bg-rose-500 w-0' :
                               item.stock <= item.minStock ? 'bg-amber-500' : 'bg-emerald-500'
-                            }`} 
+                              }`}
                             style={{ width: `${Math.min(100, (item.stock / (item.minStock || 50)) * 100)}%` }}
                           />
                         </div>
@@ -562,8 +556,8 @@ export function Inventory() {
                           </button>
                           {openDropdownId === item.id && (
                             <>
-                              <div 
-                                className="fixed inset-0 z-20" 
+                              <div
+                                className="fixed inset-0 z-20"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenDropdownId(null);
@@ -624,7 +618,7 @@ export function Inventory() {
                       >
                         <Tag size={15} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => fetchMedicineDetails(item.id)}
                         className="text-[#0057cd] hover:text-[#00419e] transition-colors p-1.5 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-100"
                         title="Xem chi tiết"
@@ -639,33 +633,33 @@ export function Inventory() {
                 ))}
               </tbody>
             </table>
-            
+
             {!loading && inventory.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-slate-500">Không tìm thấy thuốc nào khớp với từ khóa.</p>
               </div>
             )}
           </div>
-          
+
           {/* Pagination - compact */}
           <div className="px-4 py-2.5 border-t border-slate-100 flex items-center justify-between bg-white text-sm">
             <span className="text-xs text-slate-500">
               Hiển thị <span className="font-semibold text-slate-800">{inventory.length > 0 ? (page - 1) * limit + 1 : 0}</span>–<span className="font-semibold text-slate-800">{(page - 1) * limit + inventory.length}</span> / <span className="font-semibold text-slate-800">{total}</span> thuốc
             </span>
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1 || loading}
                 className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Trước
               </button>
-              
+
               <div className="flex items-center gap-1">
                 {renderPageNumbers()}
               </div>
 
-              <button 
+              <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages || totalPages === 0 || loading}
                 className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -682,7 +676,7 @@ export function Inventory() {
             <AlertCircle className="text-[#0057cd]" size={16} />
             <h3 className="font-extrabold text-slate-800 text-xs sm:text-sm">Danh sách các lô thuốc hết hạn hoặc cận hạn sử dụng (trong vòng 90 ngày)</h3>
           </div>
-          
+
           <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
             {expirationLoading ? (
               <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
@@ -690,7 +684,7 @@ export function Inventory() {
                 <p className="text-sm font-semibold text-slate-500">Đang tải báo cáo hết hạn...</p>
               </div>
             ) : null}
- 
+
             <table className="w-full text-sm text-left border-collapse">
               <thead className="text-[11px] text-slate-400 uppercase bg-slate-50/60 border-b border-slate-100/80 tracking-wider font-extrabold">
                 <tr>
@@ -721,8 +715,8 @@ export function Inventory() {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className={`px-3 py-1.5 rounded-full text-xs font-bold inline-block border shadow-sm whitespace-nowrap
-                        ${batch.status === 'EXPIRED' 
-                          ? 'bg-rose-50 text-rose-700 border-rose-100' 
+                        ${batch.status === 'EXPIRED'
+                          ? 'bg-rose-50 text-rose-700 border-rose-100'
                           : 'bg-amber-50 text-amber-700 border-amber-100'
                         }
                       `}>
@@ -767,7 +761,7 @@ export function Inventory() {
               </button>
             )}
           </div>
-          
+
           <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
             {lowStockLoading ? (
               <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
@@ -775,7 +769,7 @@ export function Inventory() {
                 <p className="text-sm font-semibold text-slate-500">Đang tải danh sách thuốc...</p>
               </div>
             ) : null}
- 
+
             <table className="w-full text-sm text-left border-collapse">
               <thead className="text-[10px] text-slate-400 uppercase bg-slate-50/60 border-b border-slate-100/80 tracking-wider">
                 <tr>
@@ -827,11 +821,10 @@ export function Inventory() {
                         </div>
                         {/* Miniature progress bar */}
                         <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden shadow-inner">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              item.stock === 0 ? 'bg-rose-500 w-0' :
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${item.stock === 0 ? 'bg-rose-500 w-0' :
                               item.stock <= item.minStock ? 'bg-amber-500' : 'bg-emerald-500'
-                            }`} 
+                              }`}
                             style={{ width: `${Math.min(100, (item.stock / (item.minStock || 50)) * 100)}%` }}
                           />
                         </div>
@@ -877,8 +870,8 @@ export function Inventory() {
                           </button>
                           {openDropdownId === item.id && (
                             <>
-                              <div 
-                                className="fixed inset-0 z-20" 
+                              <div
+                                className="fixed inset-0 z-20"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenDropdownId(null);
@@ -939,7 +932,7 @@ export function Inventory() {
                       >
                         <Tag size={15} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => fetchMedicineDetails(item.id)}
                         className="text-[#0057cd] hover:text-[#00419e] transition-colors p-1.5 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-100"
                         title="Xem chi tiết"
@@ -970,7 +963,7 @@ export function Inventory() {
               <TrendingDown className="text-[#0057cd]" size={16} />
               <h3 className="font-extrabold text-slate-800 text-xs sm:text-sm">Báo cáo tình hình Nhập - Xuất - Tồn dược phẩm</h3>
             </div>
-            
+
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1.5 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/40 text-xs">
                 <span className="text-slate-500 font-medium">Từ ngày:</span>
@@ -992,7 +985,7 @@ export function Inventory() {
               </div>
             </div>
           </div>
-          
+
           <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
             {reportLoading ? (
               <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
@@ -1058,14 +1051,14 @@ export function Inventory() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
               <h2 className="text-lg font-bold text-slate-900">Chi Tiết Thông Tin Dược Phẩm</h2>
-              <button 
+              <button
                 onClick={() => setDetailModalOpen(false)}
                 className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto flex-1">
               {fetchingDetails ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -1093,7 +1086,7 @@ export function Inventory() {
                       <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-1">
                           <span className="text-slate-500">Mã SKU:</span>
-                          <span className="font-semibold text-slate-900">{selectedMedicine._id?.toString()?.substring(0,8).toUpperCase()}</span>
+                          <span className="font-semibold text-slate-900">{selectedMedicine._id?.toString()?.substring(0, 8).toUpperCase()}</span>
                         </div>
                         <div className="flex items-center justify-between border-b border-slate-100 pb-1">
                           <span className="text-slate-500">Hạn sử dụng:</span>
@@ -1124,7 +1117,7 @@ export function Inventory() {
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="bg-emerald-50/50 rounded-xl p-5 border border-emerald-100 shadow-sm flex flex-col max-h-[250px]">
                       <h4 className="font-bold text-emerald-900 flex items-center gap-2 mb-3 shrink-0">
                         <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Công dụng
@@ -1136,7 +1129,7 @@ export function Inventory() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="bg-amber-50/50 rounded-xl p-5 border border-amber-100 shadow-sm flex flex-col max-h-[250px]">
                     <h4 className="font-bold text-amber-900 flex items-center gap-2 mb-3 shrink-0">
                       <div className="w-2 h-2 rounded-full bg-amber-500"></div> Liều dùng & Cách dùng
@@ -1163,9 +1156,9 @@ export function Inventory() {
                 <div className="text-center text-slate-500 py-10">Không tìm thấy thông tin.</div>
               )}
             </div>
-            
+
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button 
+              <button
                 onClick={() => setDetailModalOpen(false)}
                 className="px-5 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
               >
@@ -1185,14 +1178,14 @@ export function Inventory() {
                 <h2 className="text-lg font-bold text-slate-900">Cấu Hình Giá Bán Sỉ (Bậc Thang)</h2>
                 <p className="text-xs text-[#0057cd] font-bold mt-0.5">{tieredPricingMedicine.name}</p>
               </div>
-              <button 
+              <button
                 onClick={() => setTieredPricingModalOpen(false)}
                 className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto flex-1 space-y-4">
               <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 flex justify-between items-center text-xs">
                 <span className="text-slate-500 font-medium">Giá bán chuẩn hiện tại:</span>
@@ -1282,15 +1275,15 @@ export function Inventory() {
                 </button>
               </div>
             </div>
-            
+
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
-              <button 
+              <button
                 onClick={() => setTieredPricingModalOpen(false)}
                 className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-xs"
               >
                 Hủy
               </button>
-              <button 
+              <button
                 onClick={handleSavePriceTiers}
                 disabled={tieredPricingSaving}
                 className="px-5 py-2 bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-400 text-white font-bold rounded-lg transition-colors shadow-sm text-xs flex items-center gap-1.5"

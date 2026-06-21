@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   XCircle, AlertTriangle, CheckCircle2, QrCode, FileText, Stethoscope,
-  ShoppingCart, Minus, Plus, Banknote, CreditCard, Sparkles, Printer, SearchIcon, Check
+  ShoppingCart, Minus, Plus, Banknote, CreditCard, Sparkles, Printer, SearchIcon, Check,
+  ShieldAlert
 } from "lucide-react";
 import { medicineService } from "../../../services/medicine.service";
 import { prescriptionService } from "../../../services/prescription.service";
@@ -41,7 +42,7 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isPatientInfoOpen, setIsPatientInfoOpen] = useState(false);
-  
+
   // Patient & Doctor state (For manual entry & e-Rx)
   const [patientName, setPatientName] = useState("");
   const [patientAge, setPatientAge] = useState("");
@@ -565,8 +566,8 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
                     disabled={dropdownValue !== "CUSTOM" && dropdownValue !== ""}
                     placeholder="BM-1029"
                     className={`w-full p-2.5 rounded-lg text-sm font-semibold focus:outline-none focus:border-[#0057cd] ${dropdownValue !== "CUSTOM" && dropdownValue !== ""
-                        ? "bg-slate-100 text-slate-500 border-slate-250 cursor-not-allowed"
-                        : "bg-slate-50 border border-slate-200 focus:bg-white"
+                      ? "bg-slate-100 text-slate-500 border-slate-250 cursor-not-allowed"
+                      : "bg-slate-50 border border-slate-200 focus:bg-white"
                       }`}
                   />
                 </div>
@@ -905,7 +906,7 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
           </button>
         </div>
       </div>
-      
+
       {/* =======================================
        * 💳 MODAL THANH TOÁN PAYOS VIETQR
        * ======================================= */}
