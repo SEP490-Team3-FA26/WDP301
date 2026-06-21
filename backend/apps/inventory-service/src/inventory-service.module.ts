@@ -20,4 +20,4 @@ import { SalesModule } from './sales/sales.module';
     SalesModule,
   ],
 })
-export class InventoryServiceModule {}
+export class InventoryServiceModule { }
