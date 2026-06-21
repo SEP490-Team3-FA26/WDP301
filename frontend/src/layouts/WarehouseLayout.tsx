@@ -11,7 +11,8 @@ export function WarehouseLayout() {
         { name: "Tổng quan kho", href: "/warehouse/inventory" },
         { name: "Yêu cầu mua hàng (PR)", href: "/warehouse/inventory/requisitions" },
         { name: "Nhập / Xuất kho", href: "/warehouse/inventory/import" },
-        { name: "Kiểm kê kho", href: "/warehouse/inventory/dispose" },
+        { name: "Biên bản kiểm kê", href: "/warehouse/inventory/checks" },
+        { name: "Lịch sử hủy thuốc", href: "/warehouse/inventory/dispose" },
       ]
     },
     { 

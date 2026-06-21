@@ -97,7 +97,7 @@ export function PurchaseOrderCreate() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/medicines?limit=10000').then(res => res.json()),
+      fetch('/api/medicines/dropdown').then(res => res.json()),
       fetch('/api/suppliers').then(res => res.json())
     ]).then(([medData, supData]) => {
       setMedicines(medData.data || medData);

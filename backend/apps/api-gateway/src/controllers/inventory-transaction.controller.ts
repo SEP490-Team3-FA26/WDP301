@@ -11,7 +11,19 @@ export class InventoryTransactionController implements OnModuleInit {
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
       'inventory.transactions.list',
+      'inventory.reports.import_export',
     ]);
+  }
+
+  @Get('report')
+  async getImportExportReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.reports.import_export', {
+      startDate,
+      endDate,
+    });
   }
 
   /**

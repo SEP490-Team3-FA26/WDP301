@@ -6,6 +6,7 @@ import { SalesOrder } from './schemas/sales-order.schema';
 import { Prescription } from './schemas/prescription.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
+import { InventoryTransaction } from '../purchase/schemas/inventory-transaction.schema';
 
 @Injectable()
 export class SalesService {
@@ -16,6 +17,7 @@ export class SalesService {
     @InjectModel(Prescription.name) private readonly prescriptionModel: Model<Prescription>,
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
+    @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
   ) {}
 
   async getPrescriptionByCode(code: string) {
@@ -108,6 +110,24 @@ export class SalesService {
     }));
   }
 
+  private getTieredPrice(medicine: any, quantity: number): number {
+    if (medicine.priceTiers && medicine.priceTiers.length > 0) {
+      // Sắp xếp giảm dần theo minQuantity để lấy bậc cao nhất thỏa mãn
+      const sortedTiers = [...medicine.priceTiers].sort((a, b) => b.minQuantity - a.minQuantity);
+      for (const tier of sortedTiers) {
+        if (quantity >= tier.minQuantity) {
+          return tier.price;
+        }
+      }
+    }
+    // Giá bậc thang mặc định nếu không cấu hình riêng cho thuốc này
+    const basePrice = medicine.price || 50000;
+    if (quantity >= 100) return Math.round(basePrice * 0.85); // Giảm 15%
+    if (quantity >= 50) return Math.round(basePrice * 0.90);  // Giảm 10%
+    if (quantity >= 10) return Math.round(basePrice * 0.95);  // Giảm 5%
+    return basePrice;
+  }
+
   async createSalesOrder(data: any) {
     this.logger.log(`Creating Sales Order. Type: ${data.type}`);
 
@@ -151,6 +171,7 @@ export class SalesService {
     const orderItems = [];
     let totalAmount = 0;
     const allWarnings: string[] = [];
+    const transactionLogs: any[] = [];
 
     // Xuất kho FIFO
     for (const item of data.items) {
@@ -196,11 +217,25 @@ export class SalesService {
         }
 
         const deductQty = Math.min(batch.stock, remainingQty);
+        const stockBefore = batch.stock;
         batch.stock -= deductQty;
         remainingQty -= deductQty;
 
         allocatedBatches.push({ batchNo: batch.batchNo, quantity: deductQty });
         await batch.save();
+
+        transactionLogs.push({
+          type: 'SALE_EXPORT',
+          medicineId: item.medicineId,
+          medicineName: medicine.name,
+          batchNo: batch.batchNo,
+          quantityChange: -deductQty,
+          stockBefore,
+          stockAfter: stockBefore - deductQty,
+          referenceType: 'SALE',
+          performedBy: data.soldBy || 'Dược sĩ',
+          notes: `Bán hàng ${data.type === 'WHOLESALE' ? 'sỉ' : 'lẻ'}`,
+        });
       }
 
       if (remainingQty > 0) {
@@ -209,7 +244,11 @@ export class SalesService {
         });
       }
 
-      const itemPrice = medicine.price || 50000;
+      // Lấy đơn giá theo loại hình sỉ / lẻ
+      let itemPrice = medicine.price || 50000;
+      if (data.type === 'WHOLESALE') {
+        itemPrice = this.getTieredPrice(medicine, item.quantity);
+      }
       totalAmount += itemPrice * item.quantity;
 
       orderItems.push({
@@ -235,6 +274,12 @@ export class SalesService {
       soldBy: data.soldBy || 'Dược sĩ'
     });
     await salesOrder.save();
+
+    // Lưu các transaction log liên kết với mã hóa đơn bán hàng vừa tạo
+    for (const log of transactionLogs) {
+      log.referenceId = salesOrder._id.toString();
+      await new this.txnModel(log).save();
+    }
 
     // Cập nhật trạng thái đơn thuốc
     if (prescription) {

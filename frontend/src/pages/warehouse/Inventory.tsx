@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck } from "lucide-react";
+import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck, Tag, TrendingDown } from "lucide-react";
 import { medicineService } from "../../services/medicine.service";
 
 export function Inventory() {
@@ -26,12 +26,31 @@ export function Inventory() {
   // Custom stats and reports states
   const [stats, setStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"inventory" | "expiration" | "low_stock">("inventory");
+  const [activeTab, setActiveTab] = useState<"inventory" | "expiration" | "low_stock" | "report">("inventory");
   const [expirationReport, setExpirationReport] = useState<any[]>([]);
   const [expirationLoading, setExpirationLoading] = useState(false);
   const [lowStockReport, setLowStockReport] = useState<any[]>([]);
   const [lowStockLoading, setLowStockLoading] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Import - Export - Stock Report States
+  const [reportData, setReportData] = useState<any[]>([]);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [startDate, setStartDate] = useState(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+  );
+  const [endDate, setEndDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
+
+  // Tiered Pricing Modal States
+  const [tieredPricingMedicine, setTieredPricingMedicine] = useState<any>(null);
+  const [tieredPricingModalOpen, setTieredPricingModalOpen] = useState(false);
+  const [tieredPricingList, setTieredPricingList] = useState<{ minQuantity: number; price: number }[]>([]);
+  const [tieredPricingSaving, setTieredPricingSaving] = useState(false);
+  const [newMinQty, setNewMinQty] = useState<string>("");
+  const [newTierPrice, setNewTierPrice] = useState<string>("");
+
 
   const fetchMedicineDetails = async (id: string) => {
     setFetchingDetails(true);
@@ -84,17 +103,50 @@ export function Inventory() {
   const fetchLowStockReport = async () => {
     setLowStockLoading(true);
     try {
-      const res = await fetch("/api/medicines?limit=5000");
-      if (res.ok) {
-        const data = await res.json();
-        const items = data.data || data;
-        const filtered = items.filter((m: any) => m.stock <= (m.minStock || 50));
-        setLowStockReport(filtered);
-      }
+      const data = await medicineService.getLowStockReport();
+      setLowStockReport(data || []);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to fetch low stock report", err);
+      setLowStockReport([]);
     } finally {
       setLowStockLoading(false);
+    }
+  };
+
+  const fetchReportData = async () => {
+    setReportLoading(true);
+    try {
+      const data = await medicineService.getImportExportReport(startDate, endDate);
+      setReportData(data || []);
+    } catch (err) {
+      console.error("Failed to fetch inventory report", err);
+      setReportData([]);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+
+  const openPriceTiersModal = (med: any) => {
+    setTieredPricingMedicine(med);
+    setTieredPricingList(med.priceTiers || []);
+    setNewMinQty("");
+    setNewTierPrice("");
+    setTieredPricingModalOpen(true);
+  };
+
+  const handleSavePriceTiers = async () => {
+    if (!tieredPricingMedicine) return;
+    setTieredPricingSaving(true);
+    try {
+      await medicineService.updatePriceTiers(tieredPricingMedicine.id, tieredPricingList);
+      setInventory(prev => prev.map(item => item.id === tieredPricingMedicine.id ? { ...item, priceTiers: tieredPricingList } : item));
+      setTieredPricingModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save price tiers", err);
+      alert("Lỗi khi lưu cấu hình giá sỉ!");
+    } finally {
+      setTieredPricingSaving(false);
     }
   };
 
@@ -107,8 +159,10 @@ export function Inventory() {
       fetchExpirationReport();
     } else if (activeTab === "low_stock") {
       fetchLowStockReport();
+    } else if (activeTab === "report") {
+      fetchReportData();
     }
-  }, [activeTab]);
+  }, [activeTab, startDate, endDate]);
 
   // Fetch filter options on mount
   useEffect(() => {
@@ -333,6 +387,18 @@ export function Inventory() {
             </span>
           )}
         </button>
+
+        <button
+          onClick={() => setActiveTab("report")}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${
+            activeTab === "report"
+              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+          }`}
+        >
+          <TrendingDown size={13} />
+          Báo Cáo Nhập - Xuất - Tồn
+        </button>
       </div>
 
       {activeTab === "inventory" ? (
@@ -551,6 +617,13 @@ export function Inventory() {
                           <Truck size={15} />
                         </button>
                       )}
+                      <button
+                        onClick={() => openPriceTiersModal(item)}
+                        className="text-emerald-600 hover:text-emerald-800 transition-colors p-1.5 rounded-lg hover:bg-emerald-50 border border-transparent hover:border-emerald-100"
+                        title="Cấu hình giá bán sỉ"
+                      >
+                        <Tag size={15} />
+                      </button>
                       <button 
                         onClick={() => fetchMedicineDetails(item.id)}
                         className="text-[#0057cd] hover:text-[#00419e] transition-colors p-1.5 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-100"
@@ -668,7 +741,7 @@ export function Inventory() {
             )}
           </div>
         </div>
-      ) : (
+      ) : activeTab === "low_stock" ? (
         /* Low Stock Report View */
         <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-100/40 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/30 animate-in fade-in duration-200">
           <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white flex items-center justify-between gap-2">
@@ -859,6 +932,13 @@ export function Inventory() {
                           <Truck size={15} />
                         </button>
                       )}
+                      <button
+                        onClick={() => openPriceTiersModal(item)}
+                        className="text-emerald-600 hover:text-emerald-800 transition-colors p-1.5 rounded-lg hover:bg-emerald-50 border border-transparent hover:border-emerald-100"
+                        title="Cấu hình giá bán sỉ"
+                      >
+                        <Tag size={15} />
+                      </button>
                       <button 
                         onClick={() => fetchMedicineDetails(item.id)}
                         className="text-[#0057cd] hover:text-[#00419e] transition-colors p-1.5 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-100"
@@ -878,6 +958,94 @@ export function Inventory() {
             {!lowStockLoading && lowStockReport.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-slate-500 font-semibold">Tất cả các loại thuốc đều đủ số lượng tồn kho an toàn.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Import-Export-Stock Report View (Báo Cáo Nhập - Xuất - Tồn) */
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-100/40 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/30 animate-in fade-in duration-200">
+          <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="text-[#0057cd]" size={16} />
+              <h3 className="font-extrabold text-slate-800 text-xs sm:text-sm">Báo cáo tình hình Nhập - Xuất - Tồn dược phẩm</h3>
+            </div>
+            
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/40 text-xs">
+                <span className="text-slate-500 font-medium">Từ ngày:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 outline-none border-none cursor-pointer focus:ring-0 p-0"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/40 text-xs">
+                <span className="text-slate-500 font-medium">Đến ngày:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 outline-none border-none cursor-pointer focus:ring-0 p-0"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
+            {reportLoading ? (
+              <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
+                <Loader2 className="animate-spin text-[#0057cd]" size={32} />
+                <p className="text-sm font-semibold text-slate-500">Đang tổng hợp báo cáo...</p>
+              </div>
+            ) : null}
+
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="text-[10px] text-slate-400 uppercase bg-slate-50/60 border-b border-slate-100/80 tracking-wider font-extrabold sticky top-0 z-10 backdrop-blur-sm">
+                <tr>
+                  <th scope="col" className="px-6 py-4 font-bold">Dược Phẩm</th>
+                  <th scope="col" className="px-6 py-4 font-bold">Danh Mục</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Đơn Vị</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Tồn Đầu Kỳ</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Nhập Trong Kỳ</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Xuất Trong Kỳ</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Tồn Cuối Kỳ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {!reportLoading && reportData.map((item: any) => (
+                  <tr key={item.medicineId} className="group bg-white hover:bg-slate-50/40 hover:shadow-[inset_4px_0_0_0_#0057cd] transition-all duration-150">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-slate-800 text-xs sm:text-sm">{item.medicineName}</div>
+                      <div className="mt-1 font-mono text-[9px] text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md w-fit">{item.medicineId}</div>
+                    </td>
+                    <td className="px-6 py-4 font-semibold text-slate-600 text-xs sm:text-sm">
+                      {item.category || 'Chưa phân loại'}
+                    </td>
+                    <td className="px-6 py-4 text-center text-slate-600 font-medium text-xs">
+                      {item.unit || 'Hộp'}
+                    </td>
+                    <td className="px-6 py-4 text-center font-bold text-slate-700 text-xs sm:text-sm">
+                      {item.openingStock?.toLocaleString('vi-VN') || 0}
+                    </td>
+                    <td className="px-6 py-4 text-center font-black text-emerald-600 text-xs sm:text-sm">
+                      +{item.importQty?.toLocaleString('vi-VN') || 0}
+                    </td>
+                    <td className="px-6 py-4 text-center font-black text-rose-600 text-xs sm:text-sm">
+                      -{item.exportQty?.toLocaleString('vi-VN') || 0}
+                    </td>
+                    <td className="px-6 py-4 text-center font-extrabold text-[#0057cd] text-xs sm:text-sm">
+                      {item.closingStock?.toLocaleString('vi-VN') || 0}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {!reportLoading && reportData.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-slate-500 font-semibold">Không tìm thấy dữ liệu biến động kho trong khoảng thời gian đã chọn.</p>
               </div>
             )}
           </div>
@@ -1002,6 +1170,133 @@ export function Inventory() {
                 className="px-5 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tiered Pricing Modal */}
+      {tieredPricingModalOpen && tieredPricingMedicine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Cấu Hình Giá Bán Sỉ (Bậc Thang)</h2>
+                <p className="text-xs text-[#0057cd] font-bold mt-0.5">{tieredPricingMedicine.name}</p>
+              </div>
+              <button 
+                onClick={() => setTieredPricingModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 flex justify-between items-center text-xs">
+                <span className="text-slate-500 font-medium">Giá bán chuẩn hiện tại:</span>
+                <span className="font-extrabold text-slate-800">{tieredPricingMedicine.price?.toLocaleString("vi-VN")} ₫ / {tieredPricingMedicine.unit || 'Hộp'}</span>
+              </div>
+
+              {/* Tiers List */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Các bậc giá đã thiết lập</label>
+                {tieredPricingList.length === 0 ? (
+                  <div className="text-center py-4 bg-slate-50/50 border border-dashed border-slate-200 rounded-xl">
+                    <p className="text-xs text-slate-400 font-medium">Chưa có cấu hình giá sỉ. Hệ thống sẽ áp dụng chiết khấu mặc định.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                    {tieredPricingList
+                      .sort((a, b) => a.minQuantity - b.minQuantity)
+                      .map((tier, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-emerald-50/40 border border-emerald-100/60 px-3 py-2 rounded-xl text-xs">
+                          <span className="font-bold text-slate-700">Mua từ {tier.minQuantity} {tieredPricingMedicine.unit || 'hộp'}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="font-extrabold text-emerald-700">{tier.price?.toLocaleString("vi-VN")} ₫</span>
+                            <button
+                              onClick={() => {
+                                setTieredPricingList(prev => prev.filter((_, i) => i !== idx));
+                              }}
+                              className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1 rounded-lg transition-all"
+                              title="Xóa bậc này"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Tier Form */}
+              <div className="bg-slate-50/60 border border-slate-200/50 rounded-xl p-4 space-y-3">
+                <h4 className="text-xs font-bold text-slate-700">Thêm bậc giá mới</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Số lượng tối thiểu</label>
+                    <input
+                      type="number"
+                      placeholder="Ví dụ: 10"
+                      value={newMinQty}
+                      onChange={(e) => setNewMinQty(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-[#0057cd] transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Đơn giá bán sỉ (₫)</label>
+                    <input
+                      type="number"
+                      placeholder="Ví dụ: 45000"
+                      value={newTierPrice}
+                      onChange={(e) => setNewTierPrice(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-[#0057cd] transition-all"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const min = parseInt(newMinQty);
+                    const pr = parseFloat(newTierPrice);
+                    if (isNaN(min) || min <= 0) {
+                      alert("Vui lòng nhập số lượng tối thiểu hợp lệ (> 0)!");
+                      return;
+                    }
+                    if (isNaN(pr) || pr <= 0) {
+                      alert("Vui lòng nhập đơn giá sỉ hợp lệ (> 0)!");
+                      return;
+                    }
+                    if (tieredPricingList.some(t => t.minQuantity === min)) {
+                      alert(`Đã tồn tại cấu hình cho mức số lượng tối thiểu ${min}!`);
+                      return;
+                    }
+                    setTieredPricingList(prev => [...prev, { minQuantity: min, price: pr }]);
+                    setNewMinQty("");
+                    setNewTierPrice("");
+                  }}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-sm transition-all"
+                >
+                  Thêm Bậc Giá
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
+              <button 
+                onClick={() => setTieredPricingModalOpen(false)}
+                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-xs"
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={handleSavePriceTiers}
+                disabled={tieredPricingSaving}
+                className="px-5 py-2 bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-400 text-white font-bold rounded-lg transition-colors shadow-sm text-xs flex items-center gap-1.5"
+              >
+                {tieredPricingSaving && <Loader2 className="animate-spin" size={13} />}
+                {tieredPricingSaving ? "Đang lưu..." : "Lưu cấu hình"}
               </button>
             </div>
           </div>

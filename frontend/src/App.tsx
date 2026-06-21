@@ -40,6 +40,7 @@ import { Inventory } from "./pages/warehouse/Inventory";
 import { InventoryHistory } from "./pages/warehouse/InventoryHistory";
 import { PurchaseOrderCreate } from "./pages/warehouse/PurchaseOrderCreate";
 import { PurchaseRequisition } from "./pages/warehouse/PurchaseRequisition";
+import { InventoryCheck } from "./pages/warehouse/InventoryCheck";
 
 // Admin / HQ Pages
 import { Finance } from "./pages/admin/Finance";
@@ -107,6 +108,7 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
 
             <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory/checks" element={<InventoryCheck />} />
             <Route path="inventory/import" element={<InventoryHistory type="import" />} />
             <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
@@ -122,6 +124,7 @@ export default function App() {
           <Route path="/warehouse" element={<WarehouseLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory/checks" element={<InventoryCheck />} />
             <Route path="inventory/requisitions" element={<PurchaseRequisition />} />
             <Route path="inventory/import" element={<InventoryHistory type="import" />} />
             <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />

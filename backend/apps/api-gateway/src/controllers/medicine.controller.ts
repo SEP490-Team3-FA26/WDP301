@@ -16,9 +16,12 @@ export class MedicineController implements OnModuleInit {
       'inventory.medicine.list',
       'inventory.medicine.get_by_id',
       'inventory.medicine.update_status',
+      'inventory.medicine.update_price_tiers',
       'inventory.medicine.get_filters',
       'inventory.medicine.stats',
       'inventory.medicine.expiration_report',
+      'inventory.medicine.low_stock_report',
+      'inventory.medicine.dropdown_list',
     ]);
   }
 
@@ -40,6 +43,18 @@ export class MedicineController implements OnModuleInit {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.expiration_report', {});
   }
 
+  @Get('low-stock-report')
+  @ApiOperation({ summary: 'Lấy báo cáo các loại thuốc sắp hết hàng hoặc hết hàng' })
+  async getLowStockReport() {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.low_stock_report', {});
+  }
+
+  @Get('dropdown')
+  @ApiOperation({ summary: 'Lấy danh sách tối giản của các loại thuốc phục vụ cho dropdown' })
+  async getMedicinesDropdown() {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.dropdown_list', {});
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Lấy chi tiết 1 loại thuốc' })
   async getMedicineById(@Param('id') id: string) {
@@ -54,6 +69,15 @@ export class MedicineController implements OnModuleInit {
     @Body('stock') stock?: number
   ) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.update_status', { id, status, stock });
+  }
+
+  @Patch(':id/price-tiers')
+  @ApiOperation({ summary: 'Cập nhật bảng giá sỉ bậc thang của thuốc' })
+  async updateMedicinePriceTiers(
+    @Param('id') id: string,
+    @Body('priceTiers') priceTiers: { minQuantity: number; price: number }[]
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.update_price_tiers', { id, priceTiers });
   }
 
   @Get()
