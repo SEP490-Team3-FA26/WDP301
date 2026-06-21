@@ -47,7 +47,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
     // Fetch base lists to resolve IDs
     Promise.all([
       supplierService.getSuppliers().catch(() => []),
-      medicineService.getMedicines({ limit: 2000 }).then(r => r.data || r).catch(() => [])
+      medicineService.getMedicinesDropdown().catch(() => [])
     ]).then(([sData, mData]) => {
       setSuppliers(sData);
       setMedicines(mData);
@@ -652,7 +652,7 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
 
     try {
       const resData = await goodsReceiptService.createGoodsReceipt({
-        purchaseOrderId: po._id,
+        poId: po._id,
         receivedBy: "Thủ kho chính",
         items: itemsData.map(it => ({
           medicineId: it.medicineId,

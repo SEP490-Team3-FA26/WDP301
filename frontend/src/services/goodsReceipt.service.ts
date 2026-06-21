@@ -8,7 +8,7 @@ export interface GoodsReceiptItem {
 }
 
 export interface GoodsReceiptPayload {
-  purchaseOrderId: string;
+  poId: string;
   receivedBy: string;
   items: GoodsReceiptItem[];
 }

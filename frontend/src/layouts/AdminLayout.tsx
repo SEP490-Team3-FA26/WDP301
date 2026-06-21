@@ -12,7 +12,8 @@ export function AdminLayout() {
       subItems: [
         { name: "Tổng quan kho", href: "/admin/inventory" },
         { name: "Nhập / Xuất kho", href: "/admin/inventory/import" },
-        { name: "Kiểm kê kho", href: "/admin/inventory/dispose" },
+        { name: "Biên bản kiểm kê", href: "/admin/inventory/checks" },
+        { name: "Lịch sử hủy thuốc", href: "/admin/inventory/dispose" },
       ]
     },
     { 

@@ -31,6 +31,8 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: 'ERROR'
       KAFKA_LOG4J_LOGGERS: 'org.apache.kafka.image.loader.MetadataLoader=ERROR,org.apache.kafka=ERROR,kafka=ERROR,state.change.logger=ERROR,kafka.log.LogCleaner=ERROR'
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 10485760
     healthcheck:
       test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 10s
@@ -85,6 +87,7 @@ services:
     build:
       context: ./backend/apps/ai-service
     container_name: wdp301-ai-service
+    restart: on-failure
     env_file:
       - ./backend/.env
     ports:

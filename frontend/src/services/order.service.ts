@@ -20,7 +20,7 @@ export interface OrderPayload {
 }
 
 export interface SalePayload {
-  type: 'RETAIL' | 'PRESCRIPTION';
+  type: 'RETAIL' | 'PRESCRIPTION' | 'WHOLESALE';
   prescriptionCode?: string;
   patientName?: string;
   patientAge?: number;

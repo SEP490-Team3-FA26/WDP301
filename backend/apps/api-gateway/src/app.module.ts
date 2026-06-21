@@ -19,6 +19,7 @@ import { OrderController } from './controllers/order.controller';
 import { BranchController } from './controllers/branch.controller';
 import { StockTransferController } from './controllers/stock-transfer.controller';
 import { MediaController } from './storage/media.controller';
+import { InventoryCheckController } from './controllers/inventory-check.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -73,7 +74,7 @@ import { ClientKafka } from '@nestjs/microservices';
             logLevel: 0,
           },
           consumer: { groupId: 'api-gw-supplier-group' },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
       {
@@ -88,7 +89,7 @@ import { ClientKafka } from '@nestjs/microservices';
             logLevel: 0,
           },
           consumer: { groupId: 'api-gw-inventory-group' },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
       {
@@ -105,7 +106,7 @@ import { ClientKafka } from '@nestjs/microservices';
           consumer: {
             groupId: 'api-gateway-user-group',
           },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
       {
@@ -122,7 +123,7 @@ import { ClientKafka } from '@nestjs/microservices';
           consumer: {
             groupId: 'api-gateway-group',
           },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
       {
@@ -137,7 +138,7 @@ import { ClientKafka } from '@nestjs/microservices';
             logLevel: 0,
           },
           consumer: { groupId: 'api-gw-order-group' },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
     ]),
@@ -157,6 +158,7 @@ import { ClientKafka } from '@nestjs/microservices';
     BranchController,
     StockTransferController,
     MediaController,
+    InventoryCheckController,
   ],
   providers: [
     JwtAuthGuard,
