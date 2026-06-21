@@ -44,7 +44,6 @@ export function PurchaseRequisition() {
   const fetchData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
-<<<<<<< Updated upstream
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
       const res = await fetch(`/api/purchase-requisitions?status=${tab}`, { signal: controller.signal });
@@ -74,34 +73,6 @@ export function PurchaseRequisition() {
     }
     setSelectedPrs([]);
   }, [tab]);
-=======
-      const data = await purchaseRequisitionService.getPurchaseRequisitions(tab);
-      setPrList(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchData(); setSelectedPrs([]); }, [tab]);
-
-  // Gom đơn: SUBMITTED → CONSOLIDATED
-  const handleConsolidate = async () => {
-    if (selectedPrs.length === 0) return;
-    setActionLoading(true); setMsg(null);
-    try {
-      const d = await purchaseRequisitionService.consolidatePurchaseRequisitions(selectedPrs);
-      setMsg({ type: "success", text: d.message || "Gom đơn thành công" });
-      setSelectedPrs([]);
-      fetchData();
-    } catch (err: any) {
-      setMsg({ type: "error", text: err.response?.data?.message || "Lỗi kết nối" });
-    } finally {
-      setActionLoading(false);
-    }
-  };
->>>>>>> Stashed changes
 
   const toggleSelect = (id: string) => setSelectedPrs(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
