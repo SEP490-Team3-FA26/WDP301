@@ -5,6 +5,7 @@ import { SalesService } from './sales.service';
 import { SalesOrder, SalesOrderSchema } from './schemas/sales-order.schema';
 import { Prescription, PrescriptionSchema } from './schemas/prescription.schema';
 import { MedicineModule } from '../medicine/medicine.module';
+import { PricingModule } from '../pricing/pricing.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { MedicineModule } from '../medicine/medicine.module';
       { name: Prescription.name, schema: PrescriptionSchema },
     ]),
     MedicineModule, // To access Medicine and MedicineBatch schemas
+    PricingModule,  // To access PricingService for branch price resolution
   ],
   controllers: [SalesController],
   providers: [SalesService],

@@ -17,6 +17,7 @@ import { MedicineController } from './controllers/medicine.controller';
 import { AuthController } from './controllers/auth.controller';
 import { OrderController } from './controllers/order.controller';
 import { BranchController } from './controllers/branch.controller';
+import { PricingGatewayController } from './controllers/pricing.controller';
 import { MediaController } from './storage/media.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -151,6 +152,7 @@ import { S3StorageService } from './storage/s3-storage.service';
     AuthController,
     OrderController,
     BranchController,
+    PricingGatewayController,
     MediaController,
   ],
   providers: [

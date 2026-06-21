@@ -46,6 +46,7 @@ import { Finance } from "./pages/admin/Finance";
 import { Reports } from "./pages/admin/Reports";
 import { Branches } from "./pages/admin/Branches";
 import { HQApproval } from "./pages/admin/HQApproval";
+import { PriceManagement } from "./pages/admin/PriceManagement";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
@@ -115,6 +116,7 @@ export default function App() {
 
             <Route path="master-data/products" element={<Products />} />
             <Route path="master-data/suppliers" element={<Suppliers />} />
+            <Route path="pricing" element={<PriceManagement />} />
           </Route>
         </Route>
 

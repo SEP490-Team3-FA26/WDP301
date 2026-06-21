@@ -6,6 +6,7 @@ import { SalesOrder } from './schemas/sales-order.schema';
 import { Prescription } from './schemas/prescription.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
+import { PricingService } from '../pricing/pricing.service';
 
 @Injectable()
 export class SalesService {
@@ -16,6 +17,7 @@ export class SalesService {
     @InjectModel(Prescription.name) private readonly prescriptionModel: Model<Prescription>,
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
+    private readonly pricingService: PricingService,
   ) {}
 
   async getPrescriptionByCode(code: string) {
@@ -209,14 +211,21 @@ export class SalesService {
         });
       }
 
-      const itemPrice = medicine.price || 50000;
-      totalAmount += itemPrice * item.quantity;
+      // Resolve giá theo chi nhánh và loại bán hàng (UC-48)
+      const itemPrice = await this.pricingService.resolvePrice(
+        data.branchId,
+        item.medicineId,
+        data.type || 'RETAIL',
+        item.quantity,
+      );
+      const resolvedPrice = itemPrice || medicine.price || 50000;
+      totalAmount += resolvedPrice * item.quantity;
 
       orderItems.push({
         medicineId: item.medicineId,
         name: medicine.name,
         quantity: item.quantity,
-        price: itemPrice,
+        price: resolvedPrice,
         unit: medicine.unit || 'Hộp',
         batches: allocatedBatches
       });
