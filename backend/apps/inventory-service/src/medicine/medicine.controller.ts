@@ -36,6 +36,16 @@ export class MedicineController {
     }
   }
 
+  @MessagePattern('inventory.medicine.update_price_tiers')
+  async updateMedicinePriceTiers(@Payload() data: { id: string; priceTiers: { minQuantity: number; price: number }[] }) {
+    try {
+      return await this.medicineService.updateMedicinePriceTiers(data.id, data.priceTiers);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật giá sỉ bậc thang');
+    }
+  }
+
   @MessagePattern('inventory.medicine.get_filters')
   async getMedicineFilters() {
     try {
@@ -73,6 +83,66 @@ export class MedicineController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy chi tiết danh sách thuốc');
+    }
+  }
+
+  @MessagePattern('inventory.check.create')
+  async createInventoryCheck(@Payload() data: any) {
+    try {
+      return await this.medicineService.createInventoryCheck(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tạo biên bản kiểm kê');
+    }
+  }
+
+  @MessagePattern('inventory.check.list')
+  async listInventoryChecks() {
+    try {
+      return await this.medicineService.listInventoryChecks();
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách biên bản kiểm kê');
+    }
+  }
+
+  @MessagePattern('inventory.check.get_by_id')
+  async getInventoryCheckById(@Payload() data: { id: string }) {
+    try {
+      return await this.medicineService.getInventoryCheckById(data.id);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy chi tiết biên bản kiểm kê');
+    }
+  }
+
+  @MessagePattern('inventory.check.complete')
+  async completeInventoryCheck(@Payload() data: { id: string }) {
+    try {
+      return await this.medicineService.completeInventoryCheck(data.id);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi hoàn tất biên bản kiểm kê');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.low_stock_report')
+  async getLowStockReport() {
+    try {
+      return await this.medicineService.getLowStockReport();
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy báo cáo thuốc sắp hết hàng');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.dropdown_list')
+  async getMedicinesDropdown() {
+    try {
+      return await this.medicineService.getMedicinesDropdown();
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách chọn thuốc');
     }
   }
 }

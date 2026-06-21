@@ -23,7 +23,7 @@
     "start:inventory": "npx ts-node --transpile-only -r tsconfig-paths/register apps/inventory-service/src/main.ts",
     "start:supplier": "npx ts-node --transpile-only -r tsconfig-paths/register apps/supplier-service/src/main.ts",
     "start:orders": "npx ts-node --transpile-only -r tsconfig-paths/register apps/orders-service/src/main.ts",
-    "dev:all": "npx concurrently \"npm run start:gateway\" \"npm run start:auth\" \"npm run start:user\" \"npm run start:inventory\" \"npm run start:supplier\" \"npm run start:orders\"",
+    "dev:all": "npx concurrently --kill-others \"npm run start:gateway\" \"npm run start:auth\" \"npm run start:user\" \"npm run start:inventory\" \"npm run start:supplier\" \"npm run start:orders\"",
     "inspect": "ts-node --transpile-only scripts/inspect-db.ts",
     "db:clean-medicines": "ts-node --transpile-only scripts/clean-medicines.ts",
     "db:seed-prescriptions": "ts-node --transpile-only scripts/seed-prescriptions.ts",

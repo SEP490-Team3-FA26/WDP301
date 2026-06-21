@@ -494,4 +494,75 @@ export class PurchaseService {
 
     return { data, total, page, limit };
   }
+
+  async getImportExportReport(query: { startDate?: string; endDate?: string }) {
+    this.logger.log(`Generating Import/Export/Current Stock Report. Range: ${query.startDate} to ${query.endDate}`);
+
+    const start = query.startDate ? new Date(query.startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const end = query.endDate ? new Date(query.endDate) : new Date();
+
+    const medicines = await this.medicineModel.find().select('name unit price category').lean().exec();
+
+    const batches = await this.batchModel.find().select('medicineId stock').lean().exec();
+    const currentStockByMedicine = new Map<string, number>();
+    for (const batch of batches) {
+      const current = currentStockByMedicine.get(batch.medicineId) || 0;
+      currentStockByMedicine.set(batch.medicineId, current + batch.stock);
+    }
+
+    const transactionsInPeriod = await this.txnModel.find({
+      createdAt: { $gte: start, $lte: end }
+    }).select('medicineId type quantityChange').lean().exec();
+
+    const transactionsToNow = await this.txnModel.find({
+      createdAt: { $gte: start }
+    }).select('medicineId quantityChange').lean().exec();
+
+    const backtrackOffset = new Map<string, number>();
+    for (const txn of transactionsToNow) {
+      const offset = backtrackOffset.get(txn.medicineId) || 0;
+      backtrackOffset.set(txn.medicineId, offset + txn.quantityChange);
+    }
+
+    const periodImports = new Map<string, number>();
+    const periodExports = new Map<string, number>();
+
+    for (const txn of transactionsInPeriod) {
+      if (txn.quantityChange > 0) {
+        const imp = periodImports.get(txn.medicineId) || 0;
+        periodImports.set(txn.medicineId, imp + txn.quantityChange);
+      } else if (txn.quantityChange < 0) {
+        const exp = periodExports.get(txn.medicineId) || 0;
+        periodExports.set(txn.medicineId, exp + Math.abs(txn.quantityChange));
+      }
+    }
+
+    const report = medicines.map((med) => {
+      const medId = med._id.toString();
+      const current = currentStockByMedicine.get(medId) || 0;
+      const offset = backtrackOffset.get(medId) || 0;
+      
+      const opening = current - offset;
+
+      const imported = periodImports.get(medId) || 0;
+      const exported = periodExports.get(medId) || 0;
+      
+      const closing = opening + imported - exported;
+
+      return {
+        medicineId: medId,
+        medicineName: med.name,
+        category: med.category || 'Chưa phân loại',
+        unit: med.unit || 'Hộp',
+        price: med.price || 0,
+        openingStock: opening >= 0 ? opening : 0,
+        imported,
+        exported,
+        closingStock: closing >= 0 ? closing : 0,
+        currentStock: current,
+      };
+    });
+
+    return report;
+  }
 }

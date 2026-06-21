@@ -153,4 +153,13 @@ export class PurchaseController {
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy nhật ký biến động kho');
     }
   }
+
+  @MessagePattern('inventory.reports.import_export')
+  async getImportExportReport(@Payload() query: { startDate?: string; endDate?: string }) {
+    try {
+      return await this.purchaseService.getImportExportReport(query);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy báo cáo nhập xuất tồn');
+    }
+  }
 }
