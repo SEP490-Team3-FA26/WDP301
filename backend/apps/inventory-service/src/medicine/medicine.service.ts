@@ -123,6 +123,14 @@ export class MedicineService {
     search?: string;
     category?: string;
     classification?: string;
+    targetGroup?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    flavour?: string;
+    country?: string;
+    brand?: string;
+    indication?: string;
+    brandOrigin?: string;
   }) {
     try {
       console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', query);
@@ -131,7 +139,54 @@ export class MedicineService {
       const search = query.search || '';
       const category = query.category || '';
       const classification = query.classification || '';
+      const targetGroup = query.targetGroup || '';
+      const minPrice = query.minPrice;
+      const maxPrice = query.maxPrice;
+      const flavour = query.flavour || '';
+      const country = query.country || '';
+      const brand = query.brand || '';
+      const indication = query.indication || '';
+      const brandOrigin = query.brandOrigin || '';
       const skip = (page - 1) * limit;
+
+      // Construct standard filter conditions
+      const conditions: any[] = [];
+      if (category) conditions.push({ category });
+      if (classification) conditions.push({ drug_classification: classification });
+      if (targetGroup) {
+        conditions.push({ 'thong_tin_chi_tiet.Đối tượng sử dụng': { $regex: targetGroup, $options: 'i' } });
+      }
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        const priceCond: any = {};
+        if (minPrice !== undefined) priceCond.$gte = minPrice;
+        if (maxPrice !== undefined) priceCond.$lte = maxPrice;
+        conditions.push({ price: priceCond });
+      }
+      if (flavour) {
+        conditions.push({ 'thong_tin_chi_tiet.Mùi vị/ Mùi hương': { $regex: flavour, $options: 'i' } });
+      }
+      if (country) {
+        conditions.push({ 'thong_tin_chi_tiet.Nước sản xuất': { $regex: country, $options: 'i' } });
+      }
+      if (brand) {
+        conditions.push({
+          $or: [
+            { manufacturer: { $regex: brand, $options: 'i' } },
+            { 'thong_tin_chi_tiet.Nhà sản xuất': { $regex: brand, $options: 'i' } }
+          ]
+        });
+      }
+      if (indication) {
+        conditions.push({
+          $or: [
+            { cong_dung: { $regex: indication, $options: 'i' } },
+            { 'thong_tin_chi_tiet.Chỉ định': { $regex: indication, $options: 'i' } }
+          ]
+        });
+      }
+      if (brandOrigin) {
+        conditions.push({ 'thong_tin_chi_tiet.Xuất xứ thương hiệu': { $regex: brandOrigin, $options: 'i' } });
+      }
 
       if (search) {
         // AI SERVICE VECTOR SEARCH with Mongoose fallback
@@ -149,10 +204,49 @@ export class MedicineService {
             useFallback = true;
           } else {
             const resJson = await response.json();
-            const aiData = resJson.data || [];
-            aiTotal = resJson.total || aiData.length;
+            let aiData = resJson.data || [];
 
-            if (aiData.length === 0) {
+            // Apply advanced filters in-memory on aiData
+            if (targetGroup || minPrice !== undefined || maxPrice !== undefined || flavour || country || brand || indication || brandOrigin) {
+              aiData = aiData.filter((med: any) => {
+                if (targetGroup) {
+                  const val = med.thong_tin_chi_tiet?.['Đối tượng sử dụng'] || '';
+                  if (!new RegExp(targetGroup, 'i').test(val)) return false;
+                }
+                if (minPrice !== undefined && med.price < minPrice) return false;
+                if (maxPrice !== undefined && med.price > maxPrice) return false;
+                if (flavour) {
+                  const val = med.thong_tin_chi_tiet?.['Mùi vị/ Mùi hương'] || '';
+                  if (!new RegExp(flavour, 'i').test(val)) return false;
+                }
+                if (country) {
+                  const val = med.thong_tin_chi_tiet?.['Nước sản xuất'] || '';
+                  if (!new RegExp(country, 'i').test(val)) return false;
+                }
+                if (brand) {
+                  const val1 = med.manufacturer || '';
+                  const val2 = med.thong_tin_chi_tiet?.['Nhà sản xuất'] || '';
+                  if (!new RegExp(brand, 'i').test(val1) && !new RegExp(brand, 'i').test(val2)) return false;
+                }
+                if (indication) {
+                  const val1 = med.cong_dung || '';
+                  const val2 = med.thong_tin_chi_tiet?.['Chỉ định'] || '';
+                  if (!new RegExp(indication, 'i').test(val1) && !new RegExp(indication, 'i').test(val2)) return false;
+                }
+                if (brandOrigin) {
+                  const val = med.thong_tin_chi_tiet?.['Xuất xứ thương hiệu'] || '';
+                  if (!new RegExp(brandOrigin, 'i').test(val)) return false;
+                }
+                return true;
+              });
+            }
+
+            aiTotal = resJson.total !== undefined ? resJson.total : aiData.length;
+            if (targetGroup || minPrice !== undefined || maxPrice !== undefined || flavour || country || brand || indication || brandOrigin) {
+              aiTotal = aiData.length;
+            }
+
+            if (aiData.length === 0 && !targetGroup && minPrice === undefined && maxPrice === undefined && !flavour && !country && !brand && !indication && !brandOrigin) {
               useFallback = true;
             } else {
               // Truy vấn lô hàng cho các kết quả từ AI Service
@@ -197,7 +291,6 @@ export class MedicineService {
                     stock: b.stock,
                     status: b.status,
                   })),
-                  // Các field chi tiết được load riêng qua API /medicines/:id
                 };
               });
             }
@@ -210,13 +303,14 @@ export class MedicineService {
         if (useFallback) {
           this.logger.log(`Executing fallback Mongoose regex search for "${search}"`);
           const filterQuery: any = {};
-          if (category) filterQuery.category = category;
-          if (classification) filterQuery.drug_classification = classification;
-
-          filterQuery.$or = [
-            { name: { $regex: search, $options: 'i' } },
-            { active_ingredient: { $regex: search, $options: 'i' } }
-          ];
+          const conditionsCopy = [...conditions];
+          conditionsCopy.push({
+            $or: [
+              { name: { $regex: search, $options: 'i' } },
+              { active_ingredient: { $regex: search, $options: 'i' } }
+            ]
+          });
+          filterQuery.$and = conditionsCopy;
 
           const [data, total] = await Promise.all([
             this.medicineModel.find(filterQuery).select('-thong_tin_chi_tiet -cong_dung -luu_y -cach_dung').skip(skip).limit(Number(limit)).lean().exec(),
@@ -265,7 +359,6 @@ export class MedicineService {
                 stock: b.stock,
                 status: b.status,
               })),
-              // Các field chi tiết được load riêng qua API /medicines/:id
             };
           });
 
@@ -286,8 +379,9 @@ export class MedicineService {
       } else {
         // MONGOOSE SCROLL (Default View)
         const filterQuery: any = {};
-        if (category) filterQuery.category = category;
-        if (classification) filterQuery.drug_classification = classification;
+        if (conditions.length > 0) {
+          filterQuery.$and = conditions;
+        }
 
         const [data, total] = await Promise.all([
           this.medicineModel.find(filterQuery).select('-thong_tin_chi_tiet -cong_dung -luu_y -cach_dung').skip(skip).limit(Number(limit)).lean().exec(),
@@ -337,7 +431,6 @@ export class MedicineService {
               stock: b.stock,
               status: b.status,
             })),
-            // Các field chi tiết được load riêng qua API /medicines/:id
           };
         });
 

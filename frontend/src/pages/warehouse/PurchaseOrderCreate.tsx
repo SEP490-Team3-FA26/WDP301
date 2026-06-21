@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, AlertTriangle, Search, Plus, Trash2, CheckCircle2, PackagePlus, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
+import { supplierService } from "../../services/supplier.service";
+import { medicineService } from "../../services/medicine.service";
+import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
+import { purchaseOrderService } from "../../services/purchaseOrder.service";
 
 export function PurchaseOrderCreate() {
   const navigate = useNavigate();
@@ -331,12 +335,14 @@ export function PurchaseOrderCreate() {
                   setIsSubmitting(true);
                   setErrorMsg(null);
                   try {
-                    const res = await fetch('/api/purchase-orders/auto-route', {
+                     const res = await fetch('/api/purchase-orders', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
+                        supplierId: selectedSupplierId,
                         items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
-                        prIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
+                        linkedPrId: cart[0]?.prId || "",
+                        requisitionIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
                       })
                     });
                     const resData = await res.json();
@@ -353,7 +359,7 @@ export function PurchaseOrderCreate() {
                     setIsSubmitting(false);
                   }
                 }}
-                disabled={cart.length === 0 || isSubmitting}
+                disabled={cart.length === 0 || isSubmitting || isGdpExpired}
                 className={`w-full py-3.5 font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm
                   ${cart.length > 0 && !isSubmitting
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white'

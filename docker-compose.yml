@@ -43,6 +43,7 @@ services:
   backend:
     image: node:20-alpine
     container_name: wdp301-backend
+    restart: on-failure
     working_dir: /app
     volumes:
       - ./backend:/app
