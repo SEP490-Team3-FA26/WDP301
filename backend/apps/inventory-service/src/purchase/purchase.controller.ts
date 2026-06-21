@@ -168,12 +168,30 @@ export class PurchaseController {
   // ===========================================================================================
 
   @MessagePattern('inventory.transfer.create')
-  async createStockTransfer(@Payload() data: { prId: string; shippedBy: string }) {
+  async createStockTransfer(@Payload() data: { prId: string; shippedBy: string; fromBranchId?: string }) {
     try {
       return await this.purchaseService.createStockTransfer(data);
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi tạo phiếu chuyển kho');
+    }
+  }
+
+  @MessagePattern('inventory.transfer.create_direct')
+  async createDirectStockTransfer(
+    @Payload() data: {
+      fromBranchId: string;
+      toBranchId: string;
+      toBranchName: string;
+      shippedBy: string;
+      items: { medicineId: string; medicineName: string; quantity: number; unit?: string }[];
+    }
+  ) {
+    try {
+      return await this.purchaseService.createDirectStockTransfer(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tạo chuyển kho trực tiếp');
     }
   }
 

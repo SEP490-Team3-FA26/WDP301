@@ -23,3 +23,7 @@ export class MedicineBatch extends Document {
 }
 
 export const MedicineBatchSchema = SchemaFactory.createForClass(MedicineBatch);
+
+// đánh chỉ mục - tăng tốc độ read database
+MedicineBatchSchema.index({ branchId: 1, status: 1, stock: 1, medicineId: 1 });
+

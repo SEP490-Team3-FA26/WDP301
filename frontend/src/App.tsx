@@ -50,6 +50,9 @@ import { HQApproval } from "./pages/admin/HQApproval";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
+import { BranchStockReceive } from "./pages/branch/BranchStockReceive";
+import { BranchInventory } from "./pages/branch/BranchInventory";
+import { BranchTransfer } from "./pages/branch/BranchTransfer";
 
 // Pharmacist / Branch Pages
 import { Sales } from "./pages/pharmacist/Sales";
@@ -144,6 +147,9 @@ export default function App() {
             <Route index element={<DashboardHome />} />
             <Route path="sales" element={<Sales />} />
             <Route path="requisitions" element={<BranchRequisition />} />
+            <Route path="receive-transfers" element={<BranchStockReceive />} />
+            <Route path="inventory" element={<BranchInventory />} />
+            <Route path="transfers" element={<BranchTransfer />} />
             <Route path="finance" element={<Finance />} />
             <Route path="reports" element={<Reports />} />
             <Route path="profile" element={<Profile />} />

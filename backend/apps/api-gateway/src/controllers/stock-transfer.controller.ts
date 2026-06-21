@@ -11,6 +11,7 @@ export class StockTransferController implements OnModuleInit {
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
       'inventory.transfer.create',
+      'inventory.transfer.create_direct',
       'inventory.transfer.receive',
       'inventory.transfer.list',
       'inventory.transfer.get_by_id',
@@ -18,8 +19,21 @@ export class StockTransferController implements OnModuleInit {
   }
 
   @Post()
-  async createStockTransfer(@Body() data: { prId: string; shippedBy: string }) {
+  async createStockTransfer(@Body() data: { prId: string; shippedBy: string; fromBranchId?: string }) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.transfer.create', data);
+  }
+
+  @Post('direct')
+  async createDirectStockTransfer(
+    @Body() data: {
+      fromBranchId: string;
+      toBranchId: string;
+      toBranchName: string;
+      shippedBy: string;
+      items: { medicineId: string; medicineName: string; quantity: number; unit?: string }[];
+    }
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.transfer.create_direct', data);
   }
 
   @Post(':id/receive')

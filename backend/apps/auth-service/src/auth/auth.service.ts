@@ -101,6 +101,7 @@ export class AuthService {
       email: userFromDb.email,
       role: userFromDb.role,
       fullName: userFromDb.fullName,
+      branchId: userFromDb.branchId || null,
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -112,6 +113,7 @@ export class AuthService {
         email: userFromDb.email,
         fullName: userFromDb.fullName,
         role: userFromDb.role,
+        branchId: userFromDb.branchId || null,
       },
     };
   }
@@ -121,7 +123,7 @@ export class AuthService {
   // ============================================================
   async googleLogin(profile: any): Promise<{
     access_token: string;
-    user: { id: string; email: string; fullName: string; role: string };
+    user: { id: string; email: string; fullName: string; role: string; branchId?: string };
   }> {
     const { email, fullName } = profile;
 
@@ -150,6 +152,7 @@ export class AuthService {
       email: userFromDb.email,
       role: userFromDb.role,
       fullName: userFromDb.fullName,
+      branchId: userFromDb.branchId || null,
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -161,6 +164,7 @@ export class AuthService {
         email: userFromDb.email,
         fullName: userFromDb.fullName,
         role: userFromDb.role,
+        branchId: userFromDb.branchId || null,
       },
     };
   }

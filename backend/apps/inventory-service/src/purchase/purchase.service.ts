@@ -506,114 +506,146 @@ export class PurchaseService {
   /**
    * Tạo phiếu chuyển kho từ Kho Tổng (CENTRAL_WH) gửi đi Chi nhánh
    */
-  async createStockTransfer(data: { prId: string; shippedBy: string }) {
-    this.logger.log(`Creating Stock Transfer for PR: ${data.prId}`);
+  async createStockTransfer(data: { prId: string; shippedBy: string; fromBranchId?: string }) {
+    const fromBranchId = data.fromBranchId || 'CENTRAL_WH';
+    const sourceName = fromBranchId === 'CENTRAL_WH' ? 'Kho Tổng' : `Chi nhánh ${fromBranchId}`;
+    this.logger.log(`Creating Stock Transfer for PR: ${data.prId} from source: ${sourceName}`);
 
-    const pr = await this.prModel.findById(data.prId).exec();
-    if (!pr) {
-      throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${data.prId}` });
-    }
+    const session = await this.batchModel.db.startSession();
+    session.startTransaction();
 
-    if (['APPROVED', 'REJECTED', 'CANCELLED'].includes(pr.status)) {
-      throw new RpcException({
-        message: `Phiếu yêu cầu PR đang ở trạng thái "${pr.status}", không thể tạo phiếu chuyển kho.`,
-      });
-    }
+    try {
+      const pr = await this.prModel.findById(data.prId).session(session).exec();
+      if (!pr) {
+        throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${data.prId}` });
+      }
 
-    const allocatedItems = [];
-    const transactionsToSave = [];
-
-    // Kiểm định và trừ tồn kho tại Kho Tổng
-    for (const item of pr.items) {
-      const batches = await this.batchModel.find({
-        medicineId: item.medicineId,
-        branchId: 'CENTRAL_WH',
-        status: 'ACTIVE',
-        stock: { $gt: 0 },
-      }).sort({ expDate: 1 }).exec(); // FEFO: First Expiry First Out
-
-      const totalAvailable = batches.reduce((sum, b) => sum + b.stock, 0);
-      if (totalAvailable < item.requestedQuantity) {
+      if (['APPROVED', 'REJECTED', 'CANCELLED'].includes(pr.status)) {
         throw new RpcException({
-          message: `Không đủ tồn kho tại Kho Tổng cho thuốc "${item.medicineName}" (Yêu cầu: ${item.requestedQuantity}, Khả dụng: ${totalAvailable})`,
+          message: `Phiếu yêu cầu PR đang ở trạng thái "${pr.status}", không thể tạo phiếu chuyển kho.`,
         });
       }
 
-      let needed = item.requestedQuantity;
-      for (const batch of batches) {
-        if (needed <= 0) break;
-        const deductQty = Math.min(batch.stock, needed);
+      const allocatedItems = [];
+      const transactionsToSave = [];
 
-        const stockBefore = batch.stock;
-        batch.stock -= deductQty;
-        await batch.save();
-
-        allocatedItems.push({
+      // Kiểm định và trừ tồn kho tại Kho nguồn (fromBranchId)
+      for (const item of pr.items) {
+        const batches = await this.batchModel.find({
           medicineId: item.medicineId,
-          medicineName: item.medicineName,
-          batchNo: batch.batchNo,
-          quantity: deductQty,
-          unit: item.unit || 'Hộp',
-        });
+          branchId: fromBranchId,
+          status: 'ACTIVE',
+          stock: { $gt: 0 },
+        }).sort({ expDate: 1 }).session(session).exec(); // FEFO: First Expiry First Out
 
-        // Chuẩn bị transaction log (Xuất chuyển kho: âm)
-        transactionsToSave.push({
-          type: 'TRANSFER',
-          medicineId: item.medicineId,
-          medicineName: item.medicineName,
-          batchNo: batch.batchNo,
-          quantityChange: -deductQty,
-          stockBefore,
-          stockAfter: stockBefore - deductQty,
-          referenceType: 'TRANSFER_OUT',
-          performedBy: data.shippedBy || 'Kho Tổng',
-          notes: `Xuất kho chuyển nội bộ đến chi nhánh ${pr.branchName} (${pr.branchId})`,
-        });
+        const totalAvailable = batches.reduce((sum, b) => sum + b.stock, 0);
+        if (totalAvailable < item.requestedQuantity) {
+          throw new RpcException({
+            message: `Không đủ tồn kho tại ${sourceName} cho thuốc "${item.medicineName}" (Yêu cầu: ${item.requestedQuantity}, Khả dụng: ${totalAvailable})`,
+          });
+        }
 
-        needed -= deductQty;
+        let needed = item.requestedQuantity;
+        for (const batch of batches) {
+          if (needed <= 0) break;
+          const deductQty = Math.min(batch.stock, needed);
+
+          const stockBefore = batch.stock;
+          
+          // Sử dụng OCC / Atomic Update để trừ tồn kho an toàn chống Race Condition
+          const updatedBatch = await this.batchModel.findOneAndUpdate(
+            {
+              _id: batch._id,
+              stock: { $gte: deductQty }
+            },
+            {
+              $inc: { stock: -deductQty }
+            },
+            { new: true, session }
+          ).exec();
+
+          if (!updatedBatch) {
+            throw new RpcException({
+              message: `Lỗi tranh chấp tồn kho (Race Condition) khi trừ kho thuốc "${item.medicineName}" tại lô ${batch.batchNo}. Vui lòng thử lại.`,
+            });
+          }
+
+          allocatedItems.push({
+            medicineId: item.medicineId,
+            medicineName: item.medicineName,
+            batchNo: batch.batchNo,
+            quantity: deductQty,
+            unit: item.unit || 'Hộp',
+          });
+
+          // Chuẩn bị transaction log (Xuất chuyển kho: âm)
+          transactionsToSave.push({
+            type: 'TRANSFER',
+            medicineId: item.medicineId,
+            medicineName: item.medicineName,
+            batchNo: batch.batchNo,
+            quantityChange: -deductQty,
+            stockBefore,
+            stockAfter: stockBefore - deductQty,
+            referenceType: 'TRANSFER_OUT',
+            performedBy: data.shippedBy || sourceName,
+            notes: `Xuất chuyển kho nội bộ từ ${sourceName} đến chi nhánh ${pr.branchName} (${pr.branchId})`,
+          });
+
+          needed -= deductQty;
+        }
       }
+
+      // Tạo mã chuyển kho ST-YYYYMMDD-XXXX
+      const today = new Date();
+      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+      const count = await this.transferModel.countDocuments({
+        createdAt: {
+          $gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+          $lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
+        },
+      }).session(session);
+      const transferCode = `ST-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+
+      const transfer = new this.transferModel({
+        transferCode,
+        prId: pr._id.toString(),
+        prCode: pr.prCode,
+        fromBranchId: fromBranchId,
+        toBranchId: pr.branchId,
+        toBranchName: pr.branchName,
+        items: allocatedItems,
+        status: 'SHIPPING',
+        shippedBy: data.shippedBy || sourceName,
+        shippedAt: new Date(),
+      });
+      await transfer.save({ session });
+
+      // Lưu các transaction logs với referenceId chính xác
+      for (const txn of transactionsToSave) {
+        txn.referenceId = transfer._id.toString();
+        await new this.txnModel(txn).save({ session });
+      }
+
+      // Cập nhật trạng thái PR sang APPROVED
+      pr.status = 'APPROVED';
+      await pr.save({ session });
+
+      await session.commitTransaction();
+
+      return {
+        success: true,
+        message: `Đã xuất kho tại ${sourceName} và tạo phiếu chuyển kho ${transferCode} thành công.`,
+        data: transfer,
+      };
+    } catch (error) {
+      await session.abortTransaction();
+      this.logger.error(`Error in createStockTransfer: ${error.message}`);
+      if (error instanceof RpcException) throw error;
+      throw new RpcException({ message: error.message || 'Lỗi hệ thống khi chuyển kho' });
+    } finally {
+      session.endSession();
     }
-
-    // Tạo mã chuyển kho ST-YYYYMMDD-XXXX
-    const today = new Date();
-    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-    const count = await this.transferModel.countDocuments({
-      createdAt: {
-        $gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        $lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
-      },
-    });
-    const transferCode = `ST-${dateStr}-${String(count + 1).padStart(4, '0')}`;
-
-    const transfer = new this.transferModel({
-      transferCode,
-      prId: pr._id.toString(),
-      prCode: pr.prCode,
-      fromBranchId: 'CENTRAL_WH',
-      toBranchId: pr.branchId,
-      toBranchName: pr.branchName,
-      items: allocatedItems,
-      status: 'SHIPPING',
-      shippedBy: data.shippedBy || 'Kho Tổng',
-      shippedAt: new Date(),
-    });
-    await transfer.save();
-
-    // Lưu các transaction logs với referenceId chính xác
-    for (const txn of transactionsToSave) {
-      txn.referenceId = transfer._id.toString();
-      await new this.txnModel(txn).save();
-    }
-
-    // Cập nhật trạng thái PR sang SHIPPING_TO_BRANCH hoặc tương đương
-    pr.status = 'APPROVED'; // Mark approved as it has been fulfilled and dispatched
-    await pr.save();
-
-    return {
-      success: true,
-      message: `Đã xuất kho tổng và tạo phiếu chuyển kho ${transferCode} thành công.`,
-      data: transfer,
-    };
   }
 
   /**
@@ -622,75 +654,102 @@ export class PurchaseService {
   async confirmStockTransferReceipt(data: { transferId: string; receivedBy: string }) {
     this.logger.log(`Confirming stock transfer receipt for ID: ${data.transferId}`);
 
-    const transfer = await this.transferModel.findById(data.transferId).exec();
-    if (!transfer) {
-      throw new RpcException({ message: `Không tìm thấy phiếu chuyển kho: ${data.transferId}` });
-    }
+    const session = await this.batchModel.db.startSession();
+    session.startTransaction();
 
-    if (transfer.status !== 'SHIPPING') {
-      throw new RpcException({
-        message: `Phiếu chuyển kho đang ở trạng thái "${transfer.status}", không thể xác nhận nhận hàng.`,
-      });
-    }
+    try {
+      const transfer = await this.transferModel.findById(data.transferId).session(session).exec();
+      if (!transfer) {
+        throw new RpcException({ message: `Không tìm thấy phiếu chuyển kho: ${data.transferId}` });
+      }
 
-    // Nhập hàng vào kho chi nhánh nhận
-    for (const item of transfer.items) {
-      let branchBatch = await this.batchModel.findOne({
-        medicineId: item.medicineId,
-        branchId: transfer.toBranchId,
-        batchNo: item.batchNo,
-      }).exec();
+      if (transfer.status !== 'SHIPPING') {
+        throw new RpcException({
+          message: `Phiếu chuyển kho đang ở trạng thái "${transfer.status}", không thể xác nhận nhận hàng.`,
+        });
+      }
 
-      let stockBefore = 0;
-      if (branchBatch) {
-        stockBefore = branchBatch.stock;
-        branchBatch.stock += item.quantity;
-        await branchBatch.save();
-      } else {
-        // Tìm lô tương ứng tại Kho Tổng (hoặc bất kỳ kho nào trước đó) để clone expDate
-        const origBatch = await this.batchModel.findOne({
-          medicineId: item.medicineId,
-          batchNo: item.batchNo,
-        }).exec();
-
-        branchBatch = new this.batchModel({
+      // Nhập hàng vào kho chi nhánh nhận
+      for (const item of transfer.items) {
+        let branchBatch = await this.batchModel.findOne({
           medicineId: item.medicineId,
           branchId: transfer.toBranchId,
           batchNo: item.batchNo,
-          expDate: origBatch ? origBatch.expDate : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-          stock: item.quantity,
-          status: 'ACTIVE',
-        });
-        await branchBatch.save();
+        }).session(session).exec();
+
+        let stockBefore = 0;
+        if (branchBatch) {
+          stockBefore = branchBatch.stock;
+          
+          // Sử dụng Atomic update để tăng tồn kho an toàn
+          const updatedBranchBatch = await this.batchModel.findOneAndUpdate(
+            {
+              _id: branchBatch._id
+            },
+            {
+              $inc: { stock: item.quantity }
+            },
+            { new: true, session }
+          ).exec();
+
+          if (!updatedBranchBatch) {
+            throw new RpcException({ message: `Lỗi cập nhật tồn kho chi nhánh cho thuốc ${item.medicineName}` });
+          }
+        } else {
+          // Tìm lô tương ứng tại Kho Tổng (hoặc bất kỳ kho nào trước đó) để clone expDate
+          const origBatch = await this.batchModel.findOne({
+            medicineId: item.medicineId,
+            batchNo: item.batchNo,
+          }).session(session).exec();
+
+          const newBatchObj = new this.batchModel({
+            medicineId: item.medicineId,
+            branchId: transfer.toBranchId,
+            batchNo: item.batchNo,
+            expDate: origBatch ? origBatch.expDate : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            stock: item.quantity,
+            status: 'ACTIVE',
+          });
+          await newBatchObj.save({ session });
+        }
+
+        // Log transaction (Nhập chuyển kho: dương)
+        await new this.txnModel({
+          type: 'TRANSFER',
+          medicineId: item.medicineId,
+          medicineName: item.medicineName,
+          batchNo: item.batchNo,
+          quantityChange: item.quantity,
+          stockBefore,
+          stockAfter: stockBefore + item.quantity,
+          referenceId: transfer._id.toString(),
+          referenceType: 'TRANSFER_IN',
+          performedBy: data.receivedBy || 'Quản lý Chi Nhánh',
+          notes: `Nhập kho chuyển nội bộ nhận từ ${transfer.fromBranchId === 'CENTRAL_WH' ? 'Kho Tổng' : `Chi nhánh ${transfer.fromBranchId}`} (Phiếu chuyển: ${transfer.transferCode})`,
+        }).save({ session });
       }
 
-      // Log transaction (Nhập chuyển kho: dương)
-      await new this.txnModel({
-        type: 'TRANSFER',
-        medicineId: item.medicineId,
-        medicineName: item.medicineName,
-        batchNo: item.batchNo,
-        quantityChange: item.quantity,
-        stockBefore,
-        stockAfter: stockBefore + item.quantity,
-        referenceId: transfer._id.toString(),
-        referenceType: 'TRANSFER_IN',
-        performedBy: data.receivedBy || 'Quản lý Chi Nhánh',
-        notes: `Nhập kho chuyển nội bộ nhận từ Kho Tổng (Phiếu chuyển: ${transfer.transferCode})`,
-      }).save();
+      // Cập nhật trạng thái phiếu chuyển kho
+      transfer.status = 'DELIVERED';
+      transfer.receivedBy = data.receivedBy;
+      transfer.receivedAt = new Date();
+      await transfer.save({ session });
+
+      await session.commitTransaction();
+
+      return {
+        success: true,
+        message: `Đã xác nhận nhận hàng thành công. Tồn kho chi nhánh ${transfer.toBranchName} đã được cập nhật.`,
+        data: transfer,
+      };
+    } catch (error) {
+      await session.abortTransaction();
+      this.logger.error(`Error in confirmStockTransferReceipt: ${error.message}`);
+      if (error instanceof RpcException) throw error;
+      throw new RpcException({ message: error.message || 'Lỗi hệ thống khi xác nhận nhận chuyển kho' });
+    } finally {
+      session.endSession();
     }
-
-    // Cập nhật trạng thái phiếu chuyển kho
-    transfer.status = 'DELIVERED';
-    transfer.receivedBy = data.receivedBy;
-    transfer.receivedAt = new Date();
-    await transfer.save();
-
-    return {
-      success: true,
-      message: `Đã xác nhận nhận hàng thành công. Tồn kho chi nhánh ${transfer.toBranchName} đã được cập nhật.`,
-      data: transfer,
-    };
   }
 
   /**
@@ -783,5 +842,141 @@ export class PurchaseService {
     });
 
     return report;
+  }
+
+  /**
+   * Tạo phiếu chuyển kho liên chi nhánh trực tiếp (Direct Branch-to-Branch Stock Transfer)
+   */
+  async createDirectStockTransfer(data: {
+    fromBranchId: string;
+    toBranchId: string;
+    toBranchName: string;
+    shippedBy: string;
+    items: { medicineId: string; medicineName: string; quantity: number; unit?: string }[];
+  }) {
+    const fromBranchId = data.fromBranchId;
+    const sourceName = fromBranchId === 'CENTRAL_WH' ? 'Kho Tổng' : `Chi nhánh ${fromBranchId}`;
+    this.logger.log(`Creating Direct Stock Transfer from ${sourceName} to branch ${data.toBranchName} (${data.toBranchId})`);
+
+    const session = await this.batchModel.db.startSession();
+    session.startTransaction();
+
+    try {
+      const allocatedItems = [];
+      const transactionsToSave = [];
+
+      // Kiểm định và trừ tồn kho tại Kho nguồn (fromBranchId)
+      for (const item of data.items) {
+        const batches = await this.batchModel.find({
+          medicineId: item.medicineId,
+          branchId: fromBranchId,
+          status: 'ACTIVE',
+          stock: { $gt: 0 },
+        }).sort({ expDate: 1 }).session(session).exec(); // FEFO: First Expiry First Out
+
+        const totalAvailable = batches.reduce((sum, b) => sum + b.stock, 0);
+        if (totalAvailable < item.quantity) {
+          throw new RpcException({
+            message: `Không đủ tồn kho tại ${sourceName} cho thuốc "${item.medicineName || item.medicineId}" (Yêu cầu: ${item.quantity}, Khả dụng: ${totalAvailable})`,
+          });
+        }
+
+        let needed = item.quantity;
+        for (const batch of batches) {
+          if (needed <= 0) break;
+          const deductQty = Math.min(batch.stock, needed);
+
+          const stockBefore = batch.stock;
+          
+          // Sử dụng OCC / Atomic Update để trừ tồn kho an toàn chống Race Condition
+          const updatedBatch = await this.batchModel.findOneAndUpdate(
+            {
+              _id: batch._id,
+              stock: { $gte: deductQty }
+            },
+            {
+              $inc: { stock: -deductQty }
+            },
+            { new: true, session }
+          ).exec();
+
+          if (!updatedBatch) {
+            throw new RpcException({
+              message: `Lỗi tranh chấp tồn kho (Race Condition) khi trừ kho thuốc "${item.medicineName || item.medicineId}" tại lô ${batch.batchNo}. Vui lòng thử lại.`,
+            });
+          }
+
+          allocatedItems.push({
+            medicineId: item.medicineId,
+            medicineName: item.medicineName || '',
+            batchNo: batch.batchNo,
+            quantity: deductQty,
+            unit: item.unit || 'Hộp',
+          });
+
+          // Chuẩn bị transaction log (Xuất chuyển kho: âm)
+          transactionsToSave.push({
+            type: 'TRANSFER',
+            medicineId: item.medicineId,
+            medicineName: item.medicineName || '',
+            batchNo: batch.batchNo,
+            quantityChange: -deductQty,
+            stockBefore,
+            stockAfter: stockBefore - deductQty,
+            referenceType: 'TRANSFER_OUT',
+            performedBy: data.shippedBy || sourceName,
+            notes: `Xuất chuyển kho liên chi nhánh trực tiếp từ ${sourceName} đến chi nhánh ${data.toBranchName}`,
+          });
+
+          needed -= deductQty;
+        }
+      }
+
+      // Tạo mã chuyển kho ST-YYYYMMDD-XXXX
+      const today = new Date();
+      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+      const count = await this.transferModel.countDocuments({
+        createdAt: {
+          $gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+          $lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
+        },
+      }).session(session);
+      const transferCode = `ST-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+
+      const transfer = new this.transferModel({
+        transferCode,
+        prId: 'DIRECT',
+        prCode: 'DIRECT',
+        fromBranchId: fromBranchId,
+        toBranchId: data.toBranchId,
+        toBranchName: data.toBranchName,
+        items: allocatedItems,
+        status: 'SHIPPING',
+        shippedBy: data.shippedBy || sourceName,
+        shippedAt: new Date(),
+      });
+      await transfer.save({ session });
+
+      // Lưu các transaction logs với referenceId chính xác
+      for (const txn of transactionsToSave) {
+        txn.referenceId = transfer._id.toString();
+        await new this.txnModel(txn).save({ session });
+      }
+
+      await session.commitTransaction();
+
+      return {
+        success: true,
+        message: `Đã xuất kho tại ${sourceName} và tạo phiếu chuyển kho trực tiếp ${transferCode} thành công.`,
+        data: transfer,
+      };
+    } catch (error) {
+      await session.abortTransaction();
+      this.logger.error(`Error in createDirectStockTransfer: ${error.message}`);
+      if (error instanceof RpcException) throw error;
+      throw new RpcException({ message: error.message || 'Lỗi hệ thống khi chuyển kho trực tiếp' });
+    } finally {
+      session.endSession();
+    }
   }
 }

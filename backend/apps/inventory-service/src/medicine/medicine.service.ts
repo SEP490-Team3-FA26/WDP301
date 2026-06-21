@@ -217,6 +217,7 @@ export class MedicineService implements OnModuleInit {
     brand?: string;
     indication?: string;
     brandOrigin?: string;
+    branchId?: string;
   }) {
     try {
       console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', query);
@@ -274,6 +275,17 @@ export class MedicineService implements OnModuleInit {
         conditions.push({ 'thong_tin_chi_tiet.Xuất xứ thương hiệu': { $regex: brandOrigin, $options: 'i' } });
       }
 
+      let branchMedicineIds = null;
+      if (query.branchId) {
+        const activeBranchBatches = await this.batchModel.find({
+          branchId: query.branchId,
+          status: 'ACTIVE',
+          stock: { $gt: 0 }
+        }).distinct('medicineId').exec();
+        branchMedicineIds = activeBranchBatches.map(id => id.toString());
+        conditions.push({ _id: { $in: branchMedicineIds } });
+      }
+
       if (search) {
         // AI SERVICE VECTOR SEARCH with Mongoose fallback
         let aiServiceUrl = `http://ai-service:8000/api/ai/medicines?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`;
@@ -327,6 +339,13 @@ export class MedicineService implements OnModuleInit {
               });
             }
 
+            if (branchMedicineIds) {
+              aiData = aiData.filter((med: any) => {
+                const medId = (med._id || med.id || '').toString();
+                return branchMedicineIds.includes(medId);
+              });
+            }
+
             aiTotal = resJson.total !== undefined ? resJson.total : aiData.length;
             if (targetGroup || minPrice !== undefined || maxPrice !== undefined || flavour || country || brand || indication || brandOrigin) {
               aiTotal = aiData.length;
@@ -337,7 +356,11 @@ export class MedicineService implements OnModuleInit {
             } else {
               // Truy vấn lô hàng cho các kết quả từ AI Service
               const aiMedIds = aiData.map((med: any) => (med._id || med.id || '').toString()).filter(id => id);
-              const aiBatches = await this.batchModel.find({ medicineId: { $in: aiMedIds } }).lean().exec();
+              const batchFilter: any = { medicineId: { $in: aiMedIds } };
+              if (query.branchId) {
+                batchFilter.branchId = query.branchId;
+              }
+              const aiBatches = await this.batchModel.find(batchFilter).lean().exec();
               const aiBatchesByMedId = new Map<string, any[]>();
               for (const batch of aiBatches) {
                 const list = aiBatchesByMedId.get(batch.medicineId) || [];
@@ -349,7 +372,7 @@ export class MedicineService implements OnModuleInit {
                 const medId = (med._id || med.id || '').toString();
                 const medBatches = aiBatchesByMedId.get(medId) || [];
                 const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-                const totalStock = med.stock || 0;
+                const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + b.stock, 0) : (med.stock || 0);
 
                 let earliestExpiryStr = '2026-12-31';
                 if (activeBatches.length > 0) {
@@ -405,7 +428,11 @@ export class MedicineService implements OnModuleInit {
           ]);
 
           const medIds = data.map(med => med._id.toString());
-          const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).lean().exec();
+          const batchFilter: any = { medicineId: { $in: medIds } };
+          if (query.branchId) {
+            batchFilter.branchId = query.branchId;
+          }
+          const allBatches = await this.batchModel.find(batchFilter).lean().exec();
 
           const batchesByMedId = new Map<string, any[]>();
           for (const batch of allBatches) {
@@ -418,7 +445,7 @@ export class MedicineService implements OnModuleInit {
             const medId = med._id.toString();
             const medBatches = batchesByMedId.get(medId) || [];
             const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-            const totalStock = med.stock || 0;
+            const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + b.stock, 0) : (med.stock || 0);
 
             let earliestExpiryStr = '2026-12-31';
             if (activeBatches.length > 0) {
@@ -478,7 +505,11 @@ export class MedicineService implements OnModuleInit {
 
         // Truy vấn lô hàng cho toàn bộ danh sách kết quả hiển thị
         const medIds = data.map(med => med._id.toString());
-        const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).lean().exec();
+        const batchFilter: any = { medicineId: { $in: medIds } };
+        if (query.branchId) {
+          batchFilter.branchId = query.branchId;
+        }
+        const allBatches = await this.batchModel.find(batchFilter).lean().exec();
 
         const batchesByMedId = new Map<string, any[]>();
         for (const batch of allBatches) {
@@ -491,7 +522,7 @@ export class MedicineService implements OnModuleInit {
           const medId = med._id.toString();
           const medBatches = batchesByMedId.get(medId) || [];
           const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-          const totalStock = med.stock || 0;
+          const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + b.stock, 0) : (med.stock || 0);
 
           let earliestExpiryStr = '2026-12-31';
           if (activeBatches.length > 0) {
