@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Trash2, Search, ShieldAlert, ShieldCheck, AlertTriangle, Info, Bot, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { medicineService } from "../../services/medicine.service";
 
 interface InteractionResult {
   has_interactions: boolean;
@@ -49,17 +50,7 @@ export function DrugInteractions() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/medicines/check-interaction", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ medicines: validMedicines })
-      });
-
-      if (!response.ok) {
-        throw new Error("Lỗi khi kết nối đến hệ thống AI");
-      }
-
-      const data = await response.json();
+      const data = await medicineService.checkInteraction(validMedicines);
       setResult(data);
     } catch (err: any) {
       setError(err.message || "Đã xảy ra lỗi không xác định.");

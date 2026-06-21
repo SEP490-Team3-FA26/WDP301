@@ -13,8 +13,7 @@ export class PurchaseRequisitionController implements OnModuleInit {
       'inventory.pr.create',
       'inventory.pr.list',
       'inventory.pr.get_by_id',
-      'inventory.pr.consolidate',
-      'inventory.pr.approve',
+      'inventory.pr.process_urgent',
     ]);
   }
 
@@ -42,21 +41,10 @@ export class PurchaseRequisitionController implements OnModuleInit {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.get_by_id', { id });
   }
 
-  /**
-   * BƯỚC 2a: Quản lý kho gom đơn (Consolidate)
-   * Body: { prIds: ['id1', 'id2', ...], consolidatedBy?: 'user_id' }
-   */
-  @Post('consolidate')
-  async consolidatePurchaseRequisitions(@Body() data: any) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.consolidate', data);
-  }
 
-  /**
-   * BƯỚC 2b: HQ phê duyệt / từ chối
-   * Body: { prIds: ['id1', 'id2'], action: 'APPROVE' | 'REJECT', approvedBy?: 'user_id', rejectionReason?: '...' }
-   */
-  @Post('approve')
-  async approvePurchaseRequisitions(@Body() data: any) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.approve', data);
+
+  @Post('process-urgent')
+  async processUrgentPurchaseRequisitions(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.process_urgent', data);
   }
 }

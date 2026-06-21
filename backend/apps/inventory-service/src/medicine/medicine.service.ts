@@ -4,6 +4,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Medicine } from './schemas/medicine.schema';
 import { MedicineBatch } from './schemas/medicine-batch.schema';
+import { InventoryCheck } from './schemas/inventory-check.schema';
+import { InventoryTransaction } from '../purchase/schemas/inventory-transaction.schema';
 
 @Injectable()
 export class MedicineService {
@@ -12,6 +14,8 @@ export class MedicineService {
   constructor(
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
+    @InjectModel(InventoryCheck.name) private readonly checkModel: Model<InventoryCheck>,
+    @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
   ) { }
 
   async getMedicineFilters() {
@@ -117,12 +121,44 @@ export class MedicineService {
     }
   }
 
+  async updateMedicinePriceTiers(id: string, priceTiers: { minQuantity: number; price: number }[]) {
+    try {
+      const medicine = await this.medicineModel.findById(id).exec();
+      if (!medicine) {
+        throw new RpcException('Medicine not found');
+      }
+
+      // Sắp xếp priceTiers tăng dần theo số lượng tối thiểu để lưu
+      const sortedTiers = (priceTiers || []).sort((a, b) => a.minQuantity - b.minQuantity);
+
+      medicine.priceTiers = sortedTiers;
+      await medicine.save();
+
+      return {
+        success: true,
+        message: 'Cập nhật giá bậc thang thành công',
+        priceTiers: medicine.priceTiers,
+      };
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi cập nhật giá bậc thang');
+    }
+  }
+
+
   async listMedicines(query: {
     page?: number;
     limit?: number;
     search?: string;
     category?: string;
     classification?: string;
+    targetGroup?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    flavour?: string;
+    country?: string;
+    brand?: string;
+    indication?: string;
+    brandOrigin?: string;
   }) {
     try {
       console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', query);
@@ -131,7 +167,54 @@ export class MedicineService {
       const search = query.search || '';
       const category = query.category || '';
       const classification = query.classification || '';
+      const targetGroup = query.targetGroup || '';
+      const minPrice = query.minPrice;
+      const maxPrice = query.maxPrice;
+      const flavour = query.flavour || '';
+      const country = query.country || '';
+      const brand = query.brand || '';
+      const indication = query.indication || '';
+      const brandOrigin = query.brandOrigin || '';
       const skip = (page - 1) * limit;
+
+      // Construct standard filter conditions
+      const conditions: any[] = [];
+      if (category) conditions.push({ category });
+      if (classification) conditions.push({ drug_classification: classification });
+      if (targetGroup) {
+        conditions.push({ 'thong_tin_chi_tiet.Đối tượng sử dụng': { $regex: targetGroup, $options: 'i' } });
+      }
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        const priceCond: any = {};
+        if (minPrice !== undefined) priceCond.$gte = minPrice;
+        if (maxPrice !== undefined) priceCond.$lte = maxPrice;
+        conditions.push({ price: priceCond });
+      }
+      if (flavour) {
+        conditions.push({ 'thong_tin_chi_tiet.Mùi vị/ Mùi hương': { $regex: flavour, $options: 'i' } });
+      }
+      if (country) {
+        conditions.push({ 'thong_tin_chi_tiet.Nước sản xuất': { $regex: country, $options: 'i' } });
+      }
+      if (brand) {
+        conditions.push({
+          $or: [
+            { manufacturer: { $regex: brand, $options: 'i' } },
+            { 'thong_tin_chi_tiet.Nhà sản xuất': { $regex: brand, $options: 'i' } }
+          ]
+        });
+      }
+      if (indication) {
+        conditions.push({
+          $or: [
+            { cong_dung: { $regex: indication, $options: 'i' } },
+            { 'thong_tin_chi_tiet.Chỉ định': { $regex: indication, $options: 'i' } }
+          ]
+        });
+      }
+      if (brandOrigin) {
+        conditions.push({ 'thong_tin_chi_tiet.Xuất xứ thương hiệu': { $regex: brandOrigin, $options: 'i' } });
+      }
 
       if (search) {
         // AI SERVICE VECTOR SEARCH with Mongoose fallback
@@ -149,10 +232,49 @@ export class MedicineService {
             useFallback = true;
           } else {
             const resJson = await response.json();
-            const aiData = resJson.data || [];
-            aiTotal = resJson.total || aiData.length;
+            let aiData = resJson.data || [];
 
-            if (aiData.length === 0) {
+            // Apply advanced filters in-memory on aiData
+            if (targetGroup || minPrice !== undefined || maxPrice !== undefined || flavour || country || brand || indication || brandOrigin) {
+              aiData = aiData.filter((med: any) => {
+                if (targetGroup) {
+                  const val = med.thong_tin_chi_tiet?.['Đối tượng sử dụng'] || '';
+                  if (!new RegExp(targetGroup, 'i').test(val)) return false;
+                }
+                if (minPrice !== undefined && med.price < minPrice) return false;
+                if (maxPrice !== undefined && med.price > maxPrice) return false;
+                if (flavour) {
+                  const val = med.thong_tin_chi_tiet?.['Mùi vị/ Mùi hương'] || '';
+                  if (!new RegExp(flavour, 'i').test(val)) return false;
+                }
+                if (country) {
+                  const val = med.thong_tin_chi_tiet?.['Nước sản xuất'] || '';
+                  if (!new RegExp(country, 'i').test(val)) return false;
+                }
+                if (brand) {
+                  const val1 = med.manufacturer || '';
+                  const val2 = med.thong_tin_chi_tiet?.['Nhà sản xuất'] || '';
+                  if (!new RegExp(brand, 'i').test(val1) && !new RegExp(brand, 'i').test(val2)) return false;
+                }
+                if (indication) {
+                  const val1 = med.cong_dung || '';
+                  const val2 = med.thong_tin_chi_tiet?.['Chỉ định'] || '';
+                  if (!new RegExp(indication, 'i').test(val1) && !new RegExp(indication, 'i').test(val2)) return false;
+                }
+                if (brandOrigin) {
+                  const val = med.thong_tin_chi_tiet?.['Xuất xứ thương hiệu'] || '';
+                  if (!new RegExp(brandOrigin, 'i').test(val)) return false;
+                }
+                return true;
+              });
+            }
+
+            aiTotal = resJson.total !== undefined ? resJson.total : aiData.length;
+            if (targetGroup || minPrice !== undefined || maxPrice !== undefined || flavour || country || brand || indication || brandOrigin) {
+              aiTotal = aiData.length;
+            }
+
+            if (aiData.length === 0 && !targetGroup && minPrice === undefined && maxPrice === undefined && !flavour && !country && !brand && !indication && !brandOrigin) {
               useFallback = true;
             } else {
               // Truy vấn lô hàng cho các kết quả từ AI Service
@@ -191,13 +313,13 @@ export class MedicineService {
                   image: med.image,
                   active_ingredient: med.active_ingredient || '',
                   supplierId: med.supplierId || '',
+                  priceTiers: med.priceTiers || [],
                   batches: medBatches.map(b => ({
                     batchNo: b.batchNo,
                     expDate: b.expDate,
                     stock: b.stock,
                     status: b.status,
                   })),
-                  // Các field chi tiết được load riêng qua API /medicines/:id
                 };
               });
             }
@@ -210,16 +332,17 @@ export class MedicineService {
         if (useFallback) {
           this.logger.log(`Executing fallback Mongoose regex search for "${search}"`);
           const filterQuery: any = {};
-          if (category) filterQuery.category = category;
-          if (classification) filterQuery.drug_classification = classification;
-
-          filterQuery.$or = [
-            { name: { $regex: search, $options: 'i' } },
-            { active_ingredient: { $regex: search, $options: 'i' } }
-          ];
+          const conditionsCopy = [...conditions];
+          conditionsCopy.push({
+            $or: [
+              { name: { $regex: search, $options: 'i' } },
+              { active_ingredient: { $regex: search, $options: 'i' } }
+            ]
+          });
+          filterQuery.$and = conditionsCopy;
 
           const [data, total] = await Promise.all([
-            this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).lean().exec(),
+            this.medicineModel.find(filterQuery).select('-thong_tin_chi_tiet -cong_dung -luu_y -cach_dung').skip(skip).limit(Number(limit)).lean().exec(),
             this.medicineModel.countDocuments(filterQuery).exec(),
           ]);
 
@@ -259,13 +382,13 @@ export class MedicineService {
               image: med.image,
               active_ingredient: med.active_ingredient || '',
               supplierId: med.supplierId || '',
+              priceTiers: med.priceTiers || [],
               batches: medBatches.map(b => ({
                 batchNo: b.batchNo,
                 expDate: b.expDate,
                 stock: b.stock,
                 status: b.status,
               })),
-              // Các field chi tiết được load riêng qua API /medicines/:id
             };
           });
 
@@ -286,11 +409,12 @@ export class MedicineService {
       } else {
         // MONGOOSE SCROLL (Default View)
         const filterQuery: any = {};
-        if (category) filterQuery.category = category;
-        if (classification) filterQuery.drug_classification = classification;
+        if (conditions.length > 0) {
+          filterQuery.$and = conditions;
+        }
 
         const [data, total] = await Promise.all([
-          this.medicineModel.find(filterQuery).skip(skip).limit(Number(limit)).lean().exec(),
+          this.medicineModel.find(filterQuery).select('-thong_tin_chi_tiet -cong_dung -luu_y -cach_dung').skip(skip).limit(Number(limit)).lean().exec(),
           this.medicineModel.countDocuments(filterQuery).exec(),
         ]);
 
@@ -331,13 +455,13 @@ export class MedicineService {
             image: med.image,
             active_ingredient: med.active_ingredient || '',
             supplierId: med.supplierId || '',
+            priceTiers: med.priceTiers || [],
             batches: medBatches.map(b => ({
               batchNo: b.batchNo,
               expDate: b.expDate,
               stock: b.stock,
               status: b.status,
             })),
-            // Các field chi tiết được load riêng qua API /medicines/:id
           };
         });
 
@@ -424,6 +548,7 @@ export class MedicineService {
 
   async getExpirationReport() {
     try {
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy báo cáo lô thuốc cận hạn/hết hạn');
       const today = new Date();
       const ninetyDaysFromNow = new Date();
       ninetyDaysFromNow.setDate(today.getDate() + 90);
@@ -464,6 +589,7 @@ export class MedicineService {
         .filter(item => item.status === 'EXPIRED' || item.status === 'SOON_TO_EXPIRE')
         .sort((a, b) => new Date(a.expDate).getTime() - new Date(b.expDate).getTime());
 
+      console.log(`✅ [Inventory MS] Hoàn tất báo cáo hết hạn: tìm thấy ${report.length} lô.`);
       return report;
     } catch (error) {
       throw new RpcException(error.message || 'Lỗi lấy báo cáo hết hạn');
@@ -511,5 +637,244 @@ export class MedicineService {
       throw new RpcException(error.message || 'Lỗi lấy danh sách chi tiết thuốc');
     }
   }
+
+  async createInventoryCheck(data: any) {
+    this.logger.log(`Creating inventory check protocol. Status: ${data.status}`);
+
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const count = await this.checkModel.countDocuments({
+      createdAt: {
+        $gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+        $lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
+      },
+    });
+    const checkCode = `IC-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+
+    // Verify and enrich items with system stock and calculate difference
+    const enrichedItems = [];
+    for (const item of data.items) {
+      const batch = await this.batchModel.findOne({
+        medicineId: item.medicineId,
+        batchNo: item.batchNo,
+      }).exec();
+
+      if (!batch) {
+        throw new RpcException({ message: `Không tìm thấy lô "${item.batchNo}" của thuốc có ID: ${item.medicineId}` });
+      }
+
+      const medicine = await this.medicineModel.findById(item.medicineId).exec();
+      const systemStock = batch.stock;
+      const actualStock = Number(item.actualStock);
+      const difference = actualStock - systemStock;
+
+      enrichedItems.push({
+        medicineId: item.medicineId,
+        medicineName: medicine ? medicine.name : 'Thuốc không xác định',
+        batchNo: item.batchNo,
+        systemStock,
+        actualStock,
+        difference,
+        reason: item.reason || '',
+      });
+    }
+
+    const check = new this.checkModel({
+      checkCode,
+      status: data.status || 'DRAFT',
+      items: enrichedItems,
+      performedBy: data.performedBy || 'Thủ kho',
+      notes: data.notes || '',
+    });
+
+    await check.save();
+
+    if (check.status === 'COMPLETED') {
+      await this.applyStockAdjustments(check);
+    }
+
+    return {
+      success: true,
+      message: check.status === 'COMPLETED'
+        ? `Đã tạo và hoàn tất biên bản kiểm kê ${checkCode}, tồn kho đã được điều chỉnh.`
+        : `Đã lưu nháp biên bản kiểm kê ${checkCode}.`,
+      data: check,
+    };
+  }
+
+  async listInventoryChecks() {
+    return this.checkModel.find().sort({ createdAt: -1 }).exec();
+  }
+
+  async getInventoryCheckById(id: string) {
+    const check = await this.checkModel.findById(id).exec();
+    if (!check) {
+      throw new RpcException({ message: `Không tìm thấy biên bản kiểm kê: ${id}` });
+    }
+    return check;
+  }
+
+  async completeInventoryCheck(id: string) {
+    const check = await this.checkModel.findById(id).exec();
+    if (!check) {
+      throw new RpcException({ message: `Không tìm thấy biên bản kiểm kê: ${id}` });
+    }
+
+    if (check.status === 'COMPLETED') {
+      throw new RpcException({ message: 'Biên bản kiểm kê này đã được hoàn tất trước đó' });
+    }
+
+    check.status = 'COMPLETED';
+    await check.save();
+
+    await this.applyStockAdjustments(check);
+
+    return {
+      success: true,
+      message: `Đã hoàn tất biên bản kiểm kê ${check.checkCode}, tồn kho đã được điều chỉnh.`,
+      data: check,
+    };
+  }
+
+  private async applyStockAdjustments(check: any) {
+    this.logger.log(`Applying stock adjustments for check: ${check.checkCode}`);
+    for (const item of check.items) {
+      const batch = await this.batchModel.findOne({
+        medicineId: item.medicineId,
+        batchNo: item.batchNo,
+      }).exec();
+
+      if (batch) {
+        const stockBefore = batch.stock;
+        batch.stock = item.actualStock;
+        batch.status = batch.expDate < new Date() ? 'EXPIRED' : 'ACTIVE';
+        await batch.save();
+
+        if (item.difference !== 0) {
+          const log = new this.txnModel({
+            type: 'ADJUSTMENT',
+            medicineId: item.medicineId,
+            medicineName: item.medicineName,
+            batchNo: item.batchNo,
+            quantityChange: item.difference,
+            stockBefore,
+            stockAfter: item.actualStock,
+            referenceId: check._id.toString(),
+            referenceType: 'INVENTORY_CHECK',
+            performedBy: check.performedBy || 'Thủ kho',
+            notes: `Điều chỉnh kiểm kê theo biên bản ${check.checkCode}. Lý do: ${item.reason || 'Không có'}`,
+          });
+          await log.save();
+        }
+      }
+    }
+  }
+
+  async getLowStockReport() {
+    try {
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy báo cáo thuốc sắp hết hàng/hết hàng');
+      const batches = await this.batchModel.find({ stock: { $gt: 0 }, status: 'ACTIVE' })
+        .select('medicineId stock')
+        .lean()
+        .exec();
+
+      const stockMap = new Map<string, number>();
+      for (const b of batches) {
+        stockMap.set(b.medicineId, (stockMap.get(b.medicineId) || 0) + b.stock);
+      }
+
+      const medicines = await this.medicineModel.find()
+        .select('name category unit price image active_ingredient')
+        .lean()
+        .exec();
+
+      const lowStockMedicines = [];
+      const lowStockMedIds = [];
+
+      for (const med of medicines) {
+        const medId = med._id.toString();
+        const stock = stockMap.get(medId) || 0;
+        const minStock = 50;
+
+        if (stock <= minStock) {
+          lowStockMedicines.push({ med, stock, minStock });
+          lowStockMedIds.push(medId);
+        }
+      }
+
+      // Query all batches for low stock medicines in one go to prevent N+1 query timeouts
+      const allMedBatches = await this.batchModel.find({ medicineId: { $in: lowStockMedIds } })
+        .select('medicineId batchNo expDate stock status')
+        .lean()
+        .exec();
+
+      const batchesMap = new Map<string, any[]>();
+      for (const b of allMedBatches) {
+        const list = batchesMap.get(b.medicineId) || [];
+        list.push(b);
+        batchesMap.set(b.medicineId, list);
+      }
+
+      const report = lowStockMedicines.map(({ med, stock, minStock }) => {
+        const medId = med._id.toString();
+        const medBatches = batchesMap.get(medId) || [];
+        return {
+          id: medId,
+          name: med.name,
+          category: med.category || 'Chưa phân loại',
+          price: med.price || 50000,
+          stock: stock,
+          minStock: minStock,
+          status: stock > 0 ? 'In Stock' : 'Out of Stock',
+          unit: med.unit || 'Hộp',
+          image: med.image,
+          active_ingredient: med.active_ingredient || '',
+          batches: medBatches.map(b => ({
+            batchNo: b.batchNo,
+            expDate: b.expDate,
+            stock: b.stock,
+            status: b.status,
+          })),
+        };
+      });
+
+      console.log(`✅ [Inventory MS] Hoàn tất báo cáo thấp hơn mức tối thiểu: tìm thấy ${report.length} thuốc.`);
+      return report;
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi lấy báo cáo thuốc sắp hết hàng');
+    }
+  }
+
+  async getMedicinesDropdown() {
+    try {
+      const [medicines, batches] = await Promise.all([
+        this.medicineModel.find().select('name unit').lean().exec(),
+        this.batchModel.find({ stock: { $gt: 0 }, status: 'ACTIVE' }).select('medicineId batchNo stock').lean().exec()
+      ]);
+
+      const batchesByMedId = new Map<string, any[]>();
+      for (const batch of batches) {
+        const list = batchesByMedId.get(batch.medicineId) || [];
+        list.push({
+          batchNo: batch.batchNo,
+          stock: batch.stock
+        });
+        batchesByMedId.set(batch.medicineId, list);
+      }
+
+      return medicines.map(med => {
+        const medId = med._id.toString();
+        return {
+          id: medId,
+          name: med.name,
+          unit: med.unit || 'Hộp',
+          batches: batchesByMedId.get(medId) || []
+        };
+      });
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi lấy danh sách chọn thuốc');
+    }
+  }
 }
+
 

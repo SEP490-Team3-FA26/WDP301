@@ -40,6 +40,7 @@ import { Inventory } from "./pages/warehouse/Inventory";
 import { InventoryHistory } from "./pages/warehouse/InventoryHistory";
 import { PurchaseOrderCreate } from "./pages/warehouse/PurchaseOrderCreate";
 import { PurchaseRequisition } from "./pages/warehouse/PurchaseRequisition";
+import { InventoryCheck } from "./pages/warehouse/InventoryCheck";
 
 // Admin / HQ Pages
 import { Finance } from "./pages/admin/Finance";
@@ -68,7 +69,7 @@ export default function App() {
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/interactions" element={<DrugInteractions />} />
-        
+
         {/* Auth Routes */}
         <Route path="/auth" element={<AuthLayout />}>
           <Route path="login" element={<Login />} />
@@ -86,17 +87,16 @@ export default function App() {
         <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
 
         {/* --- Customer Routes --- */}
-        <Route element={<ProtectedRoute allowedRoles={["user"]} />}>
-          <Route path="/customer" element={<CustomerLayout />}>
-            <Route index element={<Navigate to="shop" replace />} />
-            <Route path="shop" element={<CustomerShop />} />
-            <Route path="cart" element={<CustomerCart />} />
-            <Route path="checkout" element={<CustomerCheckout />} />
-            <Route path="ai-consult" element={<AIConsultant />} />
-          </Route>
+        <Route path="/customer/shop" element={<Landing />} />
+        <Route path="/customer" element={<CustomerLayout />}>
+          <Route index element={<Navigate to="shop" replace />} />
+          <Route path="cart" element={<CustomerCart />} />
+          <Route path="checkout" element={<CustomerCheckout />} />
+          <Route path="interactions" element={<DrugInteractions />} />
+          <Route path="ai-consult" element={<AIConsultant />} />
         </Route>
 
-        {/* --- Admin Routes --- */}
+        {/* --- Admin / HQ Routes --- */}
         <Route element={<ProtectedRoute allowedRoles={["admin", "head_branch"]} />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<DashboardHome />} />
@@ -107,8 +107,9 @@ export default function App() {
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
-            
+
             <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory/checks" element={<InventoryCheck />} />
             <Route path="inventory/import" element={<InventoryHistory type="import" />} />
             <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
@@ -120,11 +121,12 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* --- Warehouse Routes --- */}
+        {/* --- Warehouse / Quản lý Kho Routes --- */}
         <Route element={<ProtectedRoute allowedRoles={["warehouse"]} />}>
           <Route path="/warehouse" element={<WarehouseLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory/checks" element={<InventoryCheck />} />
             <Route path="inventory/requisitions" element={<PurchaseRequisition />} />
             <Route path="inventory/import" element={<InventoryHistory type="import" />} />
             <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
@@ -132,13 +134,13 @@ export default function App() {
             <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="profile" element={<Profile />} />
-            
+
             <Route path="master-data/products" element={<Products />} />
             <Route path="master-data/suppliers" element={<Suppliers />} />
           </Route>
         </Route>
 
-        {/* --- Branch Routes --- */}
+        {/* --- Branch / Quản lý Chi nhánh Routes --- */}
         <Route element={<ProtectedRoute allowedRoles={["branch"]} />}>
           <Route path="/branch" element={<BranchLayout />}>
             <Route index element={<DashboardHome />} />

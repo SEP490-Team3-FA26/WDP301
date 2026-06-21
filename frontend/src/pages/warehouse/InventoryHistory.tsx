@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  Search, Filter, ArrowDownToLine, ArrowUpFromLine, Trash2, 
-  Calendar, FileText, Plus, ChevronRight, X, Package, 
-  Building, CheckCircle2, DollarSign, ListFilter, ClipboardCheck, 
-  AlertTriangle, Loader2 
+import {
+  Search, Filter, ArrowDownToLine, ArrowUpFromLine, Trash2,
+  Calendar, FileText, Plus, ChevronRight, X, Package,
+  Building, CheckCircle2, DollarSign, ListFilter, ClipboardCheck,
+  AlertTriangle, Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { supplierService } from "../../services/supplier.service";
+import { medicineService } from "../../services/medicine.service";
+import { purchaseOrderService } from "../../services/purchaseOrder.service";
+import { goodsReceiptService } from "../../services/goodsReceipt.service";
 
 interface InventoryHistoryProps {
   type: "import" | "export" | "dispose";
@@ -17,7 +21,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   const [activeSubTab, setActiveSubTab] = useState<"grn" | "po">("grn");
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
-  
+
   // Data lists
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [goodsReceiptNotes, setGoodsReceiptNotes] = useState<any[]>([]);
@@ -30,6 +34,11 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   // Receipt Modal state
   const [selectedPoForReceipt, setSelectedPoForReceipt] = useState<any | null>(null);
 
+  // Reject Delivery Modal state
+  const [selectedPoForReject, setSelectedPoForReject] = useState<any | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectLoading, setRejectLoading] = useState(false);
+
   // Modal details view
   const [selectedGrnDetails, setSelectedGrnDetails] = useState<any | null>(null);
   const [selectedPoDetails, setSelectedPoDetails] = useState<any | null>(null);
@@ -37,8 +46,8 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   useEffect(() => {
     // Fetch base lists to resolve IDs
     Promise.all([
-      fetch('/api/suppliers').then(r => r.json()).catch(() => []),
-      fetch('/api/medicines?limit=2000').then(r => r.json()).then(d => d.data || d).catch(() => [])
+      supplierService.getSuppliers().catch(() => []),
+      medicineService.getMedicinesDropdown().catch(() => [])
     ]).then(([sData, mData]) => {
       setSuppliers(sData);
       setMedicines(mData);
@@ -51,20 +60,14 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
     try {
       if (type === "import") {
         const [poRes, grnRes] = await Promise.all([
-          fetch('/api/purchase-orders'),
-          fetch('/api/goods-receipts')
+          purchaseOrderService.getPurchaseOrders(),
+          goodsReceiptService.getGoodsReceipts()
         ]);
-        if (poRes.ok && grnRes.ok) {
-          const poData = await poRes.json();
-          const grnData = await grnRes.json();
-          setPurchaseOrders(poData);
-          setGoodsReceiptNotes(grnData);
-        } else {
-          setError("Không thể tải danh sách dữ liệu nhập kho.");
-        }
+        setPurchaseOrders(poRes);
+        setGoodsReceiptNotes(grnRes);
       }
-    } catch (err) {
-      setError("Lỗi kết nối đến máy chủ.");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Không thể tải danh sách dữ liệu nhập kho.");
     } finally {
       setLoading(false);
     }
@@ -77,7 +80,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   const title = type === "import" ? "Nhập kho & Đặt hàng" : type === "export" ? "Lịch sử xuất kho" : "Lịch sử xuất hủy";
   const desc = type === "import" ? "Quản lý đơn đặt hàng (PO) và phiếu xác nhận nhập kho (GRN)" : type === "export" ? "Quản lý các phiếu xuất kho, luân chuyển" : "Quản lý các phiếu hủy thuốc hỏng, hết hạn";
   const btnLabel = type === "import" ? "Tạo đơn nhập hàng (PO)" : type === "export" ? "Tạo phiếu xuất" : "Tạo phiếu hủy";
-  
+
   const Icon = type === "import" ? ArrowDownToLine : type === "export" ? ArrowUpFromLine : Trash2;
   const theme = type === "import" ? "blue" : type === "export" ? "emerald" : "rose";
   const themeClasses = {
@@ -92,6 +95,35 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   const handleCreate = () => {
     if (type === "import") {
       navigate("new");
+    }
+  };
+
+  const handleRejectDelivery = async () => {
+    if (!selectedPoForReject) return;
+    setRejectLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/purchase-orders/reject-delivery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          poId: selectedPoForReject._id,
+          reason: rejectReason,
+        }),
+      });
+
+      if (res.ok) {
+        setSelectedPoForReject(null);
+        setRejectReason("");
+        fetchData();
+      } else {
+        const errData = await res.json();
+        setError(errData?.message || "Từ chối nhận hàng thất bại.");
+      }
+    } catch (err) {
+      setError("Lỗi kết nối khi từ chối nhận hàng.");
+    } finally {
+      setRejectLoading(false);
     }
   };
 
@@ -112,15 +144,15 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <div className="flex items-center gap-3">
-             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${themeClasses[`${theme}Light`]}`}>
-                <Icon size={20} />
-             </div>
-             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{title}</h1>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${themeClasses[`${theme}Light`]}`}>
+              <Icon size={20} />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{title}</h1>
           </div>
           <p className="text-slate-500 mt-2 ml-13">{desc}</p>
         </div>
         {type === "import" && (
-          <button 
+          <button
             onClick={handleCreate}
             className={`px-5 py-2.5 font-bold rounded-xl shadow-sm flex items-center gap-2 transition-colors ${themeClasses[theme]}`}
           >
@@ -134,22 +166,20 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
         <div className="flex border-b border-slate-200 mb-6 gap-2">
           <button
             onClick={() => setActiveSubTab("grn")}
-            className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-              activeSubTab === "grn"
+            className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${activeSubTab === "grn"
                 ? "border-[#0057cd] text-[#0057cd]"
                 : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
+              }`}
           >
             <ClipboardCheck size={16} />
             Phiếu Nhập Kho (GRN)
           </button>
           <button
             onClick={() => setActiveSubTab("po")}
-            className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-              activeSubTab === "po"
+            className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${activeSubTab === "po"
                 ? "border-[#0057cd] text-[#0057cd]"
                 : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
+              }`}
           >
             <FileText size={16} />
             Đơn Đặt Hàng (PO)
@@ -205,15 +235,15 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                 {goodsReceiptNotes
                   .filter(r => r._id.toLowerCase().includes(searchQuery.toLowerCase()) || r.poId.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map((r: any) => (
-                    <tr 
-                      key={r._id} 
+                    <tr
+                      key={r._id}
                       onClick={() => setSelectedGrnDetails(r)}
                       className="hover:bg-slate-50 transition-colors group cursor-pointer"
                     >
                       <td className="px-6 py-4 font-bold text-slate-900">GRN-{r._id.substring(18).toUpperCase()}</td>
                       <td className="px-6 py-4 flex items-center gap-2 text-slate-600 mt-1.5">
-                         <Calendar size={14} className="text-slate-400" />
-                         {new Date(r.createdAt).toLocaleDateString("vi-VN")}
+                        <Calendar size={14} className="text-slate-400" />
+                        {new Date(r.createdAt).toLocaleDateString("vi-VN")}
                       </td>
                       <td className="px-6 py-4 text-slate-800 font-semibold">PO-{r.poId.substring(18).toUpperCase()}</td>
                       <td className="px-6 py-4 text-slate-800">{r.receivedBy}</td>
@@ -230,12 +260,12 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                         </button>
                       </td>
                     </tr>
-                ))}
+                  ))}
                 {goodsReceiptNotes.length === 0 && (
                   <tr>
-                     <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
-                        Chưa có phiếu nhập kho nào.
-                     </td>
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                      Chưa có phiếu nhập kho nào.
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -261,38 +291,53 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                     <tr key={r._id} className="hover:bg-slate-50 transition-colors group">
                       <td className="px-6 py-4 font-bold text-slate-900">PO-{r._id.substring(18).toUpperCase()}</td>
                       <td className="px-6 py-4 flex items-center gap-2 text-slate-600 mt-1.5">
-                         <Calendar size={14} className="text-slate-400" />
-                         {new Date(r.createdAt).toLocaleDateString("vi-VN")}
+                        <Calendar size={14} className="text-slate-400" />
+                        {new Date(r.createdAt).toLocaleDateString("vi-VN")}
                       </td>
                       <td className="px-6 py-4 text-slate-800 font-medium">{getSupplierName(r.supplierId)}</td>
                       <td className="px-6 py-4 text-center font-bold text-slate-700">{r.items?.length || 0}</td>
                       <td className="px-6 py-4 text-right font-bold text-[#0057cd]">{r.totalAmount?.toLocaleString("vi-VN")}đ</td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex px-2.5 py-1 rounded-full border text-[11px] font-bold ${
-                          r.status === "COMPLETED" 
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                            : r.status === "PENDING"
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : r.status === "PARTIAL_RECEIVED"
-                            ? "bg-orange-50 text-orange-700 border-orange-200"
-                            : "bg-slate-50 text-slate-500 border-slate-200"
-                        }`}>
-                          {r.status === "PARTIAL_RECEIVED" ? "GIAO THIẾU" : r.status}
+                        <span className={`inline-flex px-2.5 py-1 rounded-full border text-[11px] font-bold ${r.status === "COMPLETED"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : r.status === "SHIPPING"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : r.status === "PENDING_APPROVAL"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : r.status === "PARTIAL_RECEIVED"
+                                  ? "bg-orange-50 text-orange-700 border-orange-200"
+                                  : r.status === "RETURNED"
+                                    ? "bg-rose-50 text-rose-700 border-rose-200"
+                                    : "bg-slate-50 text-slate-500 border-slate-200"
+                          }`}>
+                          {r.status === "PARTIAL_RECEIVED" ? "Giao thiếu" : r.status === "SHIPPING" ? "Đang giao" : r.status === "PENDING_APPROVAL" ? "Chờ duyệt" : r.status === "COMPLETED" ? "Hoàn thành" : r.status === "RETURNED" ? "Trả hàng" : r.status}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {(r.status === "PENDING" || r.status === "PARTIAL_RECEIVED") ? (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedPoForReceipt(r);
-                            }}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
-                          >
-                            {r.status === "PARTIAL_RECEIVED" ? "Nhận tiếp" : "Nhận hàng"}
-                          </button>
+                        {(r.status === "SHIPPING" || r.status === "PARTIAL_RECEIVED") ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPoForReceipt(r);
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                            >
+                              {r.status === "PARTIAL_RECEIVED" ? "Nhận tiếp" : "Nhận hàng"}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPoForReject(r);
+                                setRejectReason("");
+                              }}
+                              className="bg-rose-100 hover:bg-rose-200 text-rose-700 text-xs font-bold px-3 py-1.5 rounded-lg transition-all border border-rose-200"
+                            >
+                              Từ chối
+                            </button>
+                          </div>
                         ) : (
-                          <button 
+                          <button
                             onClick={() => setSelectedPoDetails(r)}
                             className="text-[#0057cd] text-xs font-bold hover:underline"
                           >
@@ -301,12 +346,12 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                         )}
                       </td>
                     </tr>
-                ))}
+                  ))}
                 {purchaseOrders.length === 0 && (
                   <tr>
-                     <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
-                        Chưa có đơn đặt hàng (PO) nào.
-                     </td>
+                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                      Chưa có đơn đặt hàng (PO) nào.
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -330,14 +375,76 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
         )}
       </AnimatePresence>
 
+      {/* REJECT DELIVERY MODAL */}
+      <AnimatePresence>
+        {selectedPoForReject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !rejectLoading && setSelectedPoForReject(null)} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-rose-50">
+                <div>
+                  <h3 className="font-black text-rose-700 flex items-center gap-2">
+                    <AlertTriangle size={18} />
+                    Từ Chối Nhận Hàng
+                  </h3>
+                  <p className="text-xs text-rose-600 font-medium mt-1">PO-{selectedPoForReject._id.substring(18).toUpperCase()}</p>
+                </div>
+                <button
+                  onClick={() => !rejectLoading && setSelectedPoForReject(null)}
+                  className="p-1.5 text-rose-400 hover:text-rose-600 rounded-full hover:bg-rose-100"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Lý do từ chối</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Nhập lý do từ chối nhận lô hàng này..."
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                <button
+                  onClick={() => setSelectedPoForReject(null)}
+                  disabled={rejectLoading}
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all text-sm"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleRejectDelivery}
+                  disabled={rejectLoading || !rejectReason.trim()}
+                  className="px-5 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 rounded-xl transition-all shadow-sm flex items-center gap-2 text-sm"
+                >
+                  {rejectLoading && <Loader2 size={16} className="animate-spin" />}
+                  Xác nhận từ chối
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* GRN DETAILS MODAL */}
       <AnimatePresence>
         {selectedGrnDetails && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedGrnDetails(null)} />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[85vh] overflow-hidden"
             >
@@ -411,9 +518,9 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
         {selectedPoDetails && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedPoDetails(null)} />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[85vh] overflow-hidden"
             >
@@ -515,7 +622,7 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
 
   const handleSubmit = async () => {
     setErrorMessage(null);
-    
+
     // Validate inputs
     for (let i = 0; i < itemsData.length; i++) {
       const it = itemsData[i];
@@ -544,35 +651,29 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("/api/goods-receipts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          poId: po._id,
-          receivedBy: "Thủ kho chính",
-          items: itemsData.map(it => ({
-            medicineId: it.medicineId,
-            batchNo: it.batchNo,
-            expDate: new Date(it.expDate).toISOString(),
-            quantity: Number(it.quantity),
-            unitPrice: it.unitPrice
-          }))
-        })
+      const resData = await goodsReceiptService.createGoodsReceipt({
+        poId: po._id,
+        receivedBy: "Thủ kho chính",
+        items: itemsData.map(it => ({
+          medicineId: it.medicineId,
+          batchNo: it.batchNo,
+          expiryDate: new Date(it.expDate).toISOString(),
+          quantityReceived: Number(it.quantity),
+          // Backend compatibility fields
+          expDate: new Date(it.expDate).toISOString(),
+          quantity: Number(it.quantity),
+          unitPrice: it.unitPrice
+        } as any))
       });
-
-      const resData = await res.json();
-      if (res.ok) {
-        if (resData.warnings && resData.warnings.length > 0) {
-          setWarnings(resData.warnings);
-          setTimeout(() => onSuccess(), 3000);
-        } else {
-          onSuccess();
-        }
+      if (resData.warnings && resData.warnings.length > 0) {
+        setWarnings(resData.warnings);
+        setTimeout(() => onSuccess(), 3000);
       } else {
-        setErrorMessage(resData.message || "Tạo phiếu nhập kho thất bại. Lỗi từ máy chủ.");
+        onSuccess();
       }
-    } catch (e) {
-      setErrorMessage("Lỗi kết nối mạng, vui lòng thử lại.");
+    } catch (e: any) {
+      const errMsg = e.response?.data?.message || "Tạo phiếu nhập kho thất bại. Lỗi từ máy chủ.";
+      setErrorMessage(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -581,8 +682,8 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <motion.div 
-        initial={{ scale: 0.95, opacity: 0 }} 
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden"
@@ -670,8 +771,8 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
           )}
 
           {errorMessage && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }} 
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-bold flex items-start gap-2"
             >
@@ -683,14 +784,14 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-100 bg-white flex items-center justify-end gap-3">
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             disabled={isSubmitting}
             className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
           >
             Hủy bỏ
           </button>
-          <button 
+          <button
             onClick={handleSubmit}
             disabled={isSubmitting}
             className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed"
@@ -698,8 +799,8 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
             {isSubmitting ? (
               <>
                 <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
                 Đang lưu kho...
               </>

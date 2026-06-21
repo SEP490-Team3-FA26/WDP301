@@ -68,3 +68,31 @@
 .duration-300 {
   animation-duration: 300ms;
 }
+
+/* Scanner sweep effect */
+@keyframes scan {
+  0% {
+    transform: translateY(-10%);
+  }
+  50% {
+    transform: translateY(180%);
+  }
+  100% {
+    transform: translateY(-10%);
+  }
+}
+.scanner-line {
+  animation: scan 6s ease-in-out infinite;
+  border-bottom: 2px solid rgba(20, 184, 166, 0.25);
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.15);
+}
+
+/* Custom premium glows */
+.glow-on-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glow-on-hover:hover {
+  box-shadow: 0 20px 45px -12px rgba(15, 118, 110, 0.18);
+  border-color: rgba(45, 212, 191, 0.4) !important;
+}
+

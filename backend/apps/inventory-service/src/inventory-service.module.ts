@@ -22,4 +22,4 @@ import { PricingModule } from './pricing/pricing.module';
     PricingModule,
   ],
 })
-export class InventoryServiceModule {}
+export class InventoryServiceModule { }

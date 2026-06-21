@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShoppingCart, Trash2, ArrowRight, Minus, Plus, ShieldAlert, Sparkles, XCircle, Info, HeartPulse } from "lucide-react";
+import { cartService } from "../../services/cart.service";
+import { medicineService } from "../../services/medicine.service";
 
 export function CustomerCart() {
   const navigate = useNavigate();
@@ -11,20 +13,29 @@ export function CustomerCart() {
   const [interactionResult, setInteractionResult] = useState<any>(null);
   const [showInteractionBox, setShowInteractionBox] = useState(false);
 
+  // Custom premium non-blocking alert modal state
+  const [alertModal, setAlertModal] = useState<{ message: string; title?: string; onConfirm?: () => void } | null>(null);
+
+  const showAlert = (message: string, title = "Thông báo", onConfirm?: () => void) => {
+    setAlertModal({ message, title, onConfirm });
+  };
+
   const loadCart = async () => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      try {
+        const guestCartStr = localStorage.getItem("guest_cart");
+        const items = guestCartStr ? JSON.parse(guestCartStr) : [];
+        setCartItems(items);
+      } catch (err) {
+        console.error("Error loading guest cart:", err);
+      }
+      return;
+    }
     
     try {
-      const res = await fetch("/api/users/cart", {
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCartItems(data.items || []);
-      }
+      const data = await cartService.getCart();
+      setCartItems(data.items || []);
     } catch (err) {
       console.error("Error loading cart:", err);
     }
@@ -36,7 +47,31 @@ export function CustomerCart() {
 
   const updateQuantity = async (id: string, newQty: number) => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      if (newQty <= 0) {
+        handleDelete(id);
+        return;
+      }
+      const item = cartItems.find((it) => it.id === id || it._id === id);
+      if (item && newQty > item.stock) {
+        showAlert(`Chỉ còn ${item.stock} sản phẩm khả dụng trong kho!`);
+        return;
+      }
+      try {
+        const guestCartStr = localStorage.getItem("guest_cart");
+        const cart = guestCartStr ? JSON.parse(guestCartStr) : [];
+        const cartItem = cart.find((it: any) => it.id === id || it._id === id);
+        if (cartItem) {
+          cartItem.quantity = newQty;
+        }
+        localStorage.setItem("guest_cart", JSON.stringify(cart));
+        setCartItems(cart);
+        window.dispatchEvent(new Event("cartUpdated"));
+      } catch (err) {
+        console.error("Error updating guest cart item quantity:", err);
+      }
+      return;
+    }
 
     if (newQty <= 0) {
       handleDelete(id);
@@ -46,62 +81,70 @@ export function CustomerCart() {
     // Check client-side stock first before sending request
     const item = cartItems.find((it) => it.id === id);
     if (item && newQty > item.stock) {
-      alert(`Chỉ còn ${item.stock} sản phẩm khả dụng trong kho!`);
+      showAlert(`Chỉ còn ${item.stock} sản phẩm khả dụng trong kho!`);
       return;
     }
 
     try {
-      const response = await fetch(`/api/users/cart/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ quantity: newQty })
-      });
+      await cartService.updateCartItem(id, newQty);
       
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.message || "Không thể cập nhật số lượng.");
-      }
-
       await loadCart();
       window.dispatchEvent(new Event("cartUpdated"));
     } catch (err: any) {
-      alert(err.message || "Lỗi cập nhật giỏ hàng");
+      const msg = err.response?.data?.message || err.message || "Lỗi cập nhật giỏ hàng";
+      showAlert(msg);
     }
   };
 
   const handleDelete = async (id: string) => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      try {
+        const guestCartStr = localStorage.getItem("guest_cart");
+        const cart = guestCartStr ? JSON.parse(guestCartStr) : [];
+        const filtered = cart.filter((it: any) => it.id !== id && it._id !== id);
+        localStorage.setItem("guest_cart", JSON.stringify(filtered));
+        setCartItems(filtered);
+        window.dispatchEvent(new Event("cartUpdated"));
+        setInteractionResult(null);
+        setShowInteractionBox(false);
+      } catch (err) {
+        console.error("Error deleting guest cart item:", err);
+      }
+      return;
+    }
 
     try {
-      const response = await fetch(`/api/users/cart/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
-
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.message || "Không thể xóa sản phẩm.");
-      }
+      await cartService.deleteCartItem(id);
 
       await loadCart();
       window.dispatchEvent(new Event("cartUpdated"));
       setInteractionResult(null);
       setShowInteractionBox(false);
     } catch (err: any) {
-      alert(err.message || "Lỗi xóa sản phẩm");
+      const msg = err.response?.data?.message || err.message || "Lỗi xóa sản phẩm";
+      showAlert(msg);
     }
+  };
+
+  const handleProceedToCheckout = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      showAlert(
+        "Vui lòng đăng nhập để tiến hành thanh toán!",
+        "Yêu cầu đăng nhập",
+        () => navigate("/auth/login")
+      );
+      return;
+    }
+    localStorage.setItem("customer_cart", JSON.stringify(cartItems));
+    navigate("/customer/checkout");
   };
 
   // Check drug interactions using the API Gateway
   const handleCheckInteractions = async () => {
     if (cartItems.length < 2) {
-      alert("Cần có ít nhất 2 loại thuốc trong giỏ hàng để kiểm tra tương tác chéo!");
+      showAlert("Cần có ít nhất 2 loại thuốc trong giỏ hàng để kiểm tra tương tác chéo!");
       return;
     }
     setCheckingInteraction(true);
@@ -111,27 +154,14 @@ export function CustomerCart() {
     try {
       const medicineNames = cartItems.map((it) => it.name);
       
-      const res = await fetch("/api/medicines/check-interaction", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ medicines: medicineNames })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setInteractionResult(data);
-      } else {
-        const err = await res.json();
-        setInteractionResult({
-          error: true,
-          message: err.detail || err.message || "Lỗi không xác định khi kiểm tra tương tác."
-        });
-      }
-    } catch (err) {
+      const data = await medicineService.checkInteraction(medicineNames);
+      setInteractionResult(data);
+    } catch (err: any) {
       console.error(err);
+      const msg = err.response?.data?.detail || err.response?.data?.message || err.message || "Lỗi không xác định khi kiểm tra tương tác.";
       setInteractionResult({
         error: true,
-        message: "Lỗi kết nối máy chủ y tế."
+        message: msg
       });
     } finally {
       setCheckingInteraction(false);
@@ -395,7 +425,7 @@ export function CustomerCart() {
               </div>
 
               <button
-                onClick={() => navigate("/customer/checkout")}
+                onClick={handleProceedToCheckout}
                 className="w-full mt-2.5 bg-[#0d6efd] hover:bg-[#0a58ca] text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-blue-150 transition-all active:scale-98"
               >
                 Tiến hành đặt hàng <ArrowRight size={14} />
@@ -419,6 +449,36 @@ export function CustomerCart() {
           >
             Vào cửa hàng ngay
           </Link>
+        </div>
+      )}
+
+      {/* Premium Generic Alert Modal */}
+      {alertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col items-center text-center animate-scale-up">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#0d6efd] flex items-center justify-center mb-5 border border-blue-100 shadow-inner animate-pulse">
+              <Info size={28} />
+            </div>
+            
+            <h3 className="text-md font-black text-slate-800 tracking-tight mb-2">
+              {alertModal.title || "Thông báo"}
+            </h3>
+            <p className="text-slate-500 text-xs font-semibold leading-relaxed max-w-xs mb-6">
+              {alertModal.message}
+            </p>
+            
+            <button
+              onClick={() => {
+                if (alertModal.onConfirm) {
+                  alertModal.onConfirm();
+                }
+                setAlertModal(null);
+              }}
+              className="w-full px-5 py-3 bg-[#0d6efd] hover:bg-[#0a58ca] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/10 transition-all cursor-pointer"
+            >
+              Đồng ý
+            </button>
+          </div>
         </div>
       )}
     </div>
