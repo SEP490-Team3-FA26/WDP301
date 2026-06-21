@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Mic, Square, Sparkles, AlertTriangle, CheckCircle, ShoppingCart, Volume2, Info, ArrowRight, HeartPulse } from "lucide-react";
+import { prescriptionService } from "../../services/prescription.service";
+import { cartService } from "../../services/cart.service";
 
 export function AIConsultant() {
   const [recording, setRecording] = useState(false);
@@ -11,6 +13,13 @@ export function AIConsultant() {
   // Results
   const [result, setResult] = useState<any>(null);
   const [successMessage, setSuccessMessage] = useState("");
+
+  // Custom premium non-blocking alert modal state
+  const [alertModal, setAlertModal] = useState<{ message: string; title?: string; onConfirm?: () => void } | null>(null);
+
+  const showAlert = (message: string, title = "Thông báo", onConfirm?: () => void) => {
+    setAlertModal({ message, title, onConfirm });
+  };
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -81,15 +90,7 @@ export function AIConsultant() {
       const formData = new FormData();
       formData.append("audio", audioBlob, "consultation_voice.webm");
 
-      const res = await fetch("/api/prescriptions/recommend", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Lỗi khi phân tích âm thanh.");
-      }
+      const data = await prescriptionService.recommendPrescription(formData);
 
       setResult(data);
     } catch (err: any) {
@@ -155,17 +156,8 @@ export function AIConsultant() {
           if (invMatch && invMatch.stock > 0) {
             const medId = invMatch.id || invMatch._id;
             try {
-              const res = await fetch("/api/users/cart", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({ medicineId: medId, quantity: 1 })
-              });
-              if (res.ok) {
-                addedCount++;
-              }
+              await cartService.addToCart(medId, 1);
+              addedCount++;
             } catch (err) {
               console.error("Error adding drug to cart:", err);
             }
@@ -403,7 +395,7 @@ export function AIConsultant() {
                                         if (existing.quantity < stockInfo.stock) {
                                           existing.quantity += 1;
                                         } else {
-                                          alert(`Chỉ còn ${stockInfo.stock} sản phẩm khả dụng trong kho!`);
+                                          showAlert(`Chỉ còn ${stockInfo.stock} sản phẩm khả dụng trong kho!`);
                                           return;
                                         }
                                       } else {
@@ -426,24 +418,13 @@ export function AIConsultant() {
                                       setSuccessMessage(`Đã thêm thuốc ${drug.name} vào giỏ hàng!`);
                                     } else {
                                       try {
-                                        const res = await fetch("/api/users/cart", {
-                                          method: "POST",
-                                          headers: {
-                                            "Content-Type": "application/json",
-                                            "Authorization": `Bearer ${token}`
-                                          },
-                                          body: JSON.stringify({ medicineId: medId, quantity: 1 })
-                                        });
-                                        if (res.ok) {
-                                          window.dispatchEvent(new Event("cartUpdated"));
-                                          setSuccessMessage(`Đã thêm thuốc ${drug.name} vào giỏ hàng!`);
-                                        } else {
-                                          const data = await res.json();
-                                          alert(data.message || "Không thể thêm thuốc vào giỏ hàng.");
-                                        }
-                                      } catch (err) {
+                                        await cartService.addToCart(medId, 1);
+                                        window.dispatchEvent(new Event("cartUpdated"));
+                                        setSuccessMessage(`Đã thêm thuốc ${drug.name} vào giỏ hàng!`);
+                                      } catch (err: any) {
                                         console.error(err);
-                                        alert("Lỗi kết nối máy chủ");
+                                        const msg = err.response?.data?.message || err.message || "Không thể thêm thuốc vào giỏ hàng.";
+                                        showAlert(msg);
                                       }
                                     }
                                   }}
@@ -470,6 +451,36 @@ export function AIConsultant() {
 
         </div>
       </div>
+
+      {/* Premium Generic Alert Modal */}
+      {alertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col items-center text-center animate-scale-up">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#0d6efd] flex items-center justify-center mb-5 border border-blue-100 shadow-inner animate-pulse">
+              <Info size={28} />
+            </div>
+            
+            <h3 className="text-md font-black text-slate-800 tracking-tight mb-2">
+              {alertModal.title || "Thông báo"}
+            </h3>
+            <p className="text-slate-500 text-xs font-semibold leading-relaxed max-w-xs mb-6">
+              {alertModal.message}
+            </p>
+            
+            <button
+              onClick={() => {
+                if (alertModal.onConfirm) {
+                  alertModal.onConfirm();
+                }
+                setAlertModal(null);
+              }}
+              className="w-full px-5 py-3 bg-[#0d6efd] hover:bg-[#0a58ca] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/10 transition-all cursor-pointer"
+            >
+              Đồng ý
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

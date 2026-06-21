@@ -4,6 +4,8 @@ import {
   Calendar, Package, Trash2, Send, FileText, ChevronRight, Eye
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
+import { medicineService } from "../../services/medicine.service";
 
 /**
  * BƯỚC 1 — Quản lý Chi nhánh tạo PR (Yêu cầu mua hàng) gửi lên Trụ sở.
@@ -236,11 +238,9 @@ function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; on
           items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity })),
         }),
       });
-      const d = await res.json();
-      if (res.ok) onSuccess(d.message || "Gửi yêu cầu thành công!");
-      else setErr(d.message || "Lỗi tạo yêu cầu");
-    } catch {
-      setErr("Lỗi kết nối máy chủ. Vui lòng thử lại.");
+      onSuccess(resData.message || "Gửi yêu cầu thành công!");
+    } catch (e: any) {
+      setErr(e.response?.data?.message || "Lỗi tạo yêu cầu");
     } finally {
       setIsSubmitting(false);
     }

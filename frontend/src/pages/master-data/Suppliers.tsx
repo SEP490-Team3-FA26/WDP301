@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Search, Building2, AlertTriangle, CheckCircle2, ShieldAlert, X } from "lucide-react";
 import { motion } from "motion/react";
+import { supplierService } from "../../services/supplier.service";
 
 export function Suppliers() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -10,8 +11,7 @@ export function Suppliers() {
   const [formData, setFormData] = useState({ name: "", phone: "", gdpExpiry: "" });
 
   useEffect(() => {
-    fetch('/api/suppliers')
-      .then(res => res.json())
+    supplierService.getSuppliers()
       .then(data => setSuppliers(data))
       .catch(err => console.error('Failed to fetch suppliers', err));
   }, []);
@@ -38,17 +38,12 @@ export function Suppliers() {
     if (!formData.name || !formData.gdpExpiry) return;
     
     try {
-      const res = await fetch('/api/suppliers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          phone: formData.phone || "N/A",
-          gdp_expiry_date: formData.gdpExpiry,
-          status: "ACTIVE"
-        })
-      });
-      const newSupplier = await res.json();
+      const newSupplier = await supplierService.createSupplier({
+        name: formData.name,
+        phone: formData.phone || "N/A",
+        gdp_expiry_date: formData.gdpExpiry,
+        status: "ACTIVE"
+      } as any);
       setSuppliers([...suppliers, newSupplier]);
       setIsModalOpen(false);
       setFormData({ name: "", phone: "", gdpExpiry: "" });

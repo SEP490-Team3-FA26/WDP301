@@ -5,6 +5,7 @@ import {
   Loader2, ClipboardList, Building, Calendar, Eye, ArrowRight, FileText
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
 
 // --- In-memory cache for instant back-navigation (resets on page refresh/new login) ---
 const prCache: Record<string, { data: any[]; ts: number }> = {};

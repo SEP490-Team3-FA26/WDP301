@@ -1,1 +1,0 @@
-+ tôi là người mới học Type scirpt, nest , next js . Hãy dạy tôi để tôi đi phỏng vấn  

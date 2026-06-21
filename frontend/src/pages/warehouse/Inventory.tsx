@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck } from "lucide-react";
+import { medicineService } from "../../services/medicine.service";
 
 export function Inventory() {
   const navigate = useNavigate();
@@ -36,11 +37,8 @@ export function Inventory() {
     setFetchingDetails(true);
     setDetailModalOpen(true);
     try {
-      const res = await fetch(`/api/medicines/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSelectedMedicine(data);
-      }
+      const data = await medicineService.getMedicineById(id);
+      setSelectedMedicine(data);
     } catch (error) {
       console.error("Failed to fetch details", error);
     } finally {
@@ -51,14 +49,8 @@ export function Inventory() {
   const handleStatusChange = async (id: string, newStatus: string) => {
     setUpdatingStatusId(id);
     try {
-      const res = await fetch(`/api/medicines/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (res.ok) {
-        setInventory(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
-      }
+      await medicineService.updateMedicineStatus(id, newStatus);
+      setInventory(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
     } catch (error) {
       console.error("Failed to update status", error);
     } finally {
@@ -68,11 +60,8 @@ export function Inventory() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch("/api/medicines/stats");
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
+      const data = await medicineService.getMedicineStats();
+      setStats(data);
     } catch (err) {
       console.error("Failed to fetch stats", err);
     } finally {
@@ -83,11 +72,8 @@ export function Inventory() {
   const fetchExpirationReport = async () => {
     setExpirationLoading(true);
     try {
-      const res = await fetch("/api/medicines/expiration-report");
-      if (res.ok) {
-        const data = await res.json();
-        setExpirationReport(data);
-      }
+      const data = await medicineService.getExpirationReport();
+      setExpirationReport(data);
     } catch (err) {
       console.error("Failed to fetch expiration report", err);
     } finally {
@@ -128,11 +114,8 @@ export function Inventory() {
   useEffect(() => {
     const fetchFilters = async () => {
       try {
-        const response = await fetch('/api/medicines/filters');
-        if (response.ok) {
-          const data = await response.json();
-          setFilterOptions(data);
-        }
+        const data = await medicineService.getFilters();
+        setFilterOptions(data);
       } catch (error) {
         console.error("Error fetching filters:", error);
       }
@@ -160,13 +143,13 @@ export function Inventory() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        let url = `/api/medicines?search=${encodeURIComponent(debouncedSearch)}&page=${page}&limit=${limit}`;
-        if (selectedCategory) url += `&category=${encodeURIComponent(selectedCategory)}`;
-        if (selectedClassification) url += `&classification=${encodeURIComponent(selectedClassification)}`;
-        
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Failed to fetch medicines");
-        const result = await response.json();
+        const result = await medicineService.getMedicines({
+          search: debouncedSearch || undefined,
+          page,
+          limit,
+          category: selectedCategory || undefined,
+          classification: selectedClassification || undefined
+        });
         setInventory(result.data);
         setTotal(result.total);
       } catch (error) {

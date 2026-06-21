@@ -7,6 +7,10 @@ import {
   AlertTriangle, Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { supplierService } from "../../services/supplier.service";
+import { medicineService } from "../../services/medicine.service";
+import { purchaseOrderService } from "../../services/purchaseOrder.service";
+import { goodsReceiptService } from "../../services/goodsReceipt.service";
 
 interface InventoryHistoryProps {
   type: "import" | "export" | "dispose";
@@ -42,8 +46,8 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   useEffect(() => {
     // Fetch base lists to resolve IDs
     Promise.all([
-      fetch('/api/suppliers').then(r => r.json()).catch(() => []),
-      fetch('/api/medicines?limit=2000').then(r => r.json()).then(d => d.data || d).catch(() => [])
+      supplierService.getSuppliers().catch(() => []),
+      medicineService.getMedicines({ limit: 2000 }).then(r => r.data || r).catch(() => [])
     ]).then(([sData, mData]) => {
       setSuppliers(sData);
       setMedicines(mData);
@@ -56,20 +60,14 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
     try {
       if (type === "import") {
         const [poRes, grnRes] = await Promise.all([
-          fetch('/api/purchase-orders'),
-          fetch('/api/goods-receipts')
+          purchaseOrderService.getPurchaseOrders(),
+          goodsReceiptService.getGoodsReceipts()
         ]);
-        if (poRes.ok && grnRes.ok) {
-          const poData = await poRes.json();
-          const grnData = await grnRes.json();
-          setPurchaseOrders(poData);
-          setGoodsReceiptNotes(grnData);
-        } else {
-          setError("Không thể tải danh sách dữ liệu nhập kho.");
-        }
+        setPurchaseOrders(poRes);
+        setGoodsReceiptNotes(grnRes);
       }
-    } catch (err) {
-      setError("Lỗi kết nối đến máy chủ.");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Không thể tải danh sách dữ liệu nhập kho.");
     } finally {
       setLoading(false);
     }
@@ -653,35 +651,29 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("/api/goods-receipts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          poId: po._id,
-          receivedBy: "Thủ kho chính",
-          items: itemsData.map(it => ({
-            medicineId: it.medicineId,
-            batchNo: it.batchNo,
-            expDate: new Date(it.expDate).toISOString(),
-            quantity: Number(it.quantity),
-            unitPrice: it.unitPrice
-          }))
-        })
+      const resData = await goodsReceiptService.createGoodsReceipt({
+        purchaseOrderId: po._id,
+        receivedBy: "Thủ kho chính",
+        items: itemsData.map(it => ({
+          medicineId: it.medicineId,
+          batchNo: it.batchNo,
+          expiryDate: new Date(it.expDate).toISOString(),
+          quantityReceived: Number(it.quantity),
+          // Backend compatibility fields
+          expDate: new Date(it.expDate).toISOString(),
+          quantity: Number(it.quantity),
+          unitPrice: it.unitPrice
+        } as any))
       });
-
-      const resData = await res.json();
-      if (res.ok) {
-        if (resData.warnings && resData.warnings.length > 0) {
-          setWarnings(resData.warnings);
-          setTimeout(() => onSuccess(), 3000);
-        } else {
-          onSuccess();
-        }
+      if (resData.warnings && resData.warnings.length > 0) {
+        setWarnings(resData.warnings);
+        setTimeout(() => onSuccess(), 3000);
       } else {
-        setErrorMessage(resData.message || "Tạo phiếu nhập kho thất bại. Lỗi từ máy chủ.");
+        onSuccess();
       }
-    } catch (e) {
-      setErrorMessage("Lỗi kết nối mạng, vui lòng thử lại.");
+    } catch (e: any) {
+      const errMsg = e.response?.data?.message || "Tạo phiếu nhập kho thất bại. Lỗi từ máy chủ.";
+      setErrorMessage(errMsg);
     } finally {
       setIsSubmitting(false);
     }

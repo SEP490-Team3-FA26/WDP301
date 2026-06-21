@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ShoppingCart, BrainCircuit, HeartPulse, Menu, X, LogOut, ShieldAlert } from "lucide-react";
+import api from "../services/api";
 
 export function CustomerLayout() {
   const location = useLocation();
@@ -25,17 +26,11 @@ export function CustomerLayout() {
         return;
       }
 
-      const res = await fetch("/api/users/cart", {
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.items) {
-          const count = data.items.reduce((acc: number, item: any) => acc + item.quantity, 0);
-          setCartCount(count);
-        }
+      const res = await api.get("/api/users/cart");
+      const data = res.data;
+      if (data && data.items) {
+        const count = data.items.reduce((acc: number, item: any) => acc + item.quantity, 0);
+        setCartCount(count);
       }
     } catch (err) {
       console.error("Error reading cart count:", err);

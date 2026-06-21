@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Search, MapPin, Users, Package, AlertTriangle, Clock, X, ChevronRight, Activity, RotateCcw, Building2, Bell, CheckCircle2 } from "lucide-react";
+import { branchService } from "../../services/branch.service";
 
 interface Branch {
   _id?: string;
@@ -40,9 +41,7 @@ export function Branches() {
   const fetchBranches = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Không thể tải danh sách chi nhánh");
-      const data = await res.json();
+      const data = await branchService.getBranches();
       const mapped = data.map((b: any) => ({
         ...b,
         id: b.branchCode,
@@ -51,7 +50,7 @@ export function Branches() {
       setError(null);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Đã xảy ra lỗi khi tải dữ liệu");
+      setError(err.response?.data?.message || err.message || "Đã xảy ra lỗi khi tải dữ liệu");
     } finally {
       setLoading(false);
     }
@@ -63,13 +62,7 @@ export function Branches() {
 
   const handleCreate = async (newData: any) => {
     try {
-      const res = await fetch("/api/branches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newData),
-      });
-      if (!res.ok) throw new Error("Không thể tạo chi nhánh");
-      const created = await res.json();
+      const created = await branchService.createBranch(newData);
       const mapped = {
         ...created,
         id: created.branchCode,
@@ -77,19 +70,13 @@ export function Branches() {
       setBranches((prev) => [...prev, mapped]);
       setIsCreateOpen(false);
     } catch (err: any) {
-      alert(err.message || "Lỗi khi tạo chi nhánh");
+      alert(err.response?.data?.message || err.message || "Lỗi khi tạo chi nhánh");
     }
   };
 
   const handleUpdate = async (id: string, updatedData: any) => {
     try {
-      const res = await fetch(`/api/branches/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedData),
-      });
-      if (!res.ok) throw new Error("Không thể cập nhật chi nhánh");
-      const updated = await res.json();
+      const updated = await branchService.updateBranch(id, updatedData);
       const mapped = {
         ...updated,
         id: updated.branchCode,
@@ -102,20 +89,17 @@ export function Branches() {
         setSelectedBranch(mapped);
       }
     } catch (err: any) {
-      alert(err.message || "Lỗi khi cập nhật chi nhánh");
+      alert(err.response?.data?.message || err.message || "Lỗi khi cập nhật chi nhánh");
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/branches/${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Không thể xóa chi nhánh");
+      await branchService.deleteBranch(id);
       setBranches((prev) => prev.filter((b) => b._id !== id));
       setSelectedBranch(null);
     } catch (err: any) {
-      alert(err.message || "Lỗi khi xóa chi nhánh");
+      alert(err.response?.data?.message || err.message || "Lỗi khi xóa chi nhánh");
     }
   };
 

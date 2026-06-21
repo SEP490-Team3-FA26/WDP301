@@ -63,12 +63,28 @@ export class MedicineController implements OnModuleInit {
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'category', required: false, type: String })
   @ApiQuery({ name: 'classification', required: false, type: String })
+  @ApiQuery({ name: 'targetGroup', required: false, type: String })
+  @ApiQuery({ name: 'minPrice', required: false, type: Number })
+  @ApiQuery({ name: 'maxPrice', required: false, type: Number })
+  @ApiQuery({ name: 'flavour', required: false, type: String })
+  @ApiQuery({ name: 'country', required: false, type: String })
+  @ApiQuery({ name: 'brand', required: false, type: String })
+  @ApiQuery({ name: 'indication', required: false, type: String })
+  @ApiQuery({ name: 'brandOrigin', required: false, type: String })
   async getMedicines(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
     @Query('search') search = '',
     @Query('category') category = '',
     @Query('classification') classification = '',
+    @Query('targetGroup') targetGroup = '',
+    @Query('minPrice') minPrice?: number,
+    @Query('maxPrice') maxPrice?: number,
+    @Query('flavour') flavour = '',
+    @Query('country') country = '',
+    @Query('brand') brand = '',
+    @Query('indication') indication = '',
+    @Query('brandOrigin') brandOrigin = '',
   ) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.list', {
       page: Number(page),
@@ -76,6 +92,14 @@ export class MedicineController implements OnModuleInit {
       search,
       category,
       classification,
+      targetGroup,
+      minPrice: minPrice ? Number(minPrice) : undefined,
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      flavour,
+      country,
+      brand,
+      indication,
+      brandOrigin,
     });
   }
 

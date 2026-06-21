@@ -5,6 +5,9 @@ import {
   Banknote, QrCode, PlusCircle, Save, FileCheck, Info, Check, SearchIcon,
   ArrowLeft, RefreshCw, ShoppingCart, Plus, Minus, Tag, Phone, Mic, Square
 } from "lucide-react";
+import { medicineService } from "../../services/medicine.service";
+import { prescriptionService } from "../../services/prescription.service";
+import { orderService } from "../../services/order.service";
 
 export function Sales() {
   const [activeTab, setActiveTab] = useState("KÊ ĐƠN / PRESCRIPTION");
@@ -35,8 +38,8 @@ export function Sales() {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-5 py-2 rounded-lg text-xs font-bold tracking-wide transition-all uppercase whitespace-nowrap ${activeTab === tab
-                  ? "bg-white text-[#0057cd] shadow-sm font-black"
-                  : "text-slate-500 hover:text-slate-800"
+                ? "bg-white text-[#0057cd] shadow-sm font-black"
+                : "text-slate-500 hover:text-slate-800"
                 }`}
             >
               {tab}
@@ -57,13 +60,12 @@ export function Sales() {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-center justify-between gap-3 px-4.5 py-3.5 rounded-2xl shadow-xl border text-xs font-bold tracking-wide uppercase transition-all duration-300 animate-slide-in-right ${
-              toast.type === "error"
+            className={`pointer-events-auto flex items-center justify-between gap-3 px-4.5 py-3.5 rounded-2xl shadow-xl border text-xs font-bold tracking-wide uppercase transition-all duration-300 animate-slide-in-right ${toast.type === "error"
                 ? "bg-rose-50 text-rose-800 border-rose-200 shadow-rose-100/50"
                 : toast.type === "warning"
-                ? "bg-amber-50 text-amber-800 border-amber-200 shadow-amber-100/50"
-                : "bg-emerald-50 text-emerald-800 border-emerald-200 shadow-emerald-100/50"
-            }`}
+                  ? "bg-amber-50 text-amber-800 border-amber-200 shadow-amber-100/50"
+                  : "bg-emerald-50 text-emerald-800 border-emerald-200 shadow-emerald-100/50"
+              }`}
           >
             <div className="flex items-center gap-2.5">
               {toast.type === "error" ? (
@@ -136,7 +138,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
   const [patientAge, setPatientAge] = useState("");
   const [patientGender, setPatientGender] = useState("Nam");
   const [patientPhone, setPatientPhone] = useState("");
-  
+
   const [doctorName, setDoctorName] = useState("");
   const [doctorSpecialty, setDoctorSpecialty] = useState("");
   const [hospitalName, setHospitalName] = useState("");
@@ -195,11 +197,8 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
   // Load prescriptions from DB
   const fetchDbPrescriptions = async () => {
     try {
-      const res = await fetch("/api/prescriptions");
-      if (res.ok) {
-        const data = await res.json();
-        setDbPrescriptions(data || []);
-      }
+      const data = await prescriptionService.getPrescriptions();
+      setDbPrescriptions(data || []);
     } catch (err) {
       console.error("Lỗi lấy danh sách đơn thuốc:", err);
     }
@@ -223,11 +222,8 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
 
   const searchMedicines = async (query: string) => {
     try {
-      const res = await fetch(`/api/medicines?limit=10&search=${encodeURIComponent(query)}&_t=${Date.now()}`);
-      const data = await res.json();
-      if (res.ok) {
-        setSearchResults(data.data || []);
-      }
+      const data = await medicineService.getMedicines({ limit: 10, search: query, _t: Date.now() });
+      setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);
     }
@@ -259,11 +255,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/prescriptions/${code}`);
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Không tìm thấy đơn thuốc điện tử.");
-      }
+      const data = await prescriptionService.getPrescriptionByCode(code);
       // Populate fields from fetched prescription
       setPatientName(data.patientName);
       setPatientAge(data.patientAge.toString());
@@ -276,7 +268,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
       setPrescriptionItems(data.items);
       setPrescriptionCode(code);
     } catch (err: any) {
-      setError(err.message || "Lỗi kết nối máy chủ");
+      setError(err.response?.data?.message || err.message || "Lỗi kết nối máy chủ");
       setPrescriptionItems([]);
     } finally {
       setLoading(false);
@@ -302,10 +294,10 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
         showToast("Đã vượt quá số lượng tồn kho khả dụng của thuốc!", "warning");
         return;
       }
-      setPrescriptionItems(prescriptionItems.map(it => 
-          it.medicineId === medId 
-            ? { ...it, quantity: it.quantity + 1 } 
-            : it
+      setPrescriptionItems(prescriptionItems.map(it =>
+        it.medicineId === medId
+          ? { ...it, quantity: it.quantity + 1 }
+          : it
       ));
     } else {
       if (med.stock <= 0) {
@@ -342,19 +334,11 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.message || "Lỗi khi xử lý thanh toán");
-      }
+      const result = await orderService.createSale(payload);
 
       setInvoiceData(result);
       setShowInvoiceModal(true);
-      
+
       // Clear forms
       setPrescriptionItems([]);
       setPatientName("");
@@ -367,7 +351,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
       setPrescriptionCode("");
       fetchDbPrescriptions();
     } catch (err: any) {
-      setError(err.message || "Lỗi thanh toán");
+      setError(err.response?.data?.message || err.message || "Lỗi thanh toán");
     } finally {
       setLoading(false);
     }
@@ -378,15 +362,12 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
     if (payosPolling && payosOrderCode) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`/api/orders/check/${payosOrderCode}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === "PAID") {
-              setPayosPolling(false);
-              setShowPayOSModal(false);
-              showToast("Thanh toán PayOS thành công!", "success");
-              await finalizeSalesOrder(pendingSalePayload);
-            }
+          const data = await orderService.checkOrderStatus(payosOrderCode);
+          if (data.status === "PAID") {
+            setPayosPolling(false);
+            setShowPayOSModal(false);
+            showToast("Thanh toán PayOS thành công!", "success");
+            await finalizeSalesOrder(pendingSalePayload);
           }
         } catch (err) {
           console.error("Lỗi polling status thanh toán:", err);
@@ -399,19 +380,16 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
   const checkManualPayment = async () => {
     if (!payosOrderCode) return;
     try {
-      const res = await fetch(`/api/orders/check/${payosOrderCode}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === "PAID") {
-          setPayosPolling(false);
-          setShowPayOSModal(false);
-          showToast("Thanh toán PayOS thành công!", "success");
-          await finalizeSalesOrder(pendingSalePayload);
-        } else {
-          showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
-        }
+      const data = await orderService.checkOrderStatus(payosOrderCode);
+      if (data.status === "PAID") {
+        setPayosPolling(false);
+        setShowPayOSModal(false);
+        showToast("Thanh toán PayOS thành công!", "success");
+        await finalizeSalesOrder(pendingSalePayload);
+      } else {
+        showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       showToast("Lỗi kiểm tra trạng thái thanh toán.", "error");
     }
@@ -452,26 +430,18 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
       };
 
       if (paymentMethod === "QR_PAY") {
-        const payosRes = await fetch("/api/orders/payos-link", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            patientName,
-            patientPhone: patientPhone || "0900000000",
-            totalAmount: total,
-            items: prescriptionItems.map(it => ({
-              medicineId: it.medicineId,
-              name: it.name,
-              quantity: it.quantity,
-              price: it.price,
-              unit: it.unit
-            }))
-          })
+        const payosResult = await orderService.createPayOSLink({
+          patientName,
+          patientPhone: patientPhone || "0900000000",
+          totalAmount: total,
+          items: prescriptionItems.map(it => ({
+            medicineId: it.medicineId,
+            name: it.name,
+            quantity: it.quantity,
+            price: it.price,
+            unit: it.unit
+          }))
         });
-        const payosResult = await payosRes.json();
-        if (!payosRes.ok) {
-          throw new Error(payosResult.message || "Không thể tạo link thanh toán PayOS");
-        }
 
         setPayosCheckoutUrl(payosResult.checkoutUrl);
         setPayosQrCode(payosResult.qrCode || "");
@@ -512,7 +482,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
     <div className="h-full flex flex-col xl:flex-row gap-6 overflow-hidden">
       {/* Cột trái: Chi tiết đơn & Giỏ hàng */}
       <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-6 pb-6">
-        
+
         {/* Thanh tìm kiếm đơn thuốc & Quét QR */}
         <div className="bg-white rounded-[16px] border border-slate-200 p-5 shadow-sm flex flex-col md:flex-row items-center gap-4 shrink-0">
           <div className="flex-1 relative w-full">
@@ -564,14 +534,14 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
             /* Summary view when collapsed */
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-semibold text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-100/50">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-slate-400 font-bold">Bệnh nhân:</span> 
-                <span className="font-extrabold text-slate-900">{patientName || "Chưa nhập"}</span> 
+                <span className="text-slate-400 font-bold">Bệnh nhân:</span>
+                <span className="font-extrabold text-slate-900">{patientName || "Chưa nhập"}</span>
                 {patientAge && <span className="text-slate-400">({patientAge} tuổi, {patientGender})</span>}
                 {patientPhone && <span className="text-slate-400 font-bold">| SĐT: {patientPhone}</span>}
               </div>
               <div className="flex flex-wrap items-center gap-1.5 md:justify-end">
-                <span className="text-slate-400 font-bold">Bác sĩ:</span> 
-                <span className="font-extrabold text-slate-900">{doctorName || "Chưa nhập"}</span> 
+                <span className="text-slate-400 font-bold">Bác sĩ:</span>
+                <span className="font-extrabold text-slate-900">{doctorName || "Chưa nhập"}</span>
                 {hospitalName && <span className="text-slate-400">({hospitalName})</span>}
               </div>
             </div>
@@ -581,28 +551,28 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Tên bệnh nhân *</label>
-                  <input 
-                    type="text" 
-                    value={patientName} 
+                  <input
+                    type="text"
+                    value={patientName}
                     onChange={(e) => setPatientName(e.target.value)}
-                    placeholder="Nguyễn Văn A" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+                    placeholder="Nguyễn Văn A"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Tuổi</label>
-                  <input 
-                    type="number" 
-                    value={patientAge} 
+                  <input
+                    type="number"
+                    value={patientAge}
                     onChange={(e) => setPatientAge(e.target.value)}
-                    placeholder="30" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+                    placeholder="30"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Giới tính</label>
-                  <select 
-                    value={patientGender} 
+                  <select
+                    value={patientGender}
                     onChange={(e) => setPatientGender(e.target.value)}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
                   >
@@ -612,12 +582,12 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Số điện thoại</label>
-                  <input 
-                    type="text" 
-                    value={patientPhone} 
+                  <input
+                    type="text"
+                    value={patientPhone}
                     onChange={(e) => setPatientPhone(e.target.value)}
-                    placeholder="09xx xxx xxx" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+                    placeholder="09xx xxx xxx"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
                   />
                 </div>
               </div>
@@ -625,12 +595,12 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Bác sĩ kê đơn *</label>
-                  <input 
-                    type="text" 
-                    value={doctorName} 
+                  <input
+                    type="text"
+                    value={doctorName}
                     onChange={(e) => setDoctorName(e.target.value)}
-                    placeholder="BS. Lê Văn B" 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]" 
+                    placeholder="BS. Lê Văn B"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:border-[#0057cd]"
                   />
                 </div>
                 <div>
@@ -685,11 +655,10 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
                     onChange={(e) => setHospitalCode(e.target.value)}
                     disabled={dropdownValue !== "CUSTOM" && dropdownValue !== ""}
                     placeholder="BM-1029"
-                    className={`w-full p-2.5 rounded-lg text-sm font-semibold focus:outline-none focus:border-[#0057cd] ${
-                      dropdownValue !== "CUSTOM" && dropdownValue !== ""
+                    className={`w-full p-2.5 rounded-lg text-sm font-semibold focus:outline-none focus:border-[#0057cd] ${dropdownValue !== "CUSTOM" && dropdownValue !== ""
                         ? "bg-slate-100 text-slate-500 border-slate-250 cursor-not-allowed"
                         : "bg-slate-50 border border-slate-200 focus:bg-white"
-                    }`}
+                      }`}
                   />
                 </div>
               </div>
@@ -713,19 +682,19 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
               <SearchIcon size={18} />
             </div>
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Nhập tên thuốc, hoạt chất hoặc mã thuốc để tìm..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" 
+              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
             />
 
             {/* Dropdown kết quả tìm kiếm */}
             {searchResults.length > 0 && (
               <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl border border-slate-200 shadow-xl max-h-60 overflow-y-auto z-40 divide-y divide-slate-100">
                 {searchResults.map((med) => (
-                  <button 
+                  <button
                     key={med.id || med._id}
                     onClick={() => handleAddMedicineDirect(med)}
                     className="w-full p-4 text-left hover:bg-slate-50 transition-colors flex items-center justify-between"
@@ -825,18 +794,18 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
                                 <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
                                   <Sparkles size={13} className="text-[#0057cd]" />
                                 </span>
-                                <input 
-                                  type="text" 
+                                <input
+                                  type="text"
                                   value={it.dosage}
                                   onChange={(e) => {
-                                    setPrescriptionItems(prescriptionItems.map(p => 
-                                      p.medicineId === it.medicineId 
-                                        ? { ...p, dosage: e.target.value } 
+                                    setPrescriptionItems(prescriptionItems.map(p =>
+                                      p.medicineId === it.medicineId
+                                        ? { ...p, dosage: e.target.value }
                                         : p
                                     ));
                                   }}
                                   placeholder="Ví dụ: Ngày uống 2 lần..."
-                                  className="w-full pl-7 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0057cd] focus:border-[#0057cd] transition-all" 
+                                  className="w-full pl-7 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0057cd] focus:border-[#0057cd] transition-all"
                                 />
                               </div>
                               {/* Quick select presets */}
@@ -851,9 +820,9 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
                                     key={preset}
                                     type="button"
                                     onClick={() => {
-                                      setPrescriptionItems(prescriptionItems.map(p => 
-                                        p.medicineId === it.medicineId 
-                                          ? { ...p, dosage: preset } 
+                                      setPrescriptionItems(prescriptionItems.map(p =>
+                                        p.medicineId === it.medicineId
+                                          ? { ...p, dosage: preset }
                                           : p
                                       ));
                                     }}
@@ -867,7 +836,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
                           </td>
                           <td className="px-4 py-4 text-center">
                             <div className="flex items-center justify-center gap-2">
-                              <button 
+                              <button
                                 onClick={() => {
                                   if (it.quantity > 1) {
                                     setPrescriptionItems(prescriptionItems.map(p => p.medicineId === it.medicineId ? { ...p, quantity: p.quantity - 1 } : p));
@@ -878,7 +847,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
                                 <Minus size={12} />
                               </button>
                               <span className="font-bold text-slate-900 text-[14px] w-6 text-center">{it.quantity}</span>
-                              <button 
+                              <button
                                 onClick={() => {
                                   if (it.quantity < it.stock) {
                                     setPrescriptionItems(prescriptionItems.map(p => p.medicineId === it.medicineId ? { ...p, quantity: p.quantity + 1 } : p));
@@ -898,7 +867,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
                           <td className="px-6 py-4 text-right font-medium text-slate-600">{it.price.toLocaleString()}₫</td>
                           <td className="px-6 py-4 text-right font-bold text-slate-900">{(it.price * it.quantity).toLocaleString()}₫</td>
                           <td className="px-4 py-4 text-center">
-                            <button 
+                            <button
                               onClick={() => setPrescriptionItems(prescriptionItems.filter(p => p.medicineId !== it.medicineId))}
                               className="text-red-500 hover:text-red-800"
                             >
@@ -962,8 +931,8 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
             <button
               onClick={() => setPaymentMethod("CASH")}
               className={`flex flex-col items-center justify-center gap-2 py-3 rounded-xl border-2 transition-all relative ${paymentMethod === "CASH"
-                  ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd]"
-                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd]"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
                 }`}
             >
               {paymentMethod === "CASH" && <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#0057cd] rounded-full"></div>}
@@ -973,8 +942,8 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
             <button
               onClick={() => setPaymentMethod("CARD")}
               className={`flex flex-col items-center justify-center gap-2 py-3 rounded-xl border-2 transition-all relative ${paymentMethod === "CARD"
-                  ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd]"
-                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd]"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
                 }`}
             >
               {paymentMethod === "CARD" && <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#0057cd] rounded-full"></div>}
@@ -984,8 +953,8 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
             <button
               onClick={() => setPaymentMethod("QR_PAY")}
               className={`flex flex-col items-center justify-center gap-2 py-3 rounded-xl border-2 transition-all relative ${paymentMethod === "QR_PAY"
-                  ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd]"
-                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd]"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
                 }`}
             >
               {paymentMethod === "QR_PAY" && <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#0057cd] rounded-full"></div>}
@@ -1019,7 +988,7 @@ function PrescriptionView({ showToast }: { showToast: (message: string, type?: "
             </div>
             <div className="text-[10px] opacity-75 font-semibold">Tự động xuất kho theo FIFO</div>
           </button>
-          <button 
+          <button
             onClick={() => { setPrescriptionItems([]); setPatientName(""); setDoctorName(""); setPrescriptionCode(""); }}
             className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-[16px] py-3.5 shadow-sm transition-colors flex items-center justify-center gap-2 font-bold text-[14px]"
           >
@@ -1338,15 +1307,7 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.message || "Lỗi thanh toán");
-      }
+      const result = await orderService.createSale(payload);
 
       setInvoiceData(result);
       setShowInvoiceModal(true);
@@ -1363,15 +1324,12 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
     if (payosPolling && payosOrderCode) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`/api/orders/check/${payosOrderCode}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === "PAID") {
-              setPayosPolling(false);
-              setShowPayOSModal(false);
-              showToast("Thanh toán PayOS thành công!", "success");
-              await finalizeSalesOrder(pendingSalePayload);
-            }
+          const data = await orderService.checkOrderStatus(payosOrderCode);
+          if (data.status === "PAID") {
+            setPayosPolling(false);
+            setShowPayOSModal(false);
+            showToast("Thanh toán PayOS thành công!", "success");
+            await finalizeSalesOrder(pendingSalePayload);
           }
         } catch (err) {
           console.error("Lỗi polling status thanh toán:", err);
@@ -1384,19 +1342,16 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
   const checkManualPayment = async () => {
     if (!payosOrderCode) return;
     try {
-      const res = await fetch(`/api/orders/check/${payosOrderCode}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === "PAID") {
-          setPayosPolling(false);
-          setShowPayOSModal(false);
-          showToast("Thanh toán PayOS thành công!", "success");
-          await finalizeSalesOrder(pendingSalePayload);
-        } else {
-          showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
-        }
+      const data = await orderService.checkOrderStatus(payosOrderCode);
+      if (data.status === "PAID") {
+        setPayosPolling(false);
+        setShowPayOSModal(false);
+        showToast("Thanh toán PayOS thành công!", "success");
+        await finalizeSalesOrder(pendingSalePayload);
+      } else {
+        showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       showToast("Lỗi kiểm tra trạng thái thanh toán.", "error");
     }
@@ -1409,7 +1364,7 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
   const [aiLoading, setAiLoading] = useState(false);
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [aiResult, setAiResult] = useState<any>(null);
-  
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<any>(null);
@@ -1465,19 +1420,12 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
       const formData = new FormData();
       formData.append("audio", voiceBlob, "counter_recording.webm");
 
-      const res = await fetch("/api/prescriptions/recommend", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setAiResult(data);
-      } else {
-        showToast(data.message || "Lỗi phân tích cuộc thoại từ AI.", "error");
-      }
-    } catch (err) {
+      const data = await prescriptionService.recommendPrescription(formData);
+      setAiResult(data);
+    } catch (err: any) {
       console.error(err);
-      showToast("Lỗi kết nối y tế AI", "error");
+      const errMsg = err.response?.data?.message || err.message || "Lỗi phân tích cuộc thoại từ AI.";
+      showToast(errMsg, "error");
     } finally {
       setAiLoading(false);
     }
@@ -1535,11 +1483,8 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
   const searchMedicines = async (query: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/medicines?limit=10&search=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      if (res.ok) {
-        setSearchResults(data.data || []);
-      }
+      const data = await medicineService.getMedicines({ limit: 10, search: query });
+      setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -1597,26 +1542,18 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
       };
 
       if (paymentMethod === "QR_PAY") {
-        const payosRes = await fetch("/api/orders/payos-link", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            patientName: "Khách lẻ vãng lai",
-            patientPhone: "0900000000",
-            totalAmount: total,
-            items: cart.map(it => ({
-              medicineId: it.id || it._id,
-              name: it.name,
-              quantity: it.quantity,
-              price: it.price,
-              unit: it.unit
-            }))
-          })
+        const payosResult = await orderService.createPayOSLink({
+          patientName: "Khách lẻ vãng lai",
+          patientPhone: "0900000000",
+          totalAmount: total,
+          items: cart.map(it => ({
+            medicineId: it.id || it._id,
+            name: it.name,
+            quantity: it.quantity,
+            price: it.price,
+            unit: it.unit
+          }))
         });
-        const payosResult = await payosRes.json();
-        if (!payosRes.ok) {
-          throw new Error(payosResult.message || "Không thể tạo link thanh toán PayOS");
-        }
 
         setPayosCheckoutUrl(payosResult.checkoutUrl);
         setPayosOrderCode(payosResult.orderCode);
@@ -1837,8 +1774,8 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
             <button
               onClick={() => setPaymentMethod("CASH")}
               className={`flex items-center justify-center gap-2 py-3.5 border-2 rounded-xl font-bold text-sm transition-all ${paymentMethod === "CASH"
-                  ? "border-[#0057cd] bg-[#f0f6ff] text-[#0057cd]"
-                  : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                ? "border-[#0057cd] bg-[#f0f6ff] text-[#0057cd]"
+                : "border-slate-200 text-slate-700 hover:bg-slate-50"
                 }`}
             >
               <Banknote size={16} /> Tiền mặt
@@ -1846,8 +1783,8 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
             <button
               onClick={() => setPaymentMethod("QR_PAY")}
               className={`flex items-center justify-center gap-2 py-3.5 border-2 rounded-xl font-bold text-sm transition-all ${paymentMethod === "QR_PAY"
-                  ? "border-[#0057cd] bg-[#f0f6ff] text-[#0057cd]"
-                  : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                ? "border-[#0057cd] bg-[#f0f6ff] text-[#0057cd]"
+                : "border-slate-200 text-slate-700 hover:bg-slate-50"
                 }`}
             >
               <QrCode size={16} /> VNPay/QR
@@ -2042,8 +1979,8 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
               <h3 className="font-black text-slate-900 text-sm flex items-center gap-2 uppercase tracking-wide">
                 <Sparkles className="text-purple-600 animate-pulse animate-duration-1000" /> Trợ Lý Tư Vấn Triệu Chứng AI
               </h3>
-              <button 
-                onClick={() => { setVoiceModalOpen(false); setAiResult(null); setVoiceBlob(null); }} 
+              <button
+                onClick={() => { setVoiceModalOpen(false); setAiResult(null); setVoiceBlob(null); }}
                 className="text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <XCircle size={22} />
@@ -2062,9 +1999,8 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
                   )}
                   <button
                     onClick={recording ? stopVoiceRecording : startVoiceRecording}
-                    className={`relative z-10 w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer ${
-                      recording ? "bg-rose-500 text-white shadow-rose-200" : "bg-purple-600 text-white hover:bg-purple-700 shadow-purple-200"
-                    }`}
+                    className={`relative z-10 w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer ${recording ? "bg-rose-500 text-white shadow-rose-200" : "bg-purple-600 text-white hover:bg-purple-700 shadow-purple-200"
+                      }`}
                   >
                     {recording ? <Square size={20} className="fill-white" /> : <Mic size={24} />}
                   </button>
@@ -2123,7 +2059,7 @@ function RetailView({ showToast }: { showToast: (message: string, type?: "succes
                             const match = aiResult.inventory_status?.available?.find(
                               (av: any) => av.name.toLowerCase() === drug.name.toLowerCase()
                             );
-                            
+
                             return (
                               <div key={idx} className="border border-slate-100 rounded-lg p-2.5 bg-slate-50/50 flex items-center justify-between gap-3 text-xs">
                                 <div>
