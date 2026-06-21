@@ -7,9 +7,9 @@ export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
   @MessagePattern('inventory.prescription.get')
-  async getPrescriptionByCode(@Payload() data: { code: string }) {
+  async getPrescriptionByCode(@Payload() data: { code: string; branchId?: string }) {
     try {
-      return await this.salesService.getPrescriptionByCode(data.code);
+      return await this.salesService.getPrescriptionByCode(data.code, data.branchId);
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy thông tin đơn thuốc');
@@ -37,11 +37,43 @@ export class SalesController {
   }
 
   @MessagePattern('inventory.sale.list')
-  async listSalesOrders() {
+  async listSalesOrders(@Payload() data: { search?: string }) {
     try {
-      return await this.salesService.listSalesOrders();
+      return await this.salesService.listSalesOrders(data?.search);
     } catch (error) {
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách đơn bán hàng');
+    }
+  }
+
+  // UC-08	Xử lý đổi / trả hàng
+
+  @MessagePattern('inventory.sale.get')
+  async getSalesOrderById(@Payload() data: { id: string }) {
+    try {
+      return await this.salesService.getSalesOrderById(data.id);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy thông tin đơn bán hàng');
+    }
+  }
+
+  @MessagePattern('inventory.sale.return')
+  async processReturn(@Payload() data: any) {
+    try {
+      return await this.salesService.processReturn(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi xử lý trả hàng');
+    }
+  }
+
+  @MessagePattern('inventory.sale.exchange')
+  async processExchange(@Payload() data: any) {
+    try {
+      return await this.salesService.processExchange(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi xử lý đổi hàng');
     }
   }
 }

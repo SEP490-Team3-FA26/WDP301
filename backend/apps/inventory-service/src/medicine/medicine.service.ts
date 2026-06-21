@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -6,13 +6,71 @@ import { Medicine } from './schemas/medicine.schema';
 import { MedicineBatch } from './schemas/medicine-batch.schema';
 
 @Injectable()
-export class MedicineService {
+export class MedicineService implements OnModuleInit {
   private readonly logger = new Logger(MedicineService.name);
 
   constructor(
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
   ) { }
+
+  onModuleInit() {
+    this.syncMedicineStocksInBackground().catch((error) => {
+      this.logger.error('Failed to synchronize stock in background:', error);
+    });
+  }
+
+  private async syncMedicineStocksInBackground() {
+    this.logger.log('Starting background stock synchronization for all medicines...');
+    const startTime = Date.now();
+    try {
+      // 1. Fetch all medicines with only _id and stock
+      const medicines = await this.medicineModel.find({}, { _id: 1, stock: 1 }).lean().exec();
+
+      // 2. Fetch all active batches with stock > 0
+      const activeBatches = await this.batchModel.find(
+        { status: 'ACTIVE', stock: { $gt: 0 } },
+        { medicineId: 1, stock: 1 }
+      ).lean().exec();
+
+      // 3. Aggregate active batch stocks in memory by medicineId
+      const batchStockMap = new Map<string, number>();
+      for (const batch of activeBatches) {
+        if (batch.medicineId) {
+          const medId = batch.medicineId.toString();
+          batchStockMap.set(medId, (batchStockMap.get(medId) || 0) + batch.stock);
+        }
+      }
+
+      // 4. Compare cached stock and build bulkWrite ops for mismatches
+      const bulkOps = [];
+      for (const med of medicines) {
+        const medId = med._id.toString();
+        const actualStock = batchStockMap.get(medId) || 0;
+        const currentStock = med.stock || 0;
+
+        if (currentStock !== actualStock) {
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: med._id },
+              update: { $set: { stock: actualStock } }
+            }
+          });
+        }
+      }
+
+      // 5. Execute bulkWrite if there are mismatched stocks
+      if (bulkOps.length > 0) {
+        this.logger.log(`Found ${bulkOps.length} medicines with mismatched stock. Syncing...`);
+        await this.medicineModel.bulkWrite(bulkOps);
+        this.logger.log(`Bulk stock synchronization completed successfully in ${Date.now() - startTime}ms.`);
+      } else {
+        this.logger.log(`All medicine stocks are already synchronized. Completed in ${Date.now() - startTime}ms.`);
+      }
+    } catch (error) {
+      this.logger.error('Failed to run background stock synchronization:', error);
+    }
+  }
 
   async getMedicineFilters() {
     try {
@@ -67,13 +125,6 @@ export class MedicineService {
         throw new RpcException('Medicine not found');
       }
 
-      const updateData: any = { status };
-      const updatedMedicine = await this.medicineModel.findByIdAndUpdate(
-        id,
-        { $set: updateData },
-        { new: true }
-      ).exec();
-
       // Cập nhật tồn kho ở lô INIT-BATCH nếu có tham số stock
       if (stock !== undefined) {
         let initBatch = await this.batchModel.findOne({ medicineId: id, batchNo: 'INIT-BATCH' }).exec();
@@ -96,6 +147,13 @@ export class MedicineService {
       // Lấy tồn kho cập nhật mới
       const batches = await this.batchModel.find({ medicineId: id, status: 'ACTIVE', stock: { $gt: 0 } }).exec();
       const totalStock = batches.reduce((sum, b) => sum + b.stock, 0);
+
+      // Cập nhật status và stock cho medicine
+      const updatedMedicine = await this.medicineModel.findByIdAndUpdate(
+        id,
+        { $set: { status, stock: totalStock } },
+        { new: true }
+      ).exec();
 
       let earliestExpiryStr = '2026-12-31';
       if (batches.length > 0) {
@@ -251,8 +309,8 @@ export class MedicineService {
             } else {
               // Truy vấn lô hàng cho các kết quả từ AI Service
               const aiMedIds = aiData.map((med: any) => (med._id || med.id || '').toString()).filter(id => id);
-              const aiBatches = await this.batchModel.find({ medicineId: { $in: aiMedIds } }).exec();
-              const aiBatchesByMedId = new Map<string, MedicineBatch[]>();
+              const aiBatches = await this.batchModel.find({ medicineId: { $in: aiMedIds } }).lean().exec();
+              const aiBatchesByMedId = new Map<string, any[]>();
               for (const batch of aiBatches) {
                 const list = aiBatchesByMedId.get(batch.medicineId) || [];
                 list.push(batch);
@@ -263,7 +321,7 @@ export class MedicineService {
                 const medId = (med._id || med.id || '').toString();
                 const medBatches = aiBatchesByMedId.get(medId) || [];
                 const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-                const totalStock = activeBatches.reduce((sum, b) => sum + b.stock, 0);
+                const totalStock = med.stock || 0;
 
                 let earliestExpiryStr = '2026-12-31';
                 if (activeBatches.length > 0) {
@@ -318,9 +376,9 @@ export class MedicineService {
           ]);
 
           const medIds = data.map(med => med._id.toString());
-          const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).exec();
+          const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).lean().exec();
 
-          const batchesByMedId = new Map<string, MedicineBatch[]>();
+          const batchesByMedId = new Map<string, any[]>();
           for (const batch of allBatches) {
             const list = batchesByMedId.get(batch.medicineId) || [];
             list.push(batch);
@@ -331,7 +389,7 @@ export class MedicineService {
             const medId = med._id.toString();
             const medBatches = batchesByMedId.get(medId) || [];
             const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-            const totalStock = activeBatches.reduce((sum, b) => sum + b.stock, 0);
+            const totalStock = med.stock || 0;
 
             let earliestExpiryStr = '2026-12-31';
             if (activeBatches.length > 0) {
@@ -390,9 +448,9 @@ export class MedicineService {
 
         // Truy vấn lô hàng cho toàn bộ danh sách kết quả hiển thị
         const medIds = data.map(med => med._id.toString());
-        const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).exec();
+        const allBatches = await this.batchModel.find({ medicineId: { $in: medIds } }).lean().exec();
 
-        const batchesByMedId = new Map<string, MedicineBatch[]>();
+        const batchesByMedId = new Map<string, any[]>();
         for (const batch of allBatches) {
           const list = batchesByMedId.get(batch.medicineId) || [];
           list.push(batch);
@@ -403,7 +461,7 @@ export class MedicineService {
           const medId = med._id.toString();
           const medBatches = batchesByMedId.get(medId) || [];
           const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-          const totalStock = activeBatches.reduce((sum, b) => sum + b.stock, 0);
+          const totalStock = med.stock || 0;
 
           let earliestExpiryStr = '2026-12-31';
           if (activeBatches.length > 0) {

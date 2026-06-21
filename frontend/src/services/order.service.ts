@@ -71,5 +71,25 @@ export const orderService = {
   async createSale(payload: SalePayload) {
     const response = await api.post('/api/sales', payload);
     return response.data;
+  },
+
+  async listSalesOrders(search?: string) {
+    const response = await api.get('/api/sales', { params: { search } });
+    return response.data;
+  },
+
+  async getSaleById(id: string) {
+    const response = await api.get(`/api/sales/${id}`);
+    return response.data;
+  },
+
+  async processReturn(payload: any) {
+    const response = await api.post('/api/sales/return', payload);
+    return response.data;
+  },
+
+  async processExchange(payload: any) {
+    const response = await api.post('/api/sales/exchange', payload);
+    return response.data;
   }
 };

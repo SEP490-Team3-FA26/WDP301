@@ -3,7 +3,8 @@ import {
   Search, AlertTriangle, ShieldAlert, Sparkles, Printer, XCircle, FileText,
   CheckCircle2, ChevronRight, Stethoscope, Building, UserSquare2, CreditCard,
   Banknote, QrCode, PlusCircle, Save, FileCheck, Info, Check, SearchIcon,
-  ArrowLeft, RefreshCw, ShoppingCart, Plus, Minus, Tag, Phone, Mic, Square
+  ArrowLeft, RefreshCw, ShoppingCart, Plus, Minus, Tag, Phone, Mic, Square,
+  Eye
 } from "lucide-react";
 import { medicineService } from "../../services/medicine.service";
 import { prescriptionService } from "../../services/prescription.service";
@@ -52,7 +53,7 @@ export function Sales() {
         {activeTab === "BÁN LẺ / RETAIL" && <RetailView showToast={showToast} />}
         {activeTab === "KÊ ĐƠN / PRESCRIPTION" && <PrescriptionView showToast={showToast} />}
         {activeTab === "BÁN SỈ / WHOLESALE" && <WholesaleView />}
-        {activeTab === "TRÀ HÀNG / RETURNS" && <ReturnsView />}
+        {activeTab === "TRÀ HÀNG / RETURNS" && <ReturnsView showToast={showToast} />}
       </div>
 
       {/* Custom Toast Container */}
@@ -2120,16 +2121,876 @@ function WholesaleView() {
   );
 }
 
-function ReturnsView() {
+function ReturnsView({ showToast }: { showToast: (message: string, type?: "success" | "error" | "warning") => void }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [salesOrders, setSalesOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Modal for editing/exchanging the selected order
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+
+  // Modal for viewing the original invoice detailed view (read-only)
+  const [viewInvoice, setViewInvoice] = useState<any>(null);
+
+  // Return quantities & reasons
+  const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
+  const [returnReasons, setReturnReasons] = useState<Record<string, string>>({});
+
+  // Transaction Mode: RETURN_ONLY | EXCHANGE
+  const [transactionMode, setTransactionMode] = useState<"RETURN_ONLY" | "EXCHANGE">("RETURN_ONLY");
+
+  // Exchange search & items state
+  const [exchangeSearchQuery, setExchangeSearchQuery] = useState("");
+  const [exchangeSearchResults, setExchangeSearchResults] = useState<any[]>([]);
+  const [exchangeCart, setExchangeCart] = useState<any[]>([]);
+
+  // 1. Debounce search input for scaling
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // 2. Fetch sales orders based on debounced query (initial load + search query)
+  useEffect(() => {
+    const fetchOrders = async () => {
+      setLoading(true);
+      try {
+        const data = await orderService.listSalesOrders(debouncedQuery);
+        setSalesOrders(data || []);
+      } catch (err) {
+        showToast("Lỗi tải danh sách hóa đơn", "error");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
+  }, [debouncedQuery]);
+
+  // 3. Search exchange medicines
+  useEffect(() => {
+    if (!exchangeSearchQuery) {
+      setExchangeSearchResults([]);
+      return;
+    }
+    const handler = setTimeout(async () => {
+      try {
+        const data = await medicineService.getMedicines({ limit: 10, search: exchangeSearchQuery });
+        setExchangeSearchResults(data.data || []);
+      } catch (err) {
+        console.error(err);
+      }
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [exchangeSearchQuery]);
+
+  const handleSelectOrder = (order: any) => {
+    setSelectedOrder(order);
+    const initialQties: Record<string, number> = {};
+    const initialReasons: Record<string, string> = {};
+    order.items.forEach((item: any) => {
+      initialQties[item.medicineId] = 0;
+      initialReasons[item.medicineId] = "CHANGE_OF_MIND";
+    });
+    setReturnQuantities(initialQties);
+    setReturnReasons(initialReasons);
+    setExchangeCart([]);
+    setExchangeSearchQuery("");
+    setTransactionMode("RETURN_ONLY");
+  };
+
+  const addExchangeItem = (med: any) => {
+    const medId = med.id || med._id;
+    const existing = exchangeCart.find(it => (it.id || it._id) === medId);
+    if (existing) {
+      if (existing.quantity >= med.stock) {
+        showToast("Đã vượt quá số lượng tồn kho khả dụng!", "warning");
+        return;
+      }
+      setExchangeCart(exchangeCart.map(it => (it.id || it._id) === medId ? { ...it, quantity: it.quantity + 1 } : it));
+    } else {
+      if (med.stock <= 0) {
+        showToast("Thuốc này đã hết hàng khả dụng trong kho!", "error");
+        return;
+      }
+      setExchangeCart([...exchangeCart, { ...med, id: medId, quantity: 1 }]);
+    }
+    setExchangeSearchQuery("");
+    setExchangeSearchResults([]);
+  };
+
+  const updateExchangeQty = (id: string, delta: number, stock: number) => {
+    setExchangeCart(exchangeCart.map(it => {
+      const itId = it.id || it._id;
+      if (itId === id) {
+        const newQty = it.quantity + delta;
+        if (newQty <= 0) return null;
+        if (newQty > stock) {
+          showToast("Vượt quá số lượng tồn kho khả dụng!", "warning");
+          return it;
+        }
+        return { ...it, quantity: newQty };
+      }
+      return it;
+    }).filter(Boolean));
+  };
+
+  const returnItems = selectedOrder
+    ? selectedOrder.items.map((item: any) => ({
+        medicineId: item.medicineId,
+        name: item.name,
+        quantity: returnQuantities[item.medicineId] || 0,
+        price: item.price,
+        unit: item.unit,
+        reason: returnReasons[item.medicineId] || "CHANGE_OF_MIND"
+      })).filter((it: any) => it.quantity > 0)
+    : [];
+
+  const totalRefundAmount = returnItems.reduce((sum, item) => {
+    return sum + Math.round((item.price * item.quantity) * 0.95 * 1.08);
+  }, 0);
+
+  const totalExchangeCost = exchangeCart.reduce((sum, it) => sum + (it.price * it.quantity), 0);
+  const finalDifference = totalExchangeCost - totalRefundAmount;
+
+  const handleSubmit = async () => {
+    if (returnItems.length === 0) return;
+    setSubmitting(true);
+    try {
+      if (transactionMode === "RETURN_ONLY") {
+        const payload = {
+          salesOrderId: selectedOrder._id,
+          items: returnItems.map(it => ({
+            medicineId: it.medicineId,
+            quantity: it.quantity,
+            reason: it.reason
+          })),
+          soldBy: "Dược sĩ Trần Thị A"
+        };
+        const res = await orderService.processReturn(payload);
+        if (res.success) {
+          showToast("Xử lý trả hàng hoàn tiền thành công!", "success");
+          setSelectedOrder(null);
+          const updatedList = await orderService.listSalesOrders(debouncedQuery);
+          setSalesOrders(updatedList || []);
+        } else {
+          showToast(res.message || "Xử lý trả hàng thất bại", "error");
+        }
+      } else {
+        const payload = {
+          salesOrderId: selectedOrder._id,
+          returnedItems: returnItems.map(it => ({
+            medicineId: it.medicineId,
+            quantity: it.quantity,
+            reason: it.reason
+          })),
+          newItems: exchangeCart.map(it => ({
+            medicineId: it.id || it._id,
+            quantity: it.quantity
+          })),
+          soldBy: "Dược sĩ Trần Thị A"
+        };
+        const res = await orderService.processExchange(payload);
+        if (res.success) {
+          showToast("Xử lý đổi hàng thành công!", "success");
+          setSelectedOrder(null);
+          const updatedList = await orderService.listSalesOrders(debouncedQuery);
+          setSalesOrders(updatedList || []);
+        } else {
+          showToast(res.message || "Xử lý đổi hàng thất bại", "error");
+        }
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.message || "Đã xảy ra lỗi hệ thống", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col xl:flex-row gap-6">
-      <div className="flex-1 bg-white border border-slate-200 rounded-3xl p-8 shadow-sm flex flex-col items-center justify-center text-center">
-        <RefreshCw className="text-slate-300 mb-4" size={48} />
-        <h3 className="text-lg font-bold text-slate-800">Chức năng Quản lý Hoàn trả</h3>
-        <p className="text-slate-500 text-sm max-w-sm mt-2">
-          Xử lý hoàn trả thuốc lỗi, cận hạn hoặc đổi hàng của bệnh nhân dựa trên số hóa đơn gốc.
-        </p>
+    <div className="h-full flex flex-col gap-6 overflow-hidden">
+      {/* Tìm kiếm hóa đơn */}
+      <div className="bg-white border border-slate-200 rounded-[16px] p-5 shadow-sm">
+        <h3 className="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wider">
+          Tra cứu hóa đơn mua hàng
+        </h3>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4.5 flex items-center pointer-events-none text-slate-400">
+            <SearchIcon size={18} />
+          </div>
+          <input
+            type="text"
+            placeholder="Nhập mã hóa đơn hoặc số điện thoại khách hàng để tra cứu..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+          />
+        </div>
       </div>
+
+      {/* Danh sách hóa đơn */}
+      <div className="bg-white rounded-[16px] border border-slate-200 shadow-sm overflow-hidden flex-1 flex flex-col min-h-[400px]">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+          <div className="flex items-center gap-2 font-bold text-slate-800">
+            <FileText size={18} className="text-[#0057cd]" />
+            Danh sách hóa đơn (Tối đa 20 đơn gần nhất)
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center p-12">
+              <div className="w-8 h-8 border-3 border-[#0057cd] border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : salesOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center">
+              <FileText size={40} className="text-slate-300 mb-3" />
+              <h3 className="text-sm font-bold text-slate-500">Không tìm thấy hóa đơn nào khớp</h3>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-150">
+              {salesOrders.map((order) => (
+                <div
+                  key={order._id}
+                  onClick={() => handleSelectOrder(order)}
+                  className="p-4.5 hover:bg-slate-50/80 transition-all flex items-center justify-between cursor-pointer border-l-4 border-transparent hover:border-[#0057cd]"
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewInvoice(order);
+                      }}
+                      className="font-mono font-bold text-[13px] text-[#0057cd] hover:text-[#00419e] hover:underline cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Eye size={13} className="inline" /> {order._id}
+                    </span>
+                    <div className="text-xs font-bold text-slate-700">
+                      Khách hàng: {order.patientName || "Khách lẻ vãng lai"}
+                    </div>
+                    {order.patientPhone && (
+                      <div className="text-[11px] text-slate-500 font-semibold">
+                        SĐT: {order.patientPhone}
+                      </div>
+                    )}
+                    <div className="text-[10px] text-slate-400">
+                      Ngày bán: {new Date(order.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-right flex flex-col gap-1.5">
+                    <span className="font-bold text-slate-900 text-sm">
+                      {order.totalAmount.toLocaleString()}₫
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full inline-block uppercase">
+                      {order.type}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* =======================================
+       * 📄 OVERLAY DETAIL MODAL FOR RETURN/EXCHANGE
+       * ======================================= */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] border border-slate-200 shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh] transform transition-all duration-300">
+            {/* Modal Header */}
+            <div className="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-900 text-sm uppercase tracking-wide flex items-center gap-2">
+                <RefreshCw className="text-[#0057cd]" />
+                Chi tiết Đổi / Trả hàng cho hóa đơn gốc
+              </h3>
+              <div className="flex items-center gap-4.5">
+                <span className="font-mono text-xs font-bold text-slate-500">Mã: {selectedOrder._id}</span>
+                <button
+                  onClick={() => setSelectedOrder(null)}
+                  className="text-slate-400 hover:text-slate-700 transition-colors"
+                >
+                  <XCircle size={22} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col lg:flex-row gap-6 scrollbar-hide">
+              {/* Left Side: Original Items and new Exchange Items */}
+              <div className="flex-1 flex flex-col gap-6">
+                {/* Patient Info Card */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 rounded-xl p-4 text-xs">
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Khách hàng:</span>
+                    <span className="font-bold text-slate-800">{selectedOrder.patientName || "Khách lẻ vãng lai"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Số điện thoại:</span>
+                    <span className="font-bold text-slate-800">{selectedOrder.patientPhone || "N/A"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Loại hóa đơn:</span>
+                    <span className="font-bold text-slate-800 uppercase">{selectedOrder.type}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Ngày bán:</span>
+                    <span className="font-bold text-slate-800">{new Date(selectedOrder.createdAt).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Items Table */}
+                <div>
+                  <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Sản phẩm đã mua</h3>
+                  <div className="border border-slate-150 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold uppercase tracking-wider">
+                        <tr>
+                          <th className="px-4 py-3">Tên thuốc</th>
+                          <th className="px-3 py-3 text-center">Đã mua</th>
+                          <th className="px-3 py-3 text-center">Đã trả</th>
+                          <th className="px-4 py-3 text-center">Số lượng trả</th>
+                          <th className="px-4 py-3">Lý do trả</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedOrder.items.map((item: any) => {
+                          const maxReturnable = item.quantity - (item.returnedQuantity || 0);
+                          const currentQty = returnQuantities[item.medicineId] || 0;
+
+                          return (
+                            <tr key={item.medicineId} className="hover:bg-slate-50/50">
+                              <td className="px-4 py-4">
+                                <div className="font-bold text-slate-900">{item.name}</div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  Đơn giá: {item.price.toLocaleString()}₫ | ĐVT: {item.unit}
+                                </div>
+                              </td>
+                              <td className="px-3 py-4 text-center font-bold text-slate-700">{item.quantity}</td>
+                              <td className="px-3 py-4 text-center font-bold text-rose-600">{item.returnedQuantity || 0}</td>
+                              <td className="px-4 py-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    disabled={currentQty <= 0}
+                                    onClick={() =>
+                                      setReturnQuantities({
+                                        ...returnQuantities,
+                                        [item.medicineId]: currentQty - 1
+                                      })
+                                    }
+                                    className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                                  >
+                                    <Minus size={12} />
+                                  </button>
+                                  <span className="font-bold w-6 text-center">{currentQty}</span>
+                                  <button
+                                    disabled={currentQty >= maxReturnable}
+                                    onClick={() =>
+                                      setReturnQuantities({
+                                        ...returnQuantities,
+                                        [item.medicineId]: currentQty + 1
+                                      })
+                                    }
+                                    className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                                  >
+                                    <Plus size={12} />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <select
+                                  disabled={currentQty === 0}
+                                  value={returnReasons[item.medicineId] || "CHANGE_OF_MIND"}
+                                  onChange={(e) =>
+                                    setReturnReasons({
+                                      ...returnReasons,
+                                      [item.medicineId]: e.target.value
+                                    })
+                                  }
+                                  className="px-2 py-1.5 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 bg-white"
+                                >
+                                  <option value="CHANGE_OF_MIND">Đổi ý (Cộng kho)</option>
+                                  <option value="FAULTY">Lỗi sản phẩm (Không cộng kho)</option>
+                                  <option value="EXPIRED">Cận hạn sử dụng (Không cộng kho)</option>
+                                  <option value="OTHER">Lý do khác (Không cộng kho)</option>
+                                </select>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Option to toggle Exchange mode */}
+                <div className="border-t border-slate-150 pt-4 flex flex-col gap-4">
+                  <div className="flex bg-slate-100 p-1 rounded-xl gap-1 self-start">
+                    <button
+                      onClick={() => setTransactionMode("RETURN_ONLY")}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all uppercase ${
+                        transactionMode === "RETURN_ONLY"
+                          ? "bg-white text-[#0057cd] shadow-sm font-black"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      Chỉ trả hàng (Hoàn tiền)
+                    </button>
+                    <button
+                      onClick={() => setTransactionMode("EXCHANGE")}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all uppercase ${
+                        transactionMode === "EXCHANGE"
+                          ? "bg-white text-[#0057cd] shadow-sm font-black"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      Đổi hàng (Bù trừ sản phẩm mới)
+                    </button>
+                  </div>
+
+                  {/* Exchange section if selected */}
+                  {transactionMode === "EXCHANGE" && (
+                    <div className="border border-[#0057cd]/20 rounded-2xl p-5 bg-[#fcfdff] flex flex-col gap-4">
+                      <h4 className="text-xs font-black text-[#0057cd] uppercase tracking-widest">
+                        Chọn sản phẩm mới đổi
+                      </h4>
+                      
+                      {/* Search bar */}
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                          <SearchIcon size={16} />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Tìm kiếm thuốc mới..."
+                          value={exchangeSearchQuery}
+                          onChange={(e) => setExchangeSearchQuery(e.target.value)}
+                          className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#0057cd]"
+                        />
+                        
+                        {/* Search Dropdown */}
+                        {exchangeSearchResults.length > 0 && (
+                          <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-lg border border-slate-200 shadow-lg max-h-48 overflow-y-auto z-40 divide-y divide-slate-100">
+                            {exchangeSearchResults.map((med) => (
+                              <button
+                                key={med.id || med._id}
+                                onClick={() => addExchangeItem(med)}
+                                className="w-full p-2.5 text-left hover:bg-slate-50 transition-colors flex items-center justify-between text-xs"
+                              >
+                                <div>
+                                  <div className="font-bold text-slate-900">{med.name}</div>
+                                  <div className="text-[10px] text-slate-500">Tồn: {med.stock} {med.unit}</div>
+                                </div>
+                                <span className="font-bold text-[#0057cd]">{med.price.toLocaleString()}₫</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Exchange Cart list */}
+                      <div className="border border-slate-100 rounded-lg bg-white overflow-x-auto">
+                        {exchangeCart.length === 0 ? (
+                          <div className="p-6 text-center text-slate-400 text-xs italic">
+                            Chưa chọn sản phẩm đổi mới nào. Nhập tìm kiếm ở trên.
+                          </div>
+                        ) : (
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-50 text-[10px] text-slate-500 font-bold uppercase tracking-wider border-b border-slate-150">
+                              <tr>
+                                <th className="px-4 py-2">Sản phẩm mới</th>
+                                <th className="px-3 py-2 text-center">Số lượng</th>
+                                <th className="px-3 py-2 text-center">ĐVT</th>
+                                <th className="px-4 py-2 text-right">Tổng tiền</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {exchangeCart.map((it) => (
+                                <tr key={it.id || it._id} className="hover:bg-slate-50/50">
+                                  <td className="px-4 py-3">
+                                    <div className="font-bold text-slate-800">{it.name}</div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                      Đơn giá: {it.price.toLocaleString()}₫
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-3 text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <button
+                                        onClick={() => updateExchangeQty(it.id || it._id, -1, it.stock)}
+                                        className="w-5 h-5 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100"
+                                      >
+                                        <Minus size={10} />
+                                      </button>
+                                      <span className="font-bold">{it.quantity}</span>
+                                      <button
+                                        onClick={() => updateExchangeQty(it.id || it._id, 1, it.stock)}
+                                        className="w-5 h-5 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100"
+                                      >
+                                        <Plus size={10} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-3 text-center text-slate-500">{it.unit}</td>
+                                  <td className="px-4 py-3 text-right font-bold text-[#0057cd]">
+                                    {(it.price * it.quantity).toLocaleString()}₫
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Lịch sử Đổi / Trả hàng đã thực hiện trước đó */}
+                  {((selectedOrder.returns && selectedOrder.returns.length > 0) || 
+                    (selectedOrder.exchanges && selectedOrder.exchanges.length > 0)) && (
+                    <div className="border-t border-slate-150 pt-4 flex flex-col gap-3">
+                      <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                        Lịch sử Đổi / Trả đã thực hiện
+                      </h4>
+                      <div className="space-y-3">
+                        {selectedOrder.returns?.map((ret: any, rIdx: number) => (
+                          <div key={`ret-${rIdx}`} className="bg-rose-50/50 border border-rose-100/70 rounded-xl p-3.5 space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-bold text-rose-800 uppercase tracking-wider">
+                              <span>Lần trả hàng #{rIdx + 1}</span>
+                              <span>{new Date(ret.returnedAt).toLocaleString()}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-semibold">
+                              Dược sĩ thực hiện: <span className="text-slate-800 font-bold">{ret.soldBy || "Dược sĩ"}</span>
+                            </div>
+                            <div className="space-y-1 pl-2 border-l-2 border-rose-200 text-xs">
+                              {ret.items?.map((it: any, itIdx: number) => (
+                                <div key={itIdx} className="flex justify-between text-slate-700 font-medium">
+                                  <span>{it.name}</span>
+                                  <span>
+                                    {it.quantity} {it.unit} (Lý do: {
+                                      it.reason === "CHANGE_OF_MIND" ? "Đổi ý" : 
+                                      it.reason === "FAULTY" ? "Sản phẩm lỗi" : 
+                                      it.reason === "EXPIRED" ? "Cận HSD" : "Lý do khác"
+                                    })
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+
+                        {selectedOrder.exchanges?.map((exc: any, eIdx: number) => (
+                          <div key={`exc-${eIdx}`} className="bg-blue-50/50 border border-blue-100/70 rounded-xl p-3.5 space-y-2.5">
+                            <div className="flex justify-between items-center text-[10px] font-bold text-blue-800 uppercase tracking-wider">
+                              <span>Lần đổi hàng #{eIdx + 1}</span>
+                              <span>{new Date(exc.exchangedAt).toLocaleString()}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-semibold">
+                              Dược sĩ thực hiện: <span className="text-slate-800 font-bold">{exc.soldBy || "Dược sĩ"}</span>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-[#ba1a1a] uppercase tracking-wide block">Sản phẩm trả lại:</span>
+                                <div className="space-y-1 pl-2 border-l-2 border-rose-200">
+                                  {exc.returnedItems?.map((it: any, itIdx: number) => (
+                                    <div key={itIdx} className="text-slate-700 font-semibold">
+                                      {it.name} <span className="text-slate-500 font-medium">({it.quantity} {it.unit})</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wide block">Sản phẩm đổi mới:</span>
+                                <div className="space-y-1 pl-2 border-l-2 border-emerald-200">
+                                  {exc.newItems?.map((it: any, itIdx: number) => (
+                                    <div key={itIdx} className="text-slate-700 font-semibold">
+                                      {it.name} <span className="text-slate-500 font-medium">({it.quantity} {it.unit})</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Side: Summary Card */}
+              <div className="w-full lg:w-[360px] flex flex-col gap-6 shrink-0">
+                <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 flex flex-col gap-5">
+                  <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                    Tổng kết đổi trả / Summary
+                  </h3>
+
+                  <div className="space-y-4 text-xs font-semibold">
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span>Số sản phẩm hoàn trả:</span>
+                      <span className="text-slate-900 font-bold">
+                        {returnItems.reduce((sum, it) => sum + it.quantity, 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-emerald-700 bg-emerald-100/50 p-2.5 rounded-lg border border-emerald-100">
+                      <span>Tổng tiền hoàn trả khách:</span>
+                      <span className="font-bold text-sm">+{totalRefundAmount.toLocaleString()}₫</span>
+                    </div>
+
+                    {transactionMode === "EXCHANGE" && (
+                      <>
+                        <div className="flex justify-between items-center text-slate-600 border-t border-dashed border-slate-200 pt-3">
+                          <span>Số sản phẩm mua mới:</span>
+                          <span className="text-slate-900 font-bold">
+                            {exchangeCart.reduce((sum, it) => sum + it.quantity, 0)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[#ba1a1a] bg-rose-50 p-2.5 rounded-lg border border-rose-100">
+                          <span>Tổng tiền hàng mới:</span>
+                          <span className="font-bold text-sm">-{totalExchangeCost.toLocaleString()}₫</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="border-t border-slate-200 pt-4 flex flex-col gap-2">
+                    {transactionMode === "RETURN_ONLY" ? (
+                      <div className="flex items-end justify-between text-slate-800">
+                        <div className="text-xs font-black text-slate-900 uppercase tracking-widest pb-1">
+                          HOÀN TIỀN LẠI KHÁCH
+                        </div>
+                        <div className="text-2xl font-black text-emerald-600 leading-none tracking-tighter">
+                          {totalRefundAmount.toLocaleString()}₫
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-end justify-between text-slate-800">
+                        <div className="text-xs font-black text-slate-900 uppercase tracking-widest pb-1">
+                          {finalDifference >= 0 ? "KHÁCH PHẢI BÙ THÊM" : "THỐI LẠI TIỀN KHÁCH"}
+                        </div>
+                        <div
+                          className={`text-2xl font-black leading-none tracking-tighter ${
+                            finalDifference >= 0 ? "text-[#0057cd]" : "text-emerald-600"
+                          }`}
+                        >
+                          {Math.abs(finalDifference).toLocaleString()}₫
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handleSubmit}
+                    disabled={returnItems.length === 0 || submitting}
+                    className="w-full bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl py-4 flex items-center justify-center gap-2 font-black text-xs uppercase tracking-wide mt-2 shadow transition-all cursor-pointer"
+                  >
+                    {submitting ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        <RefreshCw size={14} />
+                        Xác nhận đổi / trả hàng
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =======================================
+       * 📄 VIEW ORIGINAL INVOICE MODAL (XEM HÓA ĐƠN GỐC)
+       * ======================================= */}
+      {viewInvoice && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] border border-slate-200 shadow-2xl w-full max-w-xl overflow-hidden flex flex-col transform transition-all duration-300">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-900 text-base flex items-center gap-2 uppercase tracking-wide">
+                <FileText className="text-[#0057cd]" size={20} /> Chi tiết Hóa đơn gốc
+              </h3>
+              <button onClick={() => setViewInvoice(null)} className="text-slate-400 hover:text-slate-700 transition-colors">
+                <XCircle size={22} />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-6 overflow-y-auto max-h-[75vh] scrollbar-hide text-xs">
+              {/* Receipt Header */}
+              <div className="text-center border-b border-dashed border-slate-200 pb-4">
+                <div className="font-bold text-[16px] text-slate-900 uppercase">HỆ THỐNG NHÀ THUỐC WDP</div>
+                <div className="text-xs text-slate-500 mt-1">Đường 3/2, Quận Hải Châu, Đà Nẵng</div>
+                <div className="text-xs text-slate-500">SĐT: 0236 123 456</div>
+              </div>
+
+              {/* Invoice Information */}
+              <div className="flex flex-col gap-1.5 border-b border-slate-200 pb-3 font-semibold text-slate-700">
+                <div className="flex justify-between">
+                  <span>Mã hóa đơn:</span>
+                  <span className="font-bold font-mono text-[#0057cd]">{viewInvoice._id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Ngày bán:</span>
+                  <span>{new Date(viewInvoice.createdAt).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Kiểu bán:</span>
+                  <span className="font-bold uppercase text-[#0057cd]">{viewInvoice.type}</span>
+                </div>
+                {viewInvoice.prescriptionCode && (
+                  <div className="flex justify-between">
+                    <span>Mã đơn gốc:</span>
+                    <span className="font-bold font-mono text-[#0057cd]">{viewInvoice.prescriptionCode}</span>
+                  </div>
+                )}
+                <div className="flex justify-between flex-wrap gap-x-4 border-t border-slate-100 pt-1.5 mt-1">
+                  <span>Khách hàng:</span>
+                  <span className="font-bold text-slate-900">{viewInvoice.patientName || "Khách lẻ vãng lai"}</span>
+                </div>
+                {viewInvoice.patientPhone && (
+                  <div className="flex justify-between flex-wrap gap-x-4">
+                    <span>Số điện thoại:</span>
+                    <span className="font-bold text-slate-900">{viewInvoice.patientPhone}</span>
+                  </div>
+                )}
+                <div className="flex justify-between flex-wrap gap-x-4">
+                  <span>Dược sĩ thực hiện:</span>
+                  <span className="font-bold text-slate-900">{viewInvoice.soldBy || "Dược sĩ Trần Thị A"}</span>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div>
+                <div className="font-bold border-b border-slate-200 pb-1.5 mb-2 uppercase text-slate-800 tracking-wider">Danh sách sản phẩm đã mua</div>
+                <div className="space-y-3">
+                  {viewInvoice.items.map((it: any, idx: number) => (
+                    <div key={idx} className="flex flex-col">
+                      <div className="flex justify-between font-bold text-slate-900">
+                        <span>{it.name}</span>
+                        <span>{it.quantity} {it.unit}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-500 text-[10px] mt-0.5">
+                        <span>Đơn giá: {it.price.toLocaleString()}₫</span>
+                        <span>Thành tiền: {(it.price * it.quantity).toLocaleString()}₫</span>
+                      </div>
+                      {it.returnedQuantity > 0 && (
+                        <div className="text-[10px] text-rose-600 font-bold mt-0.5 bg-rose-50 px-2 py-0.5 rounded border border-rose-100/50 inline-block self-start">
+                          (Đã hoàn trả: {it.returnedQuantity} {it.unit})
+                        </div>
+                      )}
+                      {it.batches && it.batches.length > 0 && (
+                        <div className="text-[10px] text-slate-400 mt-1 pl-2 border-l border-slate-200">
+                          Lô xuất kho: {it.batches.map((b: any) => `${b.batchNo} (${b.quantity})`).join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lịch sử Đổi / Trả hàng của hóa đơn gốc */}
+              {((viewInvoice.returns && viewInvoice.returns.length > 0) || 
+                (viewInvoice.exchanges && viewInvoice.exchanges.length > 0)) && (
+                <div className="border-t border-slate-200 pt-4 flex flex-col gap-3">
+                  <div className="font-bold border-b border-slate-200 pb-1.5 mb-1 uppercase text-slate-800 tracking-wider">
+                    Lịch sử Đổi / Trả hàng
+                  </div>
+                  <div className="space-y-3">
+                    {viewInvoice.returns?.map((ret: any, rIdx: number) => (
+                      <div key={`ret-${rIdx}`} className="bg-rose-50/50 border border-rose-100/70 rounded-xl p-3.5 space-y-2">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-rose-800 uppercase tracking-wider">
+                          <span>Lần trả hàng #{rIdx + 1}</span>
+                          <span>{new Date(ret.returnedAt).toLocaleString()}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-semibold">
+                          Dược sĩ thực hiện: <span className="text-slate-800 font-bold">{ret.soldBy || "Dược sĩ"}</span>
+                        </div>
+                        <div className="space-y-1 pl-2 border-l-2 border-rose-200 text-xs">
+                          {ret.items?.map((it: any, itIdx: number) => (
+                            <div key={itIdx} className="flex justify-between text-slate-700 font-medium">
+                              <span>{it.name}</span>
+                              <span>
+                                {it.quantity} {it.unit} (Lý do: {
+                                  it.reason === "CHANGE_OF_MIND" ? "Đổi ý" : 
+                                  it.reason === "FAULTY" ? "Sản phẩm lỗi" : 
+                                  it.reason === "EXPIRED" ? "Cận HSD" : "Lý do khác"
+                                })
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+
+                    {viewInvoice.exchanges?.map((exc: any, eIdx: number) => (
+                      <div key={`exc-${eIdx}`} className="bg-blue-50/50 border border-blue-100/70 rounded-xl p-3.5 space-y-2.5">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-blue-800 uppercase tracking-wider">
+                          <span>Lần đổi hàng #{eIdx + 1}</span>
+                          <span>{new Date(exc.exchangedAt).toLocaleString()}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-semibold">
+                          Dược sĩ thực hiện: <span className="text-slate-800 font-bold">{exc.soldBy || "Dược sĩ"}</span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-[#ba1a1a] uppercase tracking-wide block">Sản phẩm trả lại:</span>
+                            <div className="space-y-1 pl-2 border-l-2 border-rose-200">
+                              {exc.returnedItems?.map((it: any, itIdx: number) => (
+                                <div key={itIdx} className="text-slate-700 font-semibold">
+                                  {it.name} <span className="text-slate-500 font-medium">({it.quantity} {it.unit})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wide block">Sản phẩm đổi mới:</span>
+                            <div className="space-y-1 pl-2 border-l-2 border-emerald-200">
+                              {exc.newItems?.map((it: any, itIdx: number) => (
+                                <div key={itIdx} className="text-slate-700 font-semibold">
+                                  {it.name} <span className="text-slate-500 font-medium">({it.quantity} {it.unit})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Financial summary */}
+              <div className="border-t border-slate-200 pt-4 flex flex-col gap-1.5 text-slate-700">
+                <div className="flex justify-between font-semibold">
+                  <span>Tổng tiền hàng:</span>
+                  <span className="text-slate-950 font-bold">{viewInvoice.totalAmount.toLocaleString()}₫</span>
+                </div>
+                <div className="flex justify-between font-black text-sm text-[#0057cd] border-t border-dashed border-slate-200 pt-2">
+                  <span>Tổng cộng thanh toán:</span>
+                  <span className="text-lg">{viewInvoice.totalAmount.toLocaleString()}₫</span>
+                </div>
+                <div className="flex justify-between text-slate-500 text-[10px] mt-1">
+                  <span>Phương thức thanh toán:</span>
+                  <span className="font-bold uppercase bg-slate-100 px-2 py-0.5 rounded text-slate-700">{viewInvoice.paymentMethod || "CASH"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setViewInvoice(null)}
+                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

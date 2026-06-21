@@ -3,8 +3,11 @@ import { Document } from 'mongoose';
 
 @Schema({ timestamps: true, collection: 'medicinebatches' })
 export class MedicineBatch extends Document {
-  @Prop({ type: String, required: true })
+  @Prop({ type: String, required: true, index: true })
   medicineId: string;
+
+  @Prop({ type: String, default: 'CENTRAL_WH', index: true })
+  branchId: string;
 
   @Prop({ type: String, required: true })
   batchNo: string;

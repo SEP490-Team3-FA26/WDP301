@@ -158,6 +158,12 @@ export function PurchaseOrderCreate() {
 
   const totalAmount = cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
 
+  const isGdpExpired = cart.some(item => {
+    const supplier = suppliers.find(s => s._id === item.supplierId || s.id === item.supplierId);
+    if (!supplier) return false;
+    return supplier.gdp_expiry_date && new Date(supplier.gdp_expiry_date) < new Date();
+  });
+
   return (
     <div className="flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-hidden">
       {/* Header */}
@@ -335,11 +341,10 @@ export function PurchaseOrderCreate() {
                   setIsSubmitting(true);
                   setErrorMsg(null);
                   try {
-                     const res = await fetch('/api/purchase-orders', {
+                      const res = await fetch('/api/purchase-orders/auto-route', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        supplierId: selectedSupplierId,
                         items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
                         linkedPrId: cart[0]?.prId || "",
                         requisitionIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
@@ -361,7 +366,7 @@ export function PurchaseOrderCreate() {
                 }}
                 disabled={cart.length === 0 || isSubmitting || isGdpExpired}
                 className={`w-full py-3.5 font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm
-                  ${cart.length > 0 && !isSubmitting
+                  ${cart.length > 0 && !isSubmitting && !isGdpExpired
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
                 `}
@@ -391,6 +396,14 @@ export function PurchaseOrderCreate() {
                   <AlertTriangle size={18} className="shrink-0 mt-0.5" />
                   <span className="leading-relaxed">{errorMsg}</span>
                 </motion.div>
+              )}
+
+              {/* GDP Hết Hạn Warning */}
+              {isGdpExpired && (
+                <div className="mt-4 flex items-start gap-3 bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-sm font-semibold">
+                  <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">GDP của một hoặc nhiều nhà cung cấp trong đơn đã hết hạn. Hệ thống chặn không cho lên đơn nhập hàng!</span>
+                </div>
               )}
             </div>
           </div>
