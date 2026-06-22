@@ -26,6 +26,8 @@ export class PurchaseService {
 
   async onModuleInit() {
     this.supplierClient.subscribeToResponseOf('supplier.get_by_id');
+    this.supplierClient.subscribeToResponseOf('supplier.credit.check_limit');
+    this.supplierClient.subscribeToResponseOf('supplier.credit.record_grn');
     await this.supplierClient.connect();
   }
 
@@ -252,8 +254,14 @@ export class PurchaseService {
    * HQ (Admin) duyệt và thanh toán các PO đã được hệ thống tách sẵn.
    * Lệnh thanh toán được ghi nhận, gửi PO chính thức cho NCC.
    */
-  async approveAndPayPurchaseOrder(data: { poId: string; approvedBy?: string; action: 'APPROVE' | 'REJECT'; rejectionReason?: string }) {
-    this.logger.log(`Admin ${data.action} PO: ${data.poId}`);
+  async approveAndPayPurchaseOrder(data: {
+    poId: string;
+    approvedBy?: string;
+    action: 'APPROVE' | 'REJECT';
+    rejectionReason?: string;
+    paymentType?: string;
+  }) {
+    this.logger.log(`Admin ${data.action} PO: ${data.poId} with paymentType: ${data.paymentType}`);
 
     const po = await this.poModel.findById(data.poId).exec();
     if (!po) {
@@ -274,12 +282,40 @@ export class PurchaseService {
     }
 
     // APPROVE & PAY flow
+    const paymentType = data.paymentType || po.paymentType || 'PAID';
+
+    if (paymentType === 'CREDIT') {
+      try {
+        const checkResult = await firstValueFrom(
+          this.supplierClient.send('supplier.credit.check_limit', {
+            supplierId: po.supplierId,
+            amount: po.totalAmount,
+          }),
+        );
+        if (!checkResult || !checkResult.allowed) {
+          throw new RpcException({
+            message: checkResult?.reason || 'Vượt hạn mức công nợ nhà cung cấp hoặc nhà cung cấp không khả dụng',
+            statusCode: 400,
+          });
+        }
+      } catch (err) {
+        if (err instanceof RpcException) throw err;
+        throw new RpcException({
+          message: `Lỗi khi kiểm tra hạn mức công nợ NCC: ${err.message || err}`,
+          statusCode: 500,
+        });
+      }
+    }
+
+    po.paymentType = paymentType;
     po.status = 'SHIPPING';
     await po.save();
 
     return {
       success: true,
-      message: `Đã phê duyệt và thanh toán PO. Đơn đặt hàng chuyển sang trạng thái SHIPPING. Kho vận chờ nhận hàng.`,
+      message: paymentType === 'CREDIT'
+        ? `Đã phê duyệt Đơn đặt hàng PO theo hình thức mua nợ. Đơn đặt hàng chuyển sang trạng thái SHIPPING. Kho vận chờ nhận hàng.`
+        : `Đã phê duyệt và thanh toán PO. Đơn đặt hàng chuyển sang trạng thái SHIPPING. Kho vận chờ nhận hàng.`,
       poId: po._id,
     };
   }
@@ -428,6 +464,26 @@ export class PurchaseService {
     });
 
     await grn.save();
+
+    // Ghi nhận công nợ NCC nếu PO là CREDIT
+    if (po.paymentType === 'CREDIT') {
+      try {
+        await firstValueFrom(
+          this.supplierClient.send('supplier.credit.record_grn', {
+            supplierId: po.supplierId,
+            grnId: grn._id.toString(),
+            amount: totalAmount,
+            performedBy: data.receivedBy || 'Thủ Kho',
+          }),
+        );
+      } catch (err) {
+        this.logger.error(`Error recording GRN payable: ${err.message}`, err.stack);
+        throw new RpcException({
+          message: `Không thể ghi nhận công nợ NCC: ${err.message || err}`,
+          statusCode: 500,
+        });
+      }
+    }
 
     // Cập nhật referenceId cho transaction logs rồi lưu
     for (const log of transactionLogs) {

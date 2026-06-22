@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Search, X, CheckCircle2, XCircle, AlertTriangle, Loader2,
-  ShieldCheck, Calendar, Package, Eye, ArrowRight, DollarSign, Building2
+  ShieldCheck, Calendar, Package, Eye, ArrowRight, DollarSign, Building2, CreditCard
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
@@ -64,37 +64,54 @@ export function HQApproval() {
 
   useEffect(() => { fetchData(); setSelectedPos([]); setSelectedPrs([]); }, [tab]);
 
-  const handleAction = async (action: "APPROVE" | "REJECT") => {
+  const handleAction = async (action: "APPROVE" | "REJECT", paymentType?: "PAID" | "CREDIT") => {
     if (selectedPos.length === 0) return;
     setActionLoading(true); setMsg(null);
     try {
       let successCount = 0;
       let errorCount = 0;
+      let lastErrorMessage = "";
 
       for (const poId of selectedPos) {
         try {
           const res = await fetch("/api/purchase-orders/approve-pay", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               poId,
               action,
               rejectionReason: action === "REJECT" ? rejectReason : undefined,
+              paymentType: action === "APPROVE" ? paymentType : undefined,
             }),
           });
-          if (res.ok) successCount++;
-          else errorCount++;
-        } catch { errorCount++; }
+          if (res.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+            const errData = await res.json();
+            lastErrorMessage = errData.message || "Lỗi xử lý đơn.";
+          }
+        } catch (e: any) {
+          errorCount++;
+          lastErrorMessage = e.message || "Lỗi kết nối.";
+        }
       }
 
       if (errorCount === 0) {
         setMsg({ type: "success", text: `Thành công xử lý ${successCount} đơn hàng.` });
         setSelectedPos([]); setShowRejectModal(false); setRejectReason(""); fetchData();
       } else {
-        setMsg({ type: "error", text: `Có ${errorCount} đơn hàng bị lỗi trong quá trình xử lý.` });
+        setMsg({
+          type: "error",
+          text: `Có ${errorCount} đơn hàng bị lỗi trong quá trình xử lý.${lastErrorMessage ? " Chi tiết: " + lastErrorMessage : ""}`,
+        });
         fetchData();
       }
-    } catch { setMsg({ type: "error", text: "Lỗi kết nối" }); }
-    finally { setActionLoading(false); }
+    } catch {
+      setMsg({ type: "error", text: "Lỗi kết nối" });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleProcessUrgent = async (action: "CREATE_EMERGENCY_TRANSFER" | "CREATE_URGENT_PO") => {
@@ -233,9 +250,13 @@ export function HQApproval() {
           className="mb-4 bg-white border border-violet-200 rounded-xl shadow-sm overflow-hidden p-4 flex items-center justify-between">
             <span className="text-sm font-bold text-violet-800">Đã chọn {selectedPos.length} Đơn đặt hàng (PO)</span>
             <div className="flex gap-2">
-              <button onClick={() => handleAction("APPROVE")} disabled={actionLoading}
+              <button onClick={() => handleAction("APPROVE", "PAID")} disabled={actionLoading}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
-                {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <DollarSign size={14} />} Thanh toán & Gửi Đơn
+                {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <DollarSign size={14} />} Thanh toán ngay (PAID)
+              </button>
+              <button onClick={() => handleAction("APPROVE", "CREDIT")} disabled={actionLoading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
+                {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />} Duyệt mua nợ (CREDIT)
               </button>
               <button onClick={() => setShowRejectModal(true)} disabled={actionLoading}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">

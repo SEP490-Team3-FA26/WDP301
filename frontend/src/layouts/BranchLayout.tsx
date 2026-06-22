@@ -1,5 +1,5 @@
 import { BaseDashboardLayout } from "./BaseDashboardLayout";
-import { LayoutDashboard, ShoppingCart, Banknote, BarChart3, ClipboardList, Tag } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Banknote, BarChart3, ClipboardList, Tag, CreditCard } from "lucide-react";
 
 export function BranchLayout() {
   const branchNavItems = [
@@ -8,6 +8,7 @@ export function BranchLayout() {
     { name: "Yêu cầu nhập thuốc", href: "/branch/requisitions", icon: <ClipboardList size={20} /> },
     { name: "Bảng giá bán", href: "/branch/pricing", icon: <Tag size={20} /> },
     { name: "Tài chính", href: "/branch/finance", icon: <Banknote size={20} /> },
+    { name: "Công nợ NCC", href: "/branch/supplier-credit", icon: <CreditCard size={20} /> },
     { name: "Báo cáo thống kê", href: "/branch/reports", icon: <BarChart3 size={20} /> },
   ];
 

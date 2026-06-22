@@ -20,6 +20,7 @@ import { BranchController } from './controllers/branch.controller';
 import { PricingGatewayController } from './controllers/pricing.controller';
 import { MediaController } from './storage/media.controller';
 import { InventoryCheckController } from './controllers/inventory-check.controller';
+import { SupplierCreditController } from './controllers/supplier-credit.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -156,6 +157,7 @@ import { S3StorageService } from './storage/s3-storage.service';
     PricingGatewayController,
     MediaController,
     InventoryCheckController,
+    SupplierCreditController,
   ],
   providers: [
     JwtAuthGuard,

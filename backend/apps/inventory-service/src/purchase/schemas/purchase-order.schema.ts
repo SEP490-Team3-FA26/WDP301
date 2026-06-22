@@ -46,6 +46,9 @@ export class PurchaseOrder extends Document {
 
   @Prop({ type: Number, default: 0 }) // Pipeline/Incoming Stock — hàng dự kiến về
   expectedIncoming: number;
+
+  @Prop({ type: String, default: 'PAID', enum: ['PAID', 'CREDIT'] })
+  paymentType: string; // Thanh toán ngay (PAID) vs Mua nợ (CREDIT) — UC-07
 }
 
 export const PurchaseOrderSchema = SchemaFactory.createForClass(PurchaseOrder);

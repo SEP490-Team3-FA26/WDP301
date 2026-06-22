@@ -169,6 +169,7 @@ export class SalesService {
       }
     }
 
+
     const today = new Date();
     const orderItems = [];
     let totalAmount = 0;
