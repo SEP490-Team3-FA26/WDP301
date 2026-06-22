@@ -1,6 +1,12 @@
 const { MongoClient } = require('mongodb');
+require('dotenv').config();
 
-const MONGODB_URI = 'mongodb+srv://phuocthde180577_db_user:Phuoc12345@cluster0.ruhl6tb.mongodb.net/WDP201?appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+    console.error('Lỗi: MONGODB_URI chưa được cấu hình trong biến môi trường hoặc file .env!');
+    process.exit(1);
+}
 
 // Hàm tính checksum cho EAN-13
 function calculateEAN13Checksum(code12) {

@@ -22,10 +22,12 @@ export class PurchaseService {
     @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     this.supplierClient.subscribeToResponseOf('supplier.get_by_id');
+    this.supplierClient.subscribeToResponseOf('supplier.credit.check_limit');
+    this.supplierClient.subscribeToResponseOf('supplier.credit.record_grn');
     await this.supplierClient.connect();
   }
 
@@ -71,6 +73,9 @@ export class PurchaseService {
     });
     const prCode = `PR-${dateStr}-${String(count + 1).padStart(4, '0')}`;
 
+    const isUrgent = !!data.isUrgent;
+    const status = isUrgent ? 'URGENT_PENDING' : 'SUBMITTED';
+
     const pr = new this.prModel({
       prCode,
       branchId: data.branchId || 'BRANCH_HQ',
@@ -78,15 +83,20 @@ export class PurchaseService {
       items: enrichedItems,
       reason: data.reason || '',
       notes: data.notes || '',
-      status: 'SUBMITTED',
+      status: status,
+      isUrgent: isUrgent,
       createdBy: data.createdBy || '',
     });
 
     await pr.save();
 
+    const msg = isUrgent 
+      ? `Tạo YÊU CẦU HỎA TỐC ${prCode} thành công. Đã gửi thẳng lên Headquarters.`
+      : `Tạo yêu cầu mua hàng ${prCode} thành công. Đang chờ Quản lý kho gom đơn.`;
+
     return {
       success: true,
-      message: `Tạo yêu cầu mua hàng ${prCode} thành công. Đang chờ Quản lý kho gom đơn.`,
+      message: msg,
       data: pr,
     };
   }
@@ -98,7 +108,7 @@ export class PurchaseService {
     const filter: any = {};
     if (query.status) filter.status = query.status;
     if (query.branchId) filter.branchId = query.branchId;
-    return this.prModel.find(filter).sort({ createdAt: -1 }).exec();
+    return this.prModel.find(filter).sort({ isUrgent: -1, createdAt: -1 }).exec();
   }
 
   /**
@@ -115,209 +125,228 @@ export class PurchaseService {
   // ===========================================================================================
 
   /**
-   * Quản lý Kho gom các PR lại (đánh dấu CONSOLIDATED).
-   * Quy trình: SUBMITTED → CONSOLIDATED (Kho gom) → APPROVED/REJECTED (HQ duyệt)
+   * HQ (Admin) Xử lý lệnh Hỏa tốc (URGENT FLOW) từ chi nhánh.
+   * Tạo lệnh xuất kho khẩn hoặc đặt giao hỏa tốc trực tiếp.
    */
-  async consolidatePurchaseRequisitions(data: { prIds: string[]; consolidatedBy?: string }) {
-    this.logger.log(`Consolidating PRs: ${data.prIds.join(', ')}`);
-
-    if (!data.prIds || data.prIds.length === 0) {
-      throw new RpcException({ message: 'Vui lòng chọn ít nhất 1 phiếu PR để gom đơn' });
+  async processUrgentPurchaseRequisition(data: { prId: string, action: 'CREATE_EMERGENCY_TRANSFER' | 'CREATE_URGENT_PO', approvedBy?: string }) {
+    this.logger.log(`Processing urgent PR: ${data.prId} with action ${data.action}`);
+    
+    const pr = await this.prModel.findById(data.prId).exec();
+    if (!pr) {
+      throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${data.prId}` });
     }
 
-    const prs = await this.prModel.find({ _id: { $in: data.prIds } }).exec();
-
-    // Validate: tất cả đều phải ở trạng thái SUBMITTED
-    for (const pr of prs) {
-      if (pr.status !== 'SUBMITTED') {
-        throw new RpcException({
-          message: `Phiếu ${pr.prCode} đang ở trạng thái "${pr.status}", chỉ được gom đơn ở trạng thái SUBMITTED`,
-        });
-      }
+    if (pr.status !== 'URGENT_PENDING') {
+      throw new RpcException({ message: `Phiếu PR đang ở trạng thái "${pr.status}", không phải là đơn hỏa tốc chờ xử lý.` });
     }
 
-    // Cập nhật trạng thái
-    await this.prModel.updateMany(
-      { _id: { $in: data.prIds } },
-      {
-        $set: {
-          status: 'CONSOLIDATED',
-          consolidatedBy: data.consolidatedBy || 'Warehouse Manager',
-        },
-      },
-    );
-
-    // Tính tổng hợp nhu cầu (gom sản phẩm trùng nhau từ nhiều chi nhánh)
-    const consolidatedItems = new Map<string, { medicineId: string; medicineName: string; totalQuantity: number; unit: string; branches: string[] }>();
-    for (const pr of prs) {
-      for (const item of pr.items) {
-        const existing = consolidatedItems.get(item.medicineId);
-        if (existing) {
-          existing.totalQuantity += item.requestedQuantity;
-          if (!existing.branches.includes(pr.branchName)) {
-            existing.branches.push(pr.branchName);
-          }
-        } else {
-          consolidatedItems.set(item.medicineId, {
-            medicineId: item.medicineId,
-            medicineName: item.medicineName,
-            totalQuantity: item.requestedQuantity,
-            unit: item.unit,
-            branches: [pr.branchName],
-          });
-        }
-      }
-    }
+    // Nghiệp vụ: CREATE_EMERGENCY_TRANSFER -> Xuất kho nội bộ
+    // Nghiệp vụ: CREATE_URGENT_PO -> Đặt thẳng từ NCC giao tận nơi chi nhánh
+    
+    pr.status = 'APPROVED';
+    pr.approvedBy = data.approvedBy || 'HQ Admin';
+    pr.approvedAt = new Date();
+    await pr.save();
 
     return {
       success: true,
-      message: `Đã gom ${prs.length} phiếu PR thành công. Đang chờ Headquarters phê duyệt.`,
-      consolidatedSummary: Array.from(consolidatedItems.values()),
-      prCodes: prs.map(pr => pr.prCode),
+      message: `Đã xử lý đơn khẩn cấp thành công bằng phương án: ${data.action === 'CREATE_EMERGENCY_TRANSFER' ? 'Xuất kho khẩn' : 'Đặt giao hỏa tốc từ NCC'}.`,
+      prId: pr._id,
     };
   }
 
-  /**
-   * HQ (Headquarters) phê duyệt các PR đã gom.
-   * Nếu duyệt → tạo luôn PO draft (hoặc chuyển trạng thái để Kho vận tạo PO).
-   */
-  async approvePurchaseRequisitions(data: { prIds: string[]; approvedBy?: string; action: 'APPROVE' | 'REJECT'; rejectionReason?: string }) {
-    this.logger.log(`HQ ${data.action} PRs: ${data.prIds.join(', ')}`);
-
-    if (!data.prIds || data.prIds.length === 0) {
-      throw new RpcException({ message: 'Vui lòng chọn ít nhất 1 phiếu PR để duyệt' });
-    }
-
-    const prs = await this.prModel.find({ _id: { $in: data.prIds } }).exec();
-
-    // Validate: tất cả đều phải ở trạng thái CONSOLIDATED
-    for (const pr of prs) {
-      if (pr.status !== 'CONSOLIDATED') {
-        throw new RpcException({
-          message: `Phiếu ${pr.prCode} chưa được Quản lý kho gom đơn (trạng thái hiện tại: "${pr.status}")`,
-        });
-      }
-    }
-
-    if (data.action === 'REJECT') {
-      await this.prModel.updateMany(
-        { _id: { $in: data.prIds } },
-        {
-          $set: {
-            status: 'REJECTED',
-            approvedBy: data.approvedBy || 'HQ Manager',
-            rejectionReason: data.rejectionReason || 'Không đạt yêu cầu',
-            approvedAt: new Date(),
-          },
-        },
-      );
-
-      return {
-        success: true,
-        message: `Đã từ chối ${prs.length} phiếu PR. Lý do: ${data.rejectionReason || 'Không đạt yêu cầu'}`,
-      };
-    }
-
-    // APPROVE flow
-    await this.prModel.updateMany(
-      { _id: { $in: data.prIds } },
-      {
-        $set: {
-          status: 'APPROVED',
-          approvedBy: data.approvedBy || 'HQ Manager',
-          approvedAt: new Date(),
-        },
-      },
-    );
-
-    return {
-      success: true,
-      message: `Đã phê duyệt ${prs.length} phiếu PR. Quản lý Kho có thể bắt đầu tạo Đơn Đặt Hàng (PO).`,
-      approvedPrIds: data.prIds,
-    };
-  }
-
-  // ===========================================================================================
-  // BƯỚC 3: PO - PURCHASE ORDER (Đơn đặt hàng cho nhà cung cấp)
-  // ===========================================================================================
 
   /**
-   * Tạo Purchase Order. Kiểm tra GDP nhà cung cấp + số đăng ký thuốc.
-   * Hàng chưa về nên CHƯA CÓ Số lô và HSD.
+   * Tạo nhiều PO tự động tách theo Nhà cung cấp từ UI (Truyền lên danh sách items).
+   * Update PR status to CONSOLIDATED.
    */
-  async createPurchaseOrder(data: any) {
-    this.logger.log(`Creating Purchase Order for Supplier: ${data.supplierId}`);
+  async createAutoRoutedPurchaseOrders(data: { items: any[], prIds: string[], createdBy?: string }) {
+    this.logger.log(`Auto-routing POs from UI... PRs: ${data.prIds?.join(', ')}`);
 
-    // 1. Thẩm định Pháp lý Nhà Cung Cấp (GDP) qua Kafka
-    let supplier;
-    try {
-      supplier = await firstValueFrom(
-        this.supplierClient.send('supplier.get_by_id', { id: data.supplierId })
-      );
-    } catch (e) {
-      throw new RpcException({ message: 'Không thể kết nối đến Supplier Service để thẩm định' });
-    }
-
-    if (!supplier) {
-      throw new RpcException({ message: 'Không tìm thấy thông tin Nhà cung cấp' });
+    if (!data.items || data.items.length === 0) {
+      throw new RpcException({ message: 'Giỏ hàng trống, không thể tạo đơn.' });
     }
 
     const today = new Date();
-    if (supplier.gdp_expiry_date && new Date(supplier.gdp_expiry_date) < today) {
-      throw new RpcException({ message: `Giấy chứng nhận GDP của "${supplier.name}" đã HẾT HẠN vào ngày ${new Date(supplier.gdp_expiry_date).toLocaleDateString()}. Yêu cầu gia hạn hồ sơ trước khi nhập hàng!` });
-    }
-
-    // 2. Thẩm định Pháp lý Thuốc (Số đăng ký)
+    
+    // Enrich items with supplierId from DB if missing
     for (const item of data.items) {
-      const medicine = await this.medicineModel.findById(item.medicineId).exec();
-      if (!medicine) {
-        throw new RpcException({ message: `Không tìm thấy thuốc có ID: ${item.medicineId}` });
-      }
-
-      if (medicine.expiry_date && new Date(medicine.expiry_date) < today) {
-         throw new RpcException({ message: `Số đăng ký của thuốc "${medicine.name}" đã hết hạn vào ngày ${new Date(medicine.expiry_date).toLocaleDateString()}. Không thể lên đơn nhập!` });
-      }
+      const med = await this.medicineModel.findById(item.medicineId || item.id).exec();
+      if (!med) throw new RpcException({ message: `Không tìm thấy thuốc có ID: ${item.medicineId || item.id}` });
+      item.supplierId = med.supplierId || 'UNKNOWN';
+      item.medicineId = item.medicineId || item.id;
     }
 
-    // 3. Tạo Purchase Order
-    const totalAmount = data.items.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0);
-    const expectedIncoming = data.items.reduce((sum: number, item: any) => sum + item.quantity, 0);
-
-    const po = new this.poModel({
-      supplierId: data.supplierId,
-      items: data.items.map((item: any) => ({
-        medicineId: item.medicineId,
-        quantity: item.quantity,
-        receivedQuantity: 0, // Chưa nhận gì cả
-        unitPrice: item.unitPrice,
-      })),
-      totalAmount,
-      expectedIncoming,
-      status: 'PENDING', // Đơn chờ nhập kho
-      createdBy: data.createdBy || '',
-      linkedPrId: data.linkedPrId || '', // Link PR nếu có
-    });
-
-    await po.save();
-
-    // Nếu PO được tạo từ PR, cập nhật linkedPoId cho PR
-    if (data.linkedPrId) {
-      await this.prModel.findByIdAndUpdate(data.linkedPrId, { linkedPoId: po._id.toString() });
+    // Group by supplierId
+    const supplierGroups = new Map<string, any[]>();
+    for (const item of data.items) {
+      if (item.supplierId === 'UNKNOWN') {
+        throw new RpcException({ message: `Sản phẩm chưa có Nhà cung cấp mặc định trong hệ thống.` });
+      }
+      const group = supplierGroups.get(item.supplierId) || [];
+      group.push(item);
+      supplierGroups.set(item.supplierId, group);
     }
 
-    if (data.requisitionIds && Array.isArray(data.requisitionIds) && data.requisitionIds.length > 0) {
+    const createdPoIds: string[] = [];
+    for (const [supplierId, items] of supplierGroups.entries()) {
+      let supplier;
+      try {
+        supplier = await firstValueFrom(
+          this.supplierClient.send('supplier.get_by_id', { id: supplierId })
+        );
+      } catch (e) {
+        throw new RpcException({ message: `Không thể thẩm định NCC: ${supplierId}` });
+      }
+
+      if (!supplier) {
+        throw new RpcException({ message: `Không tìm thấy NCC: ${supplierId}` });
+      }
+
+      if (supplier.gdp_expiry_date && new Date(supplier.gdp_expiry_date) < today) {
+        throw new RpcException({ message: `GDP của NCC "${supplier.name}" đã HẾT HẠN. Yêu cầu gia hạn!` });
+      }
+
+      const totalAmount = items.reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
+      const expectedIncoming = items.reduce((sum, it) => sum + it.quantity, 0);
+
+      // Enrich items with medicine name for frontend display
+      const enrichedItems = [];
+      for (const it of items) {
+        const med = await this.medicineModel.findById(it.medicineId).exec();
+        enrichedItems.push({
+          medicineId: it.medicineId,
+          medicineName: med ? med.name : 'Unknown',
+          quantity: it.quantity,
+          receivedQuantity: 0,
+          unitPrice: it.unitPrice,
+        });
+      }
+
+      const po = new this.poModel({
+        supplierId,
+        items: enrichedItems,
+        totalAmount,
+        expectedIncoming,
+        status: 'PENDING_APPROVAL',
+        createdBy: data.createdBy || '',
+      });
+
+      await po.save();
+      createdPoIds.push(po._id.toString());
+    }
+
+    if (data.prIds && data.prIds.length > 0) {
       await this.prModel.updateMany(
-        { _id: { $in: data.requisitionIds } },
-        { $set: { linkedPoId: po._id.toString() } }
+        { _id: { $in: data.prIds } },
+        { $set: { status: 'CONSOLIDATED', consolidatedBy: data.createdBy || 'Kho Tổng' } }
       );
     }
 
     return {
       success: true,
-      message: 'Tạo đơn hàng thành công, chờ nhập kho. Pipeline/Incoming Stock đã tăng.',
-      data: po,
+      message: `Đã tự động tạo ${createdPoIds.length} Đơn đặt hàng (PO) chờ duyệt.`,
+      poIds: createdPoIds,
     };
   }
+
+  /**
+   * HQ (Admin) duyệt và thanh toán các PO đã được hệ thống tách sẵn.
+   * Lệnh thanh toán được ghi nhận, gửi PO chính thức cho NCC.
+   */
+  async approveAndPayPurchaseOrder(data: {
+    poId: string;
+    approvedBy?: string;
+    action: 'APPROVE' | 'REJECT';
+    rejectionReason?: string;
+    paymentType?: string;
+  }) {
+    this.logger.log(`Admin ${data.action} PO: ${data.poId} with paymentType: ${data.paymentType}`);
+
+    const po = await this.poModel.findById(data.poId).exec();
+    if (!po) {
+      throw new RpcException({ message: `Không tìm thấy đơn hàng PO: ${data.poId}` });
+    }
+
+    if (po.status !== 'PENDING_APPROVAL') {
+      throw new RpcException({ message: `Đơn hàng đang ở trạng thái "${po.status}", không thể duyệt và thanh toán.` });
+    }
+
+    if (data.action === 'REJECT') {
+      po.status = 'CANCELLED';
+      await po.save();
+      return {
+        success: true,
+        message: `Đã từ chối Đơn đặt hàng PO. Lý do: ${data.rejectionReason || 'Không duyệt thanh toán'}`,
+      };
+    }
+
+    // APPROVE & PAY flow
+    const paymentType = data.paymentType || po.paymentType || 'PAID';
+
+    if (paymentType === 'CREDIT') {
+      try {
+        const checkResult = await firstValueFrom(
+          this.supplierClient.send('supplier.credit.check_limit', {
+            supplierId: po.supplierId,
+            amount: po.totalAmount,
+          }),
+        );
+        if (!checkResult || !checkResult.allowed) {
+          throw new RpcException({
+            message: checkResult?.reason || 'Vượt hạn mức công nợ nhà cung cấp hoặc nhà cung cấp không khả dụng',
+            statusCode: 400,
+          });
+        }
+      } catch (err) {
+        if (err instanceof RpcException) throw err;
+        throw new RpcException({
+          message: `Lỗi khi kiểm tra hạn mức công nợ NCC: ${err.message || err}`,
+          statusCode: 500,
+        });
+      }
+    }
+
+    po.paymentType = paymentType;
+    po.status = 'SHIPPING';
+    await po.save();
+
+    return {
+      success: true,
+      message: paymentType === 'CREDIT'
+        ? `Đã phê duyệt Đơn đặt hàng PO theo hình thức mua nợ. Đơn đặt hàng chuyển sang trạng thái SHIPPING. Kho vận chờ nhận hàng.`
+        : `Đã phê duyệt và thanh toán PO. Đơn đặt hàng chuyển sang trạng thái SHIPPING. Kho vận chờ nhận hàng.`,
+      poId: po._id,
+    };
+  }
+
+  /**
+   * Kho vận từ chối nhận hàng toàn bộ. PO chuyển sang trạng thái RETURNED.
+   * KHÔNG cộng tồn kho. Admin sẽ nhận thông báo hoàn tiền.
+   */
+  async rejectPurchaseOrderDelivery(data: { poId: string, reason?: string }) {
+    this.logger.log(`Rejecting delivery for PO: ${data.poId}`);
+    
+    const po = await this.poModel.findById(data.poId).exec();
+    if (!po) {
+      throw new RpcException({ message: `Không tìm thấy đơn hàng PO: ${data.poId}` });
+    }
+
+    if (po.status !== 'SHIPPING' && po.status !== 'PARTIAL_RECEIVED') {
+      throw new RpcException({ message: `Đơn hàng đang ở trạng thái "${po.status}", không thể từ chối nhận hàng.` });
+    }
+
+    po.status = 'RETURNED';
+    await po.save();
+
+    return {
+      success: true,
+      message: `Đã từ chối nhận hàng toàn bộ. Trạng thái Đơn đặt hàng đã chuyển sang RETURNED. Lý do: ${data.reason || 'Hàng lỗi/sai lệch'}`,
+      poId: po._id,
+    };
+  }
+
+
 
   // ===========================================================================================
   // BƯỚC 4: GRN - GOODS RECEIPT NOTE (Phiếu nhập kho — chốt chặn quan trọng nhất)
@@ -342,6 +371,10 @@ export class PurchaseService {
 
     if (po.status === 'CANCELLED') {
       throw new RpcException({ message: 'Đơn hàng này đã bị hủy, không thể nhập kho' });
+    }
+
+    if (po.status !== 'SHIPPING' && po.status !== 'PARTIAL_RECEIVED') {
+      throw new RpcException({ message: `Đơn hàng đang ở trạng thái "${po.status}", chưa được phép nhập kho (yêu cầu SHIPPING hoặc PARTIAL_RECEIVED)` });
     }
 
     // Kiểm tra và xử lý từng item
@@ -432,6 +465,26 @@ export class PurchaseService {
 
     await grn.save();
 
+    // Ghi nhận công nợ NCC nếu PO là CREDIT
+    if (po.paymentType === 'CREDIT') {
+      try {
+        await firstValueFrom(
+          this.supplierClient.send('supplier.credit.record_grn', {
+            supplierId: po.supplierId,
+            grnId: grn._id.toString(),
+            amount: totalAmount,
+            performedBy: data.receivedBy || 'Thủ Kho',
+          }),
+        );
+      } catch (err) {
+        this.logger.error(`Error recording GRN payable: ${err.message}`, err.stack);
+        throw new RpcException({
+          message: `Không thể ghi nhận công nợ NCC: ${err.message || err}`,
+          statusCode: 500,
+        });
+      }
+    }
+
     // Cập nhật referenceId cho transaction logs rồi lưu
     for (const log of transactionLogs) {
       log.referenceId = grn._id.toString();
@@ -496,5 +549,76 @@ export class PurchaseService {
     ]);
 
     return { data, total, page, limit };
+  }
+
+  async getImportExportReport(query: { startDate?: string; endDate?: string }) {
+    this.logger.log(`Generating Import/Export/Current Stock Report. Range: ${query.startDate} to ${query.endDate}`);
+
+    const start = query.startDate ? new Date(query.startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const end = query.endDate ? new Date(query.endDate) : new Date();
+
+    const medicines = await this.medicineModel.find().select('name unit price category').lean().exec();
+
+    const batches = await this.batchModel.find().select('medicineId stock').lean().exec();
+    const currentStockByMedicine = new Map<string, number>();
+    for (const batch of batches) {
+      const current = currentStockByMedicine.get(batch.medicineId) || 0;
+      currentStockByMedicine.set(batch.medicineId, current + batch.stock);
+    }
+
+    const transactionsInPeriod = await this.txnModel.find({
+      createdAt: { $gte: start, $lte: end }
+    }).select('medicineId type quantityChange').lean().exec();
+
+    const transactionsToNow = await this.txnModel.find({
+      createdAt: { $gte: start }
+    }).select('medicineId quantityChange').lean().exec();
+
+    const backtrackOffset = new Map<string, number>();
+    for (const txn of transactionsToNow) {
+      const offset = backtrackOffset.get(txn.medicineId) || 0;
+      backtrackOffset.set(txn.medicineId, offset + txn.quantityChange);
+    }
+
+    const periodImports = new Map<string, number>();
+    const periodExports = new Map<string, number>();
+
+    for (const txn of transactionsInPeriod) {
+      if (txn.quantityChange > 0) {
+        const imp = periodImports.get(txn.medicineId) || 0;
+        periodImports.set(txn.medicineId, imp + txn.quantityChange);
+      } else if (txn.quantityChange < 0) {
+        const exp = periodExports.get(txn.medicineId) || 0;
+        periodExports.set(txn.medicineId, exp + Math.abs(txn.quantityChange));
+      }
+    }
+
+    const report = medicines.map((med) => {
+      const medId = med._id.toString();
+      const current = currentStockByMedicine.get(medId) || 0;
+      const offset = backtrackOffset.get(medId) || 0;
+      
+      const opening = current - offset;
+
+      const imported = periodImports.get(medId) || 0;
+      const exported = periodExports.get(medId) || 0;
+      
+      const closing = opening + imported - exported;
+
+      return {
+        medicineId: medId,
+        medicineName: med.name,
+        category: med.category || 'Chưa phân loại',
+        unit: med.unit || 'Hộp',
+        price: med.price || 0,
+        openingStock: opening >= 0 ? opening : 0,
+        imported,
+        exported,
+        closingStock: closing >= 0 ? closing : 0,
+        currentStock: current,
+      };
+    });
+
+    return report;
   }
 }

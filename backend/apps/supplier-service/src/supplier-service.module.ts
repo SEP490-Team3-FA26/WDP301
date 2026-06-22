@@ -4,6 +4,9 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { SupplierServiceController } from './supplier-service.controller';
 import { SupplierServiceService } from './supplier-service.service';
 import { Supplier, SupplierSchema } from './supplier.schema';
+import { SupplierCreditController } from './credit/supplier-credit.controller';
+import { SupplierCreditService } from './credit/supplier-credit.service';
+import { SupplierCreditTransaction, SupplierCreditTransactionSchema } from './schemas/supplier-credit-transaction.schema';
 
 @Module({
   imports: [
@@ -15,9 +18,13 @@ import { Supplier, SupplierSchema } from './supplier.schema';
       }),
       inject: [ConfigService],
     }),
-    MongooseModule.forFeature([{ name: Supplier.name, schema: SupplierSchema }]),
+    MongooseModule.forFeature([
+      { name: Supplier.name, schema: SupplierSchema },
+      { name: SupplierCreditTransaction.name, schema: SupplierCreditTransactionSchema },
+    ]),
   ],
-  controllers: [SupplierServiceController],
-  providers: [SupplierServiceService],
+  controllers: [SupplierServiceController, SupplierCreditController],
+  providers: [SupplierServiceService, SupplierCreditService],
 })
 export class SupplierServiceModule {}
+

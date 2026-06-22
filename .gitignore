@@ -18,3 +18,8 @@ infra/.terraform*
 infra/terraform.tfstate*
 infra/**/.build/
 
+**/.codewhale/*
+!**/.codewhale/constitution.json
+.deepseek/
+phuc/
+agents.md

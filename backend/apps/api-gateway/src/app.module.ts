@@ -17,7 +17,10 @@ import { MedicineController } from './controllers/medicine.controller';
 import { AuthController } from './controllers/auth.controller';
 import { OrderController } from './controllers/order.controller';
 import { BranchController } from './controllers/branch.controller';
+import { PricingGatewayController } from './controllers/pricing.controller';
 import { MediaController } from './storage/media.controller';
+import { InventoryCheckController } from './controllers/inventory-check.controller';
+import { SupplierCreditController } from './controllers/supplier-credit.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -69,7 +72,7 @@ import { S3StorageService } from './storage/s3-storage.service';
             logLevel: 0,
           },
           consumer: { groupId: 'api-gw-supplier-group' },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
       {
@@ -84,7 +87,7 @@ import { S3StorageService } from './storage/s3-storage.service';
             logLevel: 0,
           },
           consumer: { groupId: 'api-gw-inventory-group' },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
       {
@@ -101,7 +104,7 @@ import { S3StorageService } from './storage/s3-storage.service';
           consumer: {
             groupId: 'api-gateway-user-group',
           },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
       {
@@ -118,7 +121,7 @@ import { S3StorageService } from './storage/s3-storage.service';
           consumer: {
             groupId: 'api-gateway-group',
           },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
       {
@@ -133,7 +136,7 @@ import { S3StorageService } from './storage/s3-storage.service';
             logLevel: 0,
           },
           consumer: { groupId: 'api-gw-order-group' },
-          producer: { allowAutoTopicCreation: true },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
     ]),
@@ -151,7 +154,10 @@ import { S3StorageService } from './storage/s3-storage.service';
     AuthController,
     OrderController,
     BranchController,
+    PricingGatewayController,
     MediaController,
+    InventoryCheckController,
+    SupplierCreditController,
   ],
   providers: [
     JwtAuthGuard,

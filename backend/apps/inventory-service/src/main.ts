@@ -26,6 +26,7 @@ async function bootstrap() {
             producer: {
               // Cho phép gửi message lớn hơn (10MB) để tránh MESSAGE_TOO_LARGE
               maxInFlightRequests: 1,
+              maxMessageBytes: 10485760,
             },
             subscribe: {
               allowAutoTopicCreation: true,
@@ -39,6 +40,7 @@ async function bootstrap() {
       console.log('🚀 Inventory Microservice khởi động thành công!');
       break;
     } catch (error) {
+      console.error('❌ Lỗi khởi động Inventory MS:', error);
       console.log('🔄 Kafka chưa sẵn sàng, đang thử lại sau 5s...');
       retries--;
       if (retries === 0) throw error;

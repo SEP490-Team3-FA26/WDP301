@@ -6,6 +6,9 @@ export class PurchaseOrderItem {
   @Prop({ type: String, required: true })
   medicineId: string;
 
+  @Prop({ type: String, default: '' })
+  medicineName: string;
+
   @Prop({ type: Number, required: true, min: 1 })
   quantity: number;
 
@@ -30,8 +33,8 @@ export class PurchaseOrder extends Document {
 
   @Prop({
     type: String,
-    default: 'PENDING',
-    enum: ['PENDING', 'PARTIAL_RECEIVED', 'COMPLETED', 'CANCELLED'],
+    default: 'PENDING_APPROVAL',
+    enum: ['PENDING_APPROVAL', 'SHIPPING', 'PARTIAL_RECEIVED', 'COMPLETED', 'RETURNED', 'CANCELLED'],
   })
   status: string;
 
@@ -43,6 +46,9 @@ export class PurchaseOrder extends Document {
 
   @Prop({ type: Number, default: 0 }) // Pipeline/Incoming Stock — hàng dự kiến về
   expectedIncoming: number;
+
+  @Prop({ type: String, default: 'PAID', enum: ['PAID', 'CREDIT'] })
+  paymentType: string; // Thanh toán ngay (PAID) vs Mua nợ (CREDIT) — UC-07
 }
 
 export const PurchaseOrderSchema = SchemaFactory.createForClass(PurchaseOrder);

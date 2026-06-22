@@ -20,6 +20,15 @@ export class Supplier extends Document {
 
   @Prop({ default: 'ACTIVE', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] })
   status: string;
+
+  @Prop({ type: Number, default: 50000000, min: 0 })
+  creditLimit: number; // Hạn mức công nợ tối đa (VNĐ) — UC-07
+
+  @Prop({ type: Number, default: 0 })
+  currentDebt: number; // Dư nợ hiện tại phải trả NCC (VNĐ) — UC-07
+
+  @Prop({ type: Number, default: 30 })
+  paymentTermDays: number; // Kỳ hạn thanh toán (ngày) — UC-07
 }
 
 export const SupplierSchema = SchemaFactory.createForClass(Supplier);

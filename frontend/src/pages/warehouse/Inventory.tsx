@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck } from "lucide-react";
+import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck, Tag, TrendingDown } from "lucide-react";
+import { medicineService } from "../../services/medicine.service";
 
 export function Inventory() {
   const navigate = useNavigate();
@@ -9,7 +10,7 @@ export function Inventory() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedClassification, setSelectedClassification] = useState("");
   const [filterOptions, setFilterOptions] = useState<{ categories: string[], classifications: string[] }>({ categories: [], classifications: [] });
-  
+
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -25,20 +26,38 @@ export function Inventory() {
   // Custom stats and reports states
   const [stats, setStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"inventory" | "expiration">("inventory");
+  const [activeTab, setActiveTab] = useState<"inventory" | "expiration" | "low_stock" | "report">("inventory");
   const [expirationReport, setExpirationReport] = useState<any[]>([]);
   const [expirationLoading, setExpirationLoading] = useState(false);
+  const [lowStockReport, setLowStockReport] = useState<any[]>([]);
+  const [lowStockLoading, setLowStockLoading] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Import - Export - Stock Report States
+  const [reportData, setReportData] = useState<any[]>([]);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [startDate, setStartDate] = useState(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+  );
+  const [endDate, setEndDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
+
+  // Tiered Pricing Modal States
+  const [tieredPricingMedicine, setTieredPricingMedicine] = useState<any>(null);
+  const [tieredPricingModalOpen, setTieredPricingModalOpen] = useState(false);
+  const [tieredPricingList, setTieredPricingList] = useState<{ minQuantity: number; price: number }[]>([]);
+  const [tieredPricingSaving, setTieredPricingSaving] = useState(false);
+  const [newMinQty, setNewMinQty] = useState<string>("");
+  const [newTierPrice, setNewTierPrice] = useState<string>("");
+
 
   const fetchMedicineDetails = async (id: string) => {
     setFetchingDetails(true);
     setDetailModalOpen(true);
     try {
-      const res = await fetch(`/api/medicines/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSelectedMedicine(data);
-      }
+      const data = await medicineService.getMedicineById(id);
+      setSelectedMedicine(data);
     } catch (error) {
       console.error("Failed to fetch details", error);
     } finally {
@@ -49,14 +68,8 @@ export function Inventory() {
   const handleStatusChange = async (id: string, newStatus: string) => {
     setUpdatingStatusId(id);
     try {
-      const res = await fetch(`/api/medicines/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (res.ok) {
-        setInventory(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
-      }
+      await medicineService.updateMedicineStatus(id, newStatus);
+      setInventory(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
     } catch (error) {
       console.error("Failed to update status", error);
     } finally {
@@ -66,11 +79,8 @@ export function Inventory() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch("/api/medicines/stats");
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
+      const data = await medicineService.getMedicineStats();
+      setStats(data);
     } catch (err) {
       console.error("Failed to fetch stats", err);
     } finally {
@@ -81,15 +91,62 @@ export function Inventory() {
   const fetchExpirationReport = async () => {
     setExpirationLoading(true);
     try {
-      const res = await fetch("/api/medicines/expiration-report");
-      if (res.ok) {
-        const data = await res.json();
-        setExpirationReport(data);
-      }
+      const data = await medicineService.getExpirationReport();
+      setExpirationReport(data);
     } catch (err) {
       console.error("Failed to fetch expiration report", err);
     } finally {
       setExpirationLoading(false);
+    }
+  };
+
+  const fetchLowStockReport = async () => {
+    setLowStockLoading(true);
+    try {
+      const data = await medicineService.getLowStockReport();
+      setLowStockReport(data || []);
+    } catch (err) {
+      console.error("Failed to fetch low stock report", err);
+      setLowStockReport([]);
+    } finally {
+      setLowStockLoading(false);
+    }
+  };
+
+  const fetchReportData = async () => {
+    setReportLoading(true);
+    try {
+      const data = await medicineService.getImportExportReport(startDate, endDate);
+      setReportData(data || []);
+    } catch (err) {
+      console.error("Failed to fetch inventory report", err);
+      setReportData([]);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+
+  const openPriceTiersModal = (med: any) => {
+    setTieredPricingMedicine(med);
+    setTieredPricingList(med.priceTiers || []);
+    setNewMinQty("");
+    setNewTierPrice("");
+    setTieredPricingModalOpen(true);
+  };
+
+  const handleSavePriceTiers = async () => {
+    if (!tieredPricingMedicine) return;
+    setTieredPricingSaving(true);
+    try {
+      await medicineService.updatePriceTiers(tieredPricingMedicine.id, tieredPricingList);
+      setInventory(prev => prev.map(item => item.id === tieredPricingMedicine.id ? { ...item, priceTiers: tieredPricingList } : item));
+      setTieredPricingModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save price tiers", err);
+      alert("Lỗi khi lưu cấu hình giá sỉ!");
+    } finally {
+      setTieredPricingSaving(false);
     }
   };
 
@@ -100,18 +157,19 @@ export function Inventory() {
   useEffect(() => {
     if (activeTab === "expiration") {
       fetchExpirationReport();
+    } else if (activeTab === "low_stock") {
+      fetchLowStockReport();
+    } else if (activeTab === "report") {
+      fetchReportData();
     }
-  }, [activeTab]);
+  }, [activeTab, startDate, endDate]);
 
   // Fetch filter options on mount
   useEffect(() => {
     const fetchFilters = async () => {
       try {
-        const response = await fetch('/api/medicines/filters');
-        if (response.ok) {
-          const data = await response.json();
-          setFilterOptions(data);
-        }
+        const data = await medicineService.getFilters();
+        setFilterOptions(data);
       } catch (error) {
         console.error("Error fetching filters:", error);
       }
@@ -139,13 +197,13 @@ export function Inventory() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        let url = `/api/medicines?search=${encodeURIComponent(debouncedSearch)}&page=${page}&limit=${limit}`;
-        if (selectedCategory) url += `&category=${encodeURIComponent(selectedCategory)}`;
-        if (selectedClassification) url += `&classification=${encodeURIComponent(selectedClassification)}`;
-        
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Failed to fetch medicines");
-        const result = await response.json();
+        const result = await medicineService.getMedicines({
+          search: debouncedSearch || undefined,
+          page,
+          limit,
+          category: selectedCategory || undefined,
+          classification: selectedClassification || undefined
+        });
         setInventory(result.data);
         setTotal(result.total);
       } catch (error) {
@@ -209,11 +267,10 @@ export function Inventory() {
           key={p}
           onClick={() => setPage(p)}
           disabled={loading}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            page === p
-              ? "bg-[#0057cd] text-white shadow-sm"
-              : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-          }`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${page === p
+            ? "bg-[#0057cd] text-white shadow-sm"
+            : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
         >
           {p}
         </button>
@@ -243,7 +300,7 @@ export function Inventory() {
               <p className="text-lg font-extrabold text-slate-900">{stats.totalMedicines}</p>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
             <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
               <TrendingUp size={18} />
@@ -288,22 +345,20 @@ export function Inventory() {
       <div className="flex bg-slate-100/70 p-1 rounded-xl w-fit border border-slate-200/40 backdrop-blur-sm gap-1">
         <button
           onClick={() => setActiveTab("inventory")}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 ${
-            activeTab === "inventory"
-              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
-              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
-          }`}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 ${activeTab === "inventory"
+            ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+            : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+            }`}
         >
           <Package size={13} />
           Danh Sách Tồn Kho
         </button>
         <button
           onClick={() => setActiveTab("expiration")}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${
-            activeTab === "expiration"
-              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
-              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
-          }`}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${activeTab === "expiration"
+            ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+            : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+            }`}
         >
           <Calendar size={13} />
           Báo Cáo Hết Hạn
@@ -312,6 +367,32 @@ export function Inventory() {
               {stats.expiredCount}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab("low_stock")}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${activeTab === "low_stock"
+            ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+            : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+            }`}
+        >
+          <AlertCircle size={13} />
+          Thuốc Cần Bổ Sung
+          {(stats?.lowStockCount + stats?.outOfStockCount) > 0 && (
+            <span className="bg-amber-500 text-white text-[9px] font-black rounded-full px-1.5 py-0.5 shadow-sm shadow-amber-500/20">
+              {stats.lowStockCount + stats.outOfStockCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab("report")}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-extrabold text-xs transition-all duration-200 relative ${activeTab === "report"
+              ? "bg-white text-[#0057cd] shadow-md shadow-slate-200/50"
+              : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+            }`}
+        >
+          <TrendingDown size={13} />
+          Báo Cáo Nhập - Xuất - Tồn
         </button>
       </div>
 
@@ -331,7 +412,7 @@ export function Inventory() {
                 className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200/80 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:ring-4 focus:ring-blue-500/10 focus:border-[#0057cd] outline-none transition-all shadow-sm"
               />
             </div>
-            
+
             <div className="flex items-center gap-2 w-full md:w-auto">
               <div className="relative w-full sm:w-auto">
                 <select
@@ -342,8 +423,8 @@ export function Inventory() {
                   <option value="">Tất cả phân loại</option>
                   {filterOptions.classifications.map(c => (
                     <option key={c} value={c}>
-                      {c === 'PRESCRIPTION_ANTIBIOTIC' ? 'Kê đơn / Kháng sinh' : 
-                       c === 'COMMON_SUPPLEMENT' ? 'Không kê đơn / TPCN' : c}
+                      {c === 'PRESCRIPTION_ANTIBIOTIC' ? 'Kê đơn / Kháng sinh' :
+                        c === 'COMMON_SUPPLEMENT' ? 'Không kê đơn / TPCN' : c}
                     </option>
                   ))}
                 </select>
@@ -426,11 +507,10 @@ export function Inventory() {
                         </div>
                         {/* Miniature progress bar */}
                         <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden shadow-inner">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              item.stock === 0 ? 'bg-rose-500 w-0' :
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${item.stock === 0 ? 'bg-rose-500 w-0' :
                               item.stock <= item.minStock ? 'bg-amber-500' : 'bg-emerald-500'
-                            }`} 
+                              }`}
                             style={{ width: `${Math.min(100, (item.stock / (item.minStock || 50)) * 100)}%` }}
                           />
                         </div>
@@ -476,8 +556,8 @@ export function Inventory() {
                           </button>
                           {openDropdownId === item.id && (
                             <>
-                              <div 
-                                className="fixed inset-0 z-20" 
+                              <div
+                                className="fixed inset-0 z-20"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenDropdownId(null);
@@ -521,7 +601,7 @@ export function Inventory() {
                             const importPath = isWarehouse ? '/warehouse/inventory/import/new' : '/admin/inventory/import/new';
                             navigate(importPath, {
                               state: {
-                                prefilledMedicineId: item.id
+                                prefillPrItems: [{ medicineId: item.id, quantity: Math.max(20, (item.minStock || 50) * 2 - item.stock) }]
                               }
                             });
                           }}
@@ -531,7 +611,14 @@ export function Inventory() {
                           <Truck size={15} />
                         </button>
                       )}
-                      <button 
+                      <button
+                        onClick={() => openPriceTiersModal(item)}
+                        className="text-emerald-600 hover:text-emerald-800 transition-colors p-1.5 rounded-lg hover:bg-emerald-50 border border-transparent hover:border-emerald-100"
+                        title="Cấu hình giá bán sỉ"
+                      >
+                        <Tag size={15} />
+                      </button>
+                      <button
                         onClick={() => fetchMedicineDetails(item.id)}
                         className="text-[#0057cd] hover:text-[#00419e] transition-colors p-1.5 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-100"
                         title="Xem chi tiết"
@@ -546,33 +633,33 @@ export function Inventory() {
                 ))}
               </tbody>
             </table>
-            
+
             {!loading && inventory.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-slate-500">Không tìm thấy thuốc nào khớp với từ khóa.</p>
               </div>
             )}
           </div>
-          
+
           {/* Pagination - compact */}
           <div className="px-4 py-2.5 border-t border-slate-100 flex items-center justify-between bg-white text-sm">
             <span className="text-xs text-slate-500">
               Hiển thị <span className="font-semibold text-slate-800">{inventory.length > 0 ? (page - 1) * limit + 1 : 0}</span>–<span className="font-semibold text-slate-800">{(page - 1) * limit + inventory.length}</span> / <span className="font-semibold text-slate-800">{total}</span> thuốc
             </span>
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1 || loading}
                 className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Trước
               </button>
-              
+
               <div className="flex items-center gap-1">
                 {renderPageNumbers()}
               </div>
 
-              <button 
+              <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages || totalPages === 0 || loading}
                 className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -582,14 +669,14 @@ export function Inventory() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === "expiration" ? (
         /* Expiration Report View */
         <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-100/40 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/30 animate-in fade-in duration-200">
           <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white flex items-center gap-2">
             <AlertCircle className="text-[#0057cd]" size={16} />
             <h3 className="font-extrabold text-slate-800 text-xs sm:text-sm">Danh sách các lô thuốc hết hạn hoặc cận hạn sử dụng (trong vòng 90 ngày)</h3>
           </div>
-          
+
           <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
             {expirationLoading ? (
               <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
@@ -597,7 +684,7 @@ export function Inventory() {
                 <p className="text-sm font-semibold text-slate-500">Đang tải báo cáo hết hạn...</p>
               </div>
             ) : null}
- 
+
             <table className="w-full text-sm text-left border-collapse">
               <thead className="text-[11px] text-slate-400 uppercase bg-slate-50/60 border-b border-slate-100/80 tracking-wider font-extrabold">
                 <tr>
@@ -628,8 +715,8 @@ export function Inventory() {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className={`px-3 py-1.5 rounded-full text-xs font-bold inline-block border shadow-sm whitespace-nowrap
-                        ${batch.status === 'EXPIRED' 
-                          ? 'bg-rose-50 text-rose-700 border-rose-100' 
+                        ${batch.status === 'EXPIRED'
+                          ? 'bg-rose-50 text-rose-700 border-rose-100'
                           : 'bg-amber-50 text-amber-700 border-amber-100'
                         }
                       `}>
@@ -648,6 +735,314 @@ export function Inventory() {
             )}
           </div>
         </div>
+      ) : activeTab === "low_stock" ? (
+        /* Low Stock Report View */
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-100/40 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/30 animate-in fade-in duration-200">
+          <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="text-amber-500" size={16} />
+              <h3 className="font-extrabold text-slate-800 text-xs sm:text-sm">Danh sách thuốc hết hàng hoặc sắp hết hàng (Dưới mức tối thiểu)</h3>
+            </div>
+            {!lowStockLoading && lowStockReport.length > 0 && (
+              <button
+                onClick={() => {
+                  const isWarehouse = window.location.pathname.startsWith('/warehouse');
+                  const importPath = isWarehouse ? '/warehouse/inventory/import/new' : '/admin/inventory/import/new';
+                  navigate(importPath, {
+                    state: {
+                      prefillPrItems: lowStockReport.map(item => ({ medicineId: item.id, quantity: Math.max(20, (item.minStock || 50) * 2 - item.stock) }))
+                    }
+                  });
+                }}
+                className="px-4 py-2 bg-[#0057cd] hover:bg-[#004bb1] text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm transition-all"
+              >
+                <Truck size={14} />
+                Nhập Tất Cả Thuốc Này
+              </button>
+            )}
+          </div>
+
+          <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
+            {lowStockLoading ? (
+              <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
+                <Loader2 className="animate-spin text-[#0057cd]" size={32} />
+                <p className="text-sm font-semibold text-slate-500">Đang tải danh sách thuốc...</p>
+              </div>
+            ) : null}
+
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="text-[10px] text-slate-400 uppercase bg-slate-50/60 border-b border-slate-100/80 tracking-wider">
+                <tr>
+                  <th scope="col" className="px-4 py-2 font-bold">Mã & Tên Thuốc</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Danh Mục & Hoạt Chất</th>
+                  <th scope="col" className="px-4 py-2 font-bold text-right">Giá Bán</th>
+                  <th scope="col" className="px-4 py-2 font-bold text-center">Tồn Kho</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Trạng Thái</th>
+                  <th scope="col" className="px-4 py-2 font-bold">Hạn Sử Dụng</th>
+                  <th scope="col" className="px-4 py-2 font-bold text-right">Hành động</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100/80">
+                {!lowStockLoading && lowStockReport.map((item) => (
+                  <tr key={item.id} className="group bg-white hover:bg-slate-50/40 hover:shadow-[inset_4px_0_0_0_#f59e0b] transition-all duration-200">
+                    <td className="px-4 py-2.5">
+                      <div className="font-semibold text-slate-900 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200/40 shadow-sm overflow-hidden flex-shrink-0 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform duration-200">
+                          {item.image ? (
+                            <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                          ) : (
+                            <Package className="text-slate-400 w-4 h-4" />
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <div className="font-bold text-slate-800 max-w-xs truncate text-xs sm:text-sm" title={item.name}>{item.name}</div>
+                          <div className="mt-1 font-mono text-[9px] text-slate-400 bg-slate-50 border border-slate-100/80 px-1.5 py-0.5 rounded-md w-fit">{item.id}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 max-w-[180px]">
+                      <div className="truncate font-bold text-slate-700 text-xs sm:text-sm" title={item.category}>{item.category}</div>
+                      {item.active_ingredient && (
+                        <div className="text-[10px] text-[#0057cd] font-black truncate mt-1 bg-blue-50/60 px-2 py-0.5 rounded-md inline-block max-w-full border border-blue-100/40" title={item.active_ingredient}>
+                          {item.active_ingredient}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-900 font-black text-right whitespace-nowrap text-xs">
+                      {item.price?.toLocaleString("vi-VN")} ₫ <span className="text-slate-400 text-[10px] font-normal">/ {item.unit || 'Hộp'}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-col items-center justify-center gap-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className={`font-black text-xs sm:text-sm ${item.stock <= item.minStock ? 'text-rose-600' : 'text-slate-800'}`}>
+                            {item.stock}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">{item.unit || 'Hộp'}</span>
+                        </div>
+                        {/* Miniature progress bar */}
+                        <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden shadow-inner">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${item.stock === 0 ? 'bg-rose-500 w-0' :
+                              item.stock <= item.minStock ? 'bg-amber-500' : 'bg-emerald-500'
+                              }`}
+                            style={{ width: `${Math.min(100, (item.stock / (item.minStock || 50)) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-slate-400 font-semibold">Min: {item.minStock}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {(() => {
+                        const isOutOfStock = item.stock === 0;
+                        const isLowStock = item.stock > 0 && item.stock <= item.minStock;
+                        if (isOutOfStock) return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-100">
+                            <AlertCircle size={12} className="text-rose-500" />
+                            Hết hàng
+                          </span>
+                        );
+                        if (isLowStock) return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                            <AlertCircle size={12} className="text-amber-500" />
+                            Sắp hết
+                          </span>
+                        );
+                        return (
+                          <span className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                            <CheckCircle2 size={12} className="text-emerald-500" />
+                            Sẵn sàng
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 relative">
+                      {item.batches && item.batches.length > 1 ? (
+                        <div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenDropdownId(openDropdownId === item.id ? null : item.id);
+                            }}
+                            className="flex items-center gap-1.5 bg-blue-50/60 text-[#0057cd] hover:bg-blue-50 hover:text-blue-700 text-xs font-extrabold rounded-lg px-3 py-1.5 transition-all border border-blue-100/50 shadow-sm whitespace-nowrap"
+                          >
+                            <span>{item.batches.length} Lô</span>
+                            <span className="text-[9px]">▼</span>
+                          </button>
+                          {openDropdownId === item.id && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-20"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdownId(null);
+                                }}
+                              />
+                              <div className="absolute left-6 mt-1 w-64 rounded-xl bg-white border border-slate-200 shadow-xl z-30 p-2 py-3 space-y-2 text-xs divide-y divide-slate-100 text-left animate-in fade-in zoom-in-95 duration-100">
+                                <div className="font-extrabold text-slate-700 px-2 pb-1 bg-slate-50 rounded">Hạn sử dụng chi tiết:</div>
+                                <div className="pt-2 max-h-40 overflow-y-auto space-y-1 px-1 custom-scrollbar">
+                                  {item.batches.map((b: any) => (
+                                    <div key={b.batchNo} className="flex flex-col py-1 px-1 justify-between hover:bg-slate-50 rounded">
+                                      <div className="flex justify-between font-bold text-slate-800">
+                                        <span>Lô: {b.batchNo}</span>
+                                        <span className={b.status === 'EXPIRED' ? 'text-rose-600' : 'text-slate-600'}>
+                                          {b.stock} {item.unit || 'Hộp'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between text-[11px] text-slate-500 mt-0.5">
+                                        <span>Hạn: {new Date(b.expDate).toLocaleDateString("vi-VN")}</span>
+                                        <span className={`font-semibold ${b.status === 'EXPIRED' ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                          {b.status === 'EXPIRED' ? 'Hết hạn' : 'Hoạt động'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="font-extrabold text-slate-700 text-xs sm:text-sm">
+                          {item.expiry ? new Date(item.expiry).toLocaleDateString("vi-VN") : 'N/A'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right flex justify-end gap-1">
+                      {item.stock <= item.minStock && (
+                        <button
+                          onClick={() => {
+                            const isWarehouse = window.location.pathname.startsWith('/warehouse');
+                            const importPath = isWarehouse ? '/warehouse/inventory/import/new' : '/admin/inventory/import/new';
+                            navigate(importPath, {
+                              state: {
+                                prefillPrItems: [{ medicineId: item.id, quantity: Math.max(20, (item.minStock || 50) * 2 - item.stock) }]
+                              }
+                            });
+                          }}
+                          className="text-amber-600 hover:text-amber-800 transition-colors p-1.5 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-100"
+                          title="Nhập hàng ngay"
+                        >
+                          <Truck size={15} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openPriceTiersModal(item)}
+                        className="text-emerald-600 hover:text-emerald-800 transition-colors p-1.5 rounded-lg hover:bg-emerald-50 border border-transparent hover:border-emerald-100"
+                        title="Cấu hình giá bán sỉ"
+                      >
+                        <Tag size={15} />
+                      </button>
+                      <button
+                        onClick={() => fetchMedicineDetails(item.id)}
+                        className="text-[#0057cd] hover:text-[#00419e] transition-colors p-1.5 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-100"
+                        title="Xem chi tiết"
+                      >
+                        <Eye size={15} />
+                      </button>
+                      <button className="text-slate-400 hover:text-slate-700 transition-colors p-1.5 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200">
+                        <MoreHorizontal size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {!lowStockLoading && lowStockReport.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-slate-500 font-semibold">Tất cả các loại thuốc đều đủ số lượng tồn kho an toàn.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Import-Export-Stock Report View (Báo Cáo Nhập - Xuất - Tồn) */
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-100/40 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/30 animate-in fade-in duration-200">
+          <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/60 to-white flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="text-[#0057cd]" size={16} />
+              <h3 className="font-extrabold text-slate-800 text-xs sm:text-sm">Báo cáo tình hình Nhập - Xuất - Tồn dược phẩm</h3>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/40 text-xs">
+                <span className="text-slate-500 font-medium">Từ ngày:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 outline-none border-none cursor-pointer focus:ring-0 p-0"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/40 text-xs">
+                <span className="text-slate-500 font-medium">Đến ngày:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 outline-none border-none cursor-pointer focus:ring-0 p-0"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto overflow-y-auto relative flex-1 min-h-0 custom-scrollbar">
+            {reportLoading ? (
+              <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-3 z-10">
+                <Loader2 className="animate-spin text-[#0057cd]" size={32} />
+                <p className="text-sm font-semibold text-slate-500">Đang tổng hợp báo cáo...</p>
+              </div>
+            ) : null}
+
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="text-[10px] text-slate-400 uppercase bg-slate-50/60 border-b border-slate-100/80 tracking-wider font-extrabold sticky top-0 z-10 backdrop-blur-sm">
+                <tr>
+                  <th scope="col" className="px-6 py-4 font-bold">Dược Phẩm</th>
+                  <th scope="col" className="px-6 py-4 font-bold">Danh Mục</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Đơn Vị</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Tồn Đầu Kỳ</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Nhập Trong Kỳ</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Xuất Trong Kỳ</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Tồn Cuối Kỳ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {!reportLoading && reportData.map((item: any) => (
+                  <tr key={item.medicineId} className="group bg-white hover:bg-slate-50/40 hover:shadow-[inset_4px_0_0_0_#0057cd] transition-all duration-150">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-slate-800 text-xs sm:text-sm">{item.medicineName}</div>
+                      <div className="mt-1 font-mono text-[9px] text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md w-fit">{item.medicineId}</div>
+                    </td>
+                    <td className="px-6 py-4 font-semibold text-slate-600 text-xs sm:text-sm">
+                      {item.category || 'Chưa phân loại'}
+                    </td>
+                    <td className="px-6 py-4 text-center text-slate-600 font-medium text-xs">
+                      {item.unit || 'Hộp'}
+                    </td>
+                    <td className="px-6 py-4 text-center font-bold text-slate-700 text-xs sm:text-sm">
+                      {item.openingStock?.toLocaleString('vi-VN') || 0}
+                    </td>
+                    <td className="px-6 py-4 text-center font-black text-emerald-600 text-xs sm:text-sm">
+                      +{item.importQty?.toLocaleString('vi-VN') || 0}
+                    </td>
+                    <td className="px-6 py-4 text-center font-black text-rose-600 text-xs sm:text-sm">
+                      -{item.exportQty?.toLocaleString('vi-VN') || 0}
+                    </td>
+                    <td className="px-6 py-4 text-center font-extrabold text-[#0057cd] text-xs sm:text-sm">
+                      {item.closingStock?.toLocaleString('vi-VN') || 0}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {!reportLoading && reportData.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-slate-500 font-semibold">Không tìm thấy dữ liệu biến động kho trong khoảng thời gian đã chọn.</p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Detail Modal */}
@@ -656,14 +1051,14 @@ export function Inventory() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
               <h2 className="text-lg font-bold text-slate-900">Chi Tiết Thông Tin Dược Phẩm</h2>
-              <button 
+              <button
                 onClick={() => setDetailModalOpen(false)}
                 className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto flex-1">
               {fetchingDetails ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -691,7 +1086,7 @@ export function Inventory() {
                       <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-1">
                           <span className="text-slate-500">Mã SKU:</span>
-                          <span className="font-semibold text-slate-900">{selectedMedicine._id?.toString()?.substring(0,8).toUpperCase()}</span>
+                          <span className="font-semibold text-slate-900">{selectedMedicine._id?.toString()?.substring(0, 8).toUpperCase()}</span>
                         </div>
                         <div className="flex items-center justify-between border-b border-slate-100 pb-1">
                           <span className="text-slate-500">Hạn sử dụng:</span>
@@ -722,7 +1117,7 @@ export function Inventory() {
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="bg-emerald-50/50 rounded-xl p-5 border border-emerald-100 shadow-sm flex flex-col max-h-[250px]">
                       <h4 className="font-bold text-emerald-900 flex items-center gap-2 mb-3 shrink-0">
                         <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Công dụng
@@ -734,7 +1129,7 @@ export function Inventory() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="bg-amber-50/50 rounded-xl p-5 border border-amber-100 shadow-sm flex flex-col max-h-[250px]">
                     <h4 className="font-bold text-amber-900 flex items-center gap-2 mb-3 shrink-0">
                       <div className="w-2 h-2 rounded-full bg-amber-500"></div> Liều dùng & Cách dùng
@@ -761,13 +1156,140 @@ export function Inventory() {
                 <div className="text-center text-slate-500 py-10">Không tìm thấy thông tin.</div>
               )}
             </div>
-            
+
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button 
+              <button
                 onClick={() => setDetailModalOpen(false)}
                 className="px-5 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tiered Pricing Modal */}
+      {tieredPricingModalOpen && tieredPricingMedicine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Cấu Hình Giá Bán Sỉ (Bậc Thang)</h2>
+                <p className="text-xs text-[#0057cd] font-bold mt-0.5">{tieredPricingMedicine.name}</p>
+              </div>
+              <button
+                onClick={() => setTieredPricingModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 flex justify-between items-center text-xs">
+                <span className="text-slate-500 font-medium">Giá bán chuẩn hiện tại:</span>
+                <span className="font-extrabold text-slate-800">{tieredPricingMedicine.price?.toLocaleString("vi-VN")} ₫ / {tieredPricingMedicine.unit || 'Hộp'}</span>
+              </div>
+
+              {/* Tiers List */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Các bậc giá đã thiết lập</label>
+                {tieredPricingList.length === 0 ? (
+                  <div className="text-center py-4 bg-slate-50/50 border border-dashed border-slate-200 rounded-xl">
+                    <p className="text-xs text-slate-400 font-medium">Chưa có cấu hình giá sỉ. Hệ thống sẽ áp dụng chiết khấu mặc định.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                    {tieredPricingList
+                      .sort((a, b) => a.minQuantity - b.minQuantity)
+                      .map((tier, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-emerald-50/40 border border-emerald-100/60 px-3 py-2 rounded-xl text-xs">
+                          <span className="font-bold text-slate-700">Mua từ {tier.minQuantity} {tieredPricingMedicine.unit || 'hộp'}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="font-extrabold text-emerald-700">{tier.price?.toLocaleString("vi-VN")} ₫</span>
+                            <button
+                              onClick={() => {
+                                setTieredPricingList(prev => prev.filter((_, i) => i !== idx));
+                              }}
+                              className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1 rounded-lg transition-all"
+                              title="Xóa bậc này"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Tier Form */}
+              <div className="bg-slate-50/60 border border-slate-200/50 rounded-xl p-4 space-y-3">
+                <h4 className="text-xs font-bold text-slate-700">Thêm bậc giá mới</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Số lượng tối thiểu</label>
+                    <input
+                      type="number"
+                      placeholder="Ví dụ: 10"
+                      value={newMinQty}
+                      onChange={(e) => setNewMinQty(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-[#0057cd] transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Đơn giá bán sỉ (₫)</label>
+                    <input
+                      type="number"
+                      placeholder="Ví dụ: 45000"
+                      value={newTierPrice}
+                      onChange={(e) => setNewTierPrice(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-[#0057cd] transition-all"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const min = parseInt(newMinQty);
+                    const pr = parseFloat(newTierPrice);
+                    if (isNaN(min) || min <= 0) {
+                      alert("Vui lòng nhập số lượng tối thiểu hợp lệ (> 0)!");
+                      return;
+                    }
+                    if (isNaN(pr) || pr <= 0) {
+                      alert("Vui lòng nhập đơn giá sỉ hợp lệ (> 0)!");
+                      return;
+                    }
+                    if (tieredPricingList.some(t => t.minQuantity === min)) {
+                      alert(`Đã tồn tại cấu hình cho mức số lượng tối thiểu ${min}!`);
+                      return;
+                    }
+                    setTieredPricingList(prev => [...prev, { minQuantity: min, price: pr }]);
+                    setNewMinQty("");
+                    setNewTierPrice("");
+                  }}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-sm transition-all"
+                >
+                  Thêm Bậc Giá
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
+              <button
+                onClick={() => setTieredPricingModalOpen(false)}
+                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-xs"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSavePriceTiers}
+                disabled={tieredPricingSaving}
+                className="px-5 py-2 bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-400 text-white font-bold rounded-lg transition-colors shadow-sm text-xs flex items-center gap-1.5"
+              >
+                {tieredPricingSaving && <Loader2 className="animate-spin" size={13} />}
+                {tieredPricingSaving ? "Đang lưu..." : "Lưu cấu hình"}
               </button>
             </div>
           </div>

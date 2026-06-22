@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CreditCard, Banknote, QrCode, ClipboardList, Printer, ShoppingBag, FileCheck, CheckCircle2, ChevronRight, XCircle } from "lucide-react";
+import { orderService } from "../../services/order.service";
+import { cartService } from "../../services/cart.service";
 
 export function CustomerCheckout() {
   const navigate = useNavigate();
@@ -22,7 +24,20 @@ export function CustomerCheckout() {
   const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
   const [payosPolling, setPayosPolling] = useState(false);
 
+  // Custom premium non-blocking alert modal state
+  const [alertModal, setAlertModal] = useState<{ message: string; title?: string; onConfirm?: () => void } | null>(null);
+
+  const showAlert = (message: string, title = "Thông báo", onConfirm?: () => void) => {
+    setAlertModal({ message, title, onConfirm });
+  };
+
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/auth/login");
+      return;
+    }
+
     // Check if redirecting back from PayOS
     const queryParams = new URLSearchParams(window.location.search);
     const isSuccess = queryParams.get("success") === "true";
@@ -33,10 +48,10 @@ export function CustomerCheckout() {
       setOrderId(`PayOS Code: ${orderCode}`);
 
       // Call endpoint to verify payment status and trigger stock deduction
-      fetch(`/api/orders/check/${orderCode}`)
-        .then((res) => res.json())
-        .then((data) => {
+      orderService.checkOrderStatus(orderCode)
+        .then((res) => {
           setCheckingPayment(false);
+          const data = res.data;
           if (data && data.status === "PAID") {
             setFullname(data.order.patientName);
             setPhone(data.order.patientPhone);
@@ -47,8 +62,7 @@ export function CustomerCheckout() {
             setShowSuccessModal(true);
 
             // Clear cart
-            localStorage.removeItem("customer_cart");
-            window.dispatchEvent(new Event("cartUpdated"));
+            clearAllCarts();
 
             // Remove search params from URL
             navigate("/customer/checkout", { replace: true });
@@ -78,26 +92,22 @@ export function CustomerCheckout() {
     if (payosPolling && payosOrderCode) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`/api/orders/check/${payosOrderCode}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === "PAID") {
-              setPayosPolling(false);
-              setShowPayOSModal(false);
-              
-              setOrderId(`SP-ORD-${payosOrderCode}`);
-              if (data.order) {
-                setFullname(data.order.patientName);
-                setPhone(data.order.patientPhone);
-                setAddress(data.order.shippingAddress);
-                setPaymentMethod(data.order.paymentMethod);
-                setCartItems(data.order.items);
-              }
-              setShowSuccessModal(true);
-
-              localStorage.removeItem("customer_cart");
-              window.dispatchEvent(new Event("cartUpdated"));
+          const data = await orderService.checkOrderStatus(payosOrderCode);
+          if (data.status === "PAID") {
+            setPayosPolling(false);
+            setShowPayOSModal(false);
+            
+            setOrderId(`SP-ORD-${payosOrderCode}`);
+            if (data.order) {
+              setFullname(data.order.patientName);
+              setPhone(data.order.patientPhone);
+              setAddress(data.order.shippingAddress);
+              setPaymentMethod(data.order.paymentMethod);
+              setCartItems(data.order.items);
             }
+            setShowSuccessModal(true);
+
+            clearAllCarts();
           }
         } catch (err) {
           console.error("Lỗi polling status thanh toán:", err);
@@ -110,33 +120,39 @@ export function CustomerCheckout() {
   const checkManualPayment = async () => {
     if (!payosOrderCode) return;
     try {
-      const res = await fetch(`/api/orders/check/${payosOrderCode}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === "PAID") {
-          setPayosPolling(false);
-          setShowPayOSModal(false);
-          
-          setOrderId(`SP-ORD-${payosOrderCode}`);
-          if (data.order) {
-            setFullname(data.order.patientName);
-            setPhone(data.order.patientPhone);
-            setAddress(data.order.shippingAddress);
-            setPaymentMethod(data.order.paymentMethod);
-            setCartItems(data.order.items);
-          }
-          setShowSuccessModal(true);
-
-          localStorage.removeItem("customer_cart");
-          window.dispatchEvent(new Event("cartUpdated"));
-        } else {
-          alert("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.");
+      const data = await orderService.checkOrderStatus(payosOrderCode);
+      if (data.status === "PAID") {
+        setPayosPolling(false);
+        setShowPayOSModal(false);
+        
+        setOrderId(`SP-ORD-${payosOrderCode}`);
+        if (data.order) {
+          setFullname(data.order.patientName);
+          setPhone(data.order.patientPhone);
+          setAddress(data.order.shippingAddress);
+          setPaymentMethod(data.order.paymentMethod);
+          setCartItems(data.order.items);
         }
+        setShowSuccessModal(true);
+
+        clearAllCarts();
+      } else {
+        showAlert("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.");
       }
     } catch (err) {
       console.error(err);
-      alert("Lỗi kiểm tra trạng thái thanh toán.");
+      showAlert("Lỗi kiểm tra trạng thái thanh toán.");
     }
+  };
+
+  const clearAllCarts = () => {
+    localStorage.removeItem("customer_cart");
+    localStorage.removeItem("guest_cart");
+    const token = localStorage.getItem("token");
+    if (token) {
+      cartService.clearCart()
+    }
+    window.dispatchEvent(new Event("cartUpdated"));
   };
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -147,13 +163,7 @@ export function CustomerCheckout() {
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
       if (!fullname || !phone || !address) {
-        alert("Vui lòng điền đầy đủ các thông tin giao hàng!");
-        return;
-      }
-
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("Vui lòng đăng nhập để thực hiện đặt hàng!");
+        showAlert("Vui lòng điền đầy đủ các thông tin giao hàng!");
         return;
       }
 
@@ -177,18 +187,9 @@ export function CustomerCheckout() {
           }))
         };
 
-        const res = await fetch("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const result = await res.json();
+        const result = await orderService.createOrder(payload);
 
         setIsSubmitting(false);
-
-        if (!res.ok) {
-          throw new Error(result.message || "Lỗi tạo đơn hàng");
-        }
 
         if (paymentMethod === "QR_PAY" && result.checkoutUrl) {
           // Show PayOS Modal instead of redirecting
@@ -203,12 +204,12 @@ export function CustomerCheckout() {
           setShowSuccessModal(true);
 
           // Clear cart
-          localStorage.removeItem("customer_cart");
-          window.dispatchEvent(new Event("cartUpdated"));
+          clearAllCarts();
         }
       } catch (err: any) {
         setIsSubmitting(false);
-        alert(err.message || "Lỗi hệ thống khi gửi đơn hàng!");
+        const msg = err.response?.data?.message || err.message || "Lỗi hệ thống khi gửi đơn hàng!";
+        showAlert(msg);
       }
     };
 
@@ -551,6 +552,36 @@ export function CustomerCheckout() {
                   Đóng
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Premium Generic Alert Modal */}
+        {alertModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col items-center text-center animate-scale-up">
+              <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#0d6efd] flex items-center justify-center mb-5 border border-blue-100 shadow-inner animate-pulse">
+                <ClipboardList size={28} />
+              </div>
+              
+              <h3 className="text-md font-black text-slate-800 tracking-tight mb-2">
+                {alertModal.title || "Thông báo"}
+              </h3>
+              <p className="text-slate-500 text-xs font-semibold leading-relaxed max-w-xs mb-6">
+                {alertModal.message}
+              </p>
+              
+              <button
+                onClick={() => {
+                  if (alertModal.onConfirm) {
+                    alertModal.onConfirm();
+                  }
+                  setAlertModal(null);
+                }}
+                className="w-full px-5 py-3 bg-[#0d6efd] hover:bg-[#0a58ca] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/10 transition-all cursor-pointer"
+              >
+                Đồng ý
+              </button>
             </div>
           </div>
         )}

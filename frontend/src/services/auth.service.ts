@@ -1,3 +1,5 @@
+import api from './api';
+
 const PENDING_EMAIL_KEY = "pendingVerificationEmail";
 
 export const authService = {
@@ -14,110 +16,64 @@ export const authService = {
   },
 
   async login(email: string, password: string) {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    let data;
     try {
-      const text = await response.text();
-      data = text ? JSON.parse(text) : {};
-    } catch (err) {
-      throw new Error('Không thể kết nối đến máy chủ. Backend có thể đang khởi động...');
+      const response = await api.post('/api/auth/login', { email, password });
+      return response.data;
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Đăng nhập thất bại (Máy chủ không phản hồi đúng định dạng).';
+      throw new Error(msg);
     }
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Đăng nhập thất bại (Máy chủ không phản hồi đúng định dạng).');
-    }
-
-    return data;
   },
 
   async register(fullName: string, email: string, password: string) {
-    const response = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fullName, email, password, role: 'user' }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Đăng ký thất bại');
+    try {
+      const response = await api.post('/api/auth/register', { fullName, email, password, role: 'user' });
+      this.setPendingEmail(email);
+      return response.data;
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Đăng ký thất bại';
+      throw new Error(msg);
     }
-
-    // Backup email to localStorage in case URL search params are lost during redirect
-    this.setPendingEmail(email);
-
-    return data;
   },
 
   async verifyEmail(email: string, token: string) {
-    const response = await fetch('/api/auth/verify-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, token }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Xác thực tài khoản thất bại');
+    try {
+      const response = await api.post('/api/auth/verify-email', { email, token });
+      this.clearPendingEmail();
+      return response.data;
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Xác thực tài khoản thất bại';
+      throw new Error(msg);
     }
-
-    // Successfully verified, clear the backup email
-    this.clearPendingEmail();
-
-    return data;
   },
 
   async resendVerification(email: string) {
-    const response = await fetch('/api/auth/resend-verification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Không thể gửi lại mã OTP');
+    try {
+      const response = await api.post('/api/auth/resend-verification', { email });
+      return response.data;
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Không thể gửi lại mã OTP';
+      throw new Error(msg);
     }
-
-    return data;
   },
 
   async forgotPassword(email: string) {
-    const response = await fetch('/api/auth/forgot-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Yêu cầu thất bại');
+    try {
+      const response = await api.post('/api/auth/forgot-password', { email });
+      return response.data;
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Yêu cầu thất bại';
+      throw new Error(msg);
     }
-
-    return data;
   },
 
   async resetPassword(email: string, token: string, newPassword: string) {
-    const response = await fetch('/api/auth/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, token, newPassword }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Đặt lại mật khẩu thất bại');
+    try {
+      const response = await api.post('/api/auth/reset-password', { email, token, newPassword });
+      return response.data;
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Đặt lại mật khẩu thất bại';
+      throw new Error(msg);
     }
-
-    return data;
   }
 };

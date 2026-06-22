@@ -57,7 +57,7 @@ export function BaseDashboardLayout({ navItems, userRole }: BaseDashboardLayoutP
           handleLogout={handleLogout}
           getRoleLabel={getRoleLabel}
         />
-        <div className="flex-1 min-h-0 overflow-hidden bg-[#faf8ff] print:overflow-visible print:bg-white print:h-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto bg-[#faf8ff] print:overflow-visible print:bg-white print:h-auto">
           <Outlet />
         </div>
       </main>
