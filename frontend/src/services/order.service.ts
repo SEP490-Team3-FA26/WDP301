@@ -73,8 +73,8 @@ export const orderService = {
     return response.data;
   },
 
-  async listSalesOrders(search?: string) {
-    const response = await api.get('/api/sales', { params: { search } });
+  async listSalesOrders(search?: string, type?: string) {
+    const response = await api.get('/api/sales', { params: { search, type } });
     return response.data;
   },
 

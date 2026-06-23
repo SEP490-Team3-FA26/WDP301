@@ -8,6 +8,30 @@ import { medicineService } from "../../../services/medicine.service";
 import { prescriptionService } from "../../../services/prescription.service";
 import { orderService } from "../../../services/order.service";
 
+// Helper to decode JWT token to extract branchId and user info
+function getBranchInfoFromToken() {
+  const token = localStorage.getItem("token");
+  if (!token) return { branchId: null, fullName: "Dược sĩ Trần Thị A" };
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const decoded = JSON.parse(jsonPayload);
+    return {
+      branchId: decoded.branchId || null,
+      fullName: decoded.fullName || "Dược sĩ Trần Thị A"
+    };
+  } catch (e) {
+    console.error("Lỗi giải mã token:", e);
+    return { branchId: null, fullName: "Dược sĩ Trần Thị A" };
+  }
+}
+
 const hospitalPresets = [
   { name: "Bệnh viện Bạch Mai", code: "BM-1029" },
   { name: "Bệnh viện Chợ Rẫy", code: "CR-2045" },
@@ -343,10 +367,14 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
     setLoading(true);
     setError("");
     try {
+      const { branchId: currentBranchId, fullName: currentUserName } = getBranchInfoFromToken();
       const code = prescriptionMode === "QR" && prescriptionCode ? prescriptionCode : `PRX-HAND-${Math.floor(10000 + Math.random() * 90000)}`;
+      
+      const generatedOrderCode = Math.floor(10000000 + Math.random() * 90000000);
       const payload = {
         prescriptionCode: code,
         type: "PRESCRIPTION",
+        branchId: currentBranchId || undefined,
         isManualPrescription: prescriptionMode === "MANUAL" || !prescriptionCode,
         items: prescriptionItems.map((it: any) => ({
           medicineId: it.medicineId,
@@ -362,7 +390,8 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
         doctorSpecialty,
         hospitalName,
         hospitalCode,
-        soldBy: "Dược sĩ Trần Thị A"
+        soldBy: currentUserName || "Dược sĩ Trần Thị A",
+        orderCode: generatedOrderCode
       };
 
       if (paymentMethod === "QR_PAY") {
@@ -378,6 +407,8 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
             unit: it.unit
           }))
         });
+
+        payload.orderCode = payosResult.orderCode;
 
         setPayosCheckoutUrl(payosResult.checkoutUrl);
         setPayosQrCode(payosResult.qrCode || "");
