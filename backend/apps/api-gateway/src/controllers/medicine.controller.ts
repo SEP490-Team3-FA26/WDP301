@@ -95,6 +95,7 @@ export class MedicineController implements OnModuleInit {
   @ApiQuery({ name: 'brand', required: false, type: String })
   @ApiQuery({ name: 'indication', required: false, type: String })
   @ApiQuery({ name: 'brandOrigin', required: false, type: String })
+  @ApiQuery({ name: 'branchId', required: false, type: String })
   async getMedicines(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
@@ -109,6 +110,7 @@ export class MedicineController implements OnModuleInit {
     @Query('brand') brand = '',
     @Query('indication') indication = '',
     @Query('brandOrigin') brandOrigin = '',
+    @Query('branchId') branchId = '',
   ) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.list', {
       page: Number(page),
@@ -124,6 +126,7 @@ export class MedicineController implements OnModuleInit {
       brand,
       indication,
       brandOrigin,
+      branchId,
     });
   }
 

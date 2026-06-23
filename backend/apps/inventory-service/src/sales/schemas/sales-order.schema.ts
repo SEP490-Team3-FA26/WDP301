@@ -30,6 +30,9 @@ export class SalesOrderItem {
 
   @Prop({ type: [SalesOrderBatchItemSchema], required: true })
   batches: SalesOrderBatchItem[];
+
+  @Prop({ type: Number, default: 0 })
+  returnedQuantity: number;
 }
 export const SalesOrderItemSchema = SchemaFactory.createForClass(SalesOrderItem);
 
@@ -64,6 +67,12 @@ export class SalesOrder extends Document {
 
   @Prop({ type: Number })
   orderCode: number; // Linked to orders.orderCode to guarantee idempotency and avoid duplicate deductions
+
+  @Prop({ type: [Object], default: [] })
+  returns: any[];
+
+  @Prop({ type: [Object], default: [] })
+  exchanges: any[];
 }
 
 export const SalesOrderSchema = SchemaFactory.createForClass(SalesOrder);

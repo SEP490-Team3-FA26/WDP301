@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
+import { branchService } from "../../services/branch.service";
 
 // --- In-memory cache for instant back-navigation (resets on page refresh/new login) ---
 const prCache: Record<string, { data: any[]; ts: number }> = {};
@@ -40,6 +41,20 @@ export function PurchaseRequisition() {
   const [actionLoading, setActionLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [detailPr, setDetailPr] = useState<any>(null);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [selectedSourceBranch, setSelectedSourceBranch] = useState("CENTRAL_WH");
+
+  useEffect(() => {
+    const loadBranches = async () => {
+      try {
+        const data = await branchService.getBranches();
+        setBranches(data || []);
+      } catch (e) {
+        console.error("Failed to load branches", e);
+      }
+    };
+    loadBranches();
+  }, []);
 
   const fetchData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -235,8 +250,59 @@ export function PurchaseRequisition() {
                     </div>
                   ))}
                 </div>
-
               </div>
+
+              {/* Footer Actions */}
+              {detailPr.status === "SUBMITTED" && (
+                <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row gap-3 items-center justify-between">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Kho xuất hàng:</span>
+                    <select
+                      value={selectedSourceBranch}
+                      onChange={(e) => setSelectedSourceBranch(e.target.value)}
+                      className="text-xs p-2 border border-slate-200 rounded-lg bg-white font-semibold outline-none focus:border-blue-500 w-full sm:w-48 shadow-sm cursor-pointer"
+                    >
+                      <option value="CENTRAL_WH">Kho Tổng (CENTRAL_WH)</option>
+                      {branches.map(b => (
+                        <option key={b.branchCode} value={b.branchCode}>{b.name} ({b.branchCode})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setActionLoading(true);
+                      setMsg(null);
+                      try {
+                        const res = await fetch("/api/stock-transfers", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            prId: detailPr._id,
+                            shippedBy: "Nguyễn Văn A",
+                            fromBranchId: selectedSourceBranch
+                          }),
+                        });
+                        const resData = await res.json();
+                        if (!res.ok) {
+                          throw new Error(resData.message || "Không thể chuyển kho");
+                        }
+                        setMsg({ type: "success", text: resData.message || "Đã tạo phiếu chuyển kho thành công!" });
+                        setDetailPr(null);
+                        fetchData();
+                      } catch (err: any) {
+                        setMsg({ type: "error", text: err.message || "Đã xảy ra lỗi" });
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-350 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm w-full sm:w-auto justify-center"
+                  >
+                    {actionLoading ? <Loader2 className="animate-spin" size={14} /> : <ArrowRight size={14} />}
+                    Xác nhận chuyển kho
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

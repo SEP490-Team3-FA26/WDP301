@@ -238,6 +238,7 @@ function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; on
           items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity })),
         }),
       });
+      const resData = await res.json();
       onSuccess(resData.message || "Gửi yêu cầu thành công!");
     } catch (e: any) {
       setErr(e.response?.data?.message || "Lỗi tạo yêu cầu");

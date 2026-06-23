@@ -21,6 +21,7 @@ import { PricingGatewayController } from './controllers/pricing.controller';
 import { MediaController } from './storage/media.controller';
 import { InventoryCheckController } from './controllers/inventory-check.controller';
 import { SupplierCreditController } from './controllers/supplier-credit.controller';
+import { StockTransferController } from './controllers/stock-transfer.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -31,6 +32,9 @@ import { S3StorageService } from './storage/s3-storage.service';
  * Root Module của API Gateway
  * Chỉ chứa các module để routing và caching — không kết nối trực tiếp Database
  */
+import { OnModuleInit, Inject } from '@nestjs/common';
+import { ClientKafka } from '@nestjs/microservices';
+
 @Module({
   imports: [
     // Đọc biến môi trường toàn cục
@@ -158,6 +162,7 @@ import { S3StorageService } from './storage/s3-storage.service';
     MediaController,
     InventoryCheckController,
     SupplierCreditController,
+    StockTransferController,
   ],
   providers: [
     JwtAuthGuard,
@@ -166,4 +171,108 @@ import { S3StorageService } from './storage/s3-storage.service';
     S3StorageService,
   ],
 })
-export class AppGatewayModule { }
+export class AppGatewayModule {
+  constructor(
+    @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
+    @Inject('SUPPLIER_SERVICE') private readonly supplierClient: ClientKafka,
+    @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
+    @Inject('ORDER_SERVICE') private readonly orderClient: ClientKafka,
+    @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
+  ) {
+    // 1. INVENTORY_SERVICE Reply Topics
+    const inventoryTopics = [
+      'inventory.medicine.list',
+      'inventory.medicine.get_by_id',
+      'inventory.medicine.update_status',
+      'inventory.medicine.get_filters',
+      'inventory.medicine.stats',
+      'inventory.medicine.expiration_report',
+      'inventory.pr.create',
+      'inventory.pr.list',
+      'inventory.pr.get_by_id',
+      'inventory.pr.process_urgent',
+      'inventory.po.approve_pay',
+      'inventory.po.auto_route',
+      'inventory.po.list',
+      'inventory.po.get_by_id',
+      'inventory.po.reject_delivery',
+      'inventory.grn.create',
+      'inventory.grn.list',
+      'inventory.grn.get_by_id',
+      'inventory.transactions.list',
+      'inventory.prescription.get_by_code',
+      'inventory.prescription.list',
+      'inventory.sales.create',
+      'inventory.sales.list',
+      'inventory.sales.get_by_id',
+      'inventory.sales.return',
+      'inventory.sales.exchange',
+      'inventory.transfer.create',
+      'inventory.transfer.receive',
+      'inventory.transfer.list',
+      'inventory.transfer.get_by_id',
+    ];
+    for (const t of inventoryTopics) {
+      this.inventoryClient.subscribeToResponseOf(t);
+    }
+
+    // 2. SUPPLIER_SERVICE Reply Topics
+    const supplierTopics = [
+      'supplier.get_all',
+      'supplier.create',
+    ];
+    for (const t of supplierTopics) {
+      this.supplierClient.subscribeToResponseOf(t);
+    }
+
+    // 3. USER_SERVICE Reply Topics
+    const userTopics = [
+      'user.edit_profile',
+      'user.change_avatar',
+      'user.cart.get',
+      'user.cart.add',
+      'user.cart.update',
+      'user.cart.delete',
+      'user.cart.clear',
+      'user.branch.list',
+      'user.branch.create',
+      'user.branch.update',
+      'user.branch.delete',
+    ];
+    for (const t of userTopics) {
+      this.userClient.subscribeToResponseOf(t);
+    }
+
+    // 4. ORDER_SERVICE Reply Topics
+    const orderTopics = [
+      'orders.create',
+      'orders.check',
+      'orders.list',
+    ];
+    for (const t of orderTopics) {
+      this.orderClient.subscribeToResponseOf(t);
+    }
+
+    // 5. KAFKA_SERVICE Reply Topics
+    const kafkaTopics = [
+      'auth.login',
+      'auth.register',
+      'auth.google.login',
+      'auth.validate.token',
+      'auth.get.user.by.id',
+      'auth.forgot.password',
+      'auth.reset.password',
+      'auth.2fa.generate',
+      'auth.2fa.enable',
+      'auth.2fa.disable',
+      'auth.2fa.authenticate',
+      'auth.verify.email',
+      'auth.resend.verification',
+    ];
+    for (const t of kafkaTopics) {
+      this.kafkaClient.subscribeToResponseOf(t);
+    }
+
+    console.log('🏁 [API Gateway] All global Kafka reply topics pre-subscribed successfully.');
+  }
+}
