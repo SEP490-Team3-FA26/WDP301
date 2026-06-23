@@ -937,7 +937,7 @@ export class MedicineService implements OnModuleInit {
   async getMedicinesDropdown() {
     try {
       const [medicines, batches] = await Promise.all([
-        this.medicineModel.find().select('name unit').lean().exec(),
+        this.medicineModel.find().select('name unit price supplierId').lean().exec(),
         this.batchModel.find({ stock: { $gt: 0 }, status: 'ACTIVE' }).select('medicineId batchNo stock').lean().exec()
       ]);
 
@@ -957,6 +957,8 @@ export class MedicineService implements OnModuleInit {
           id: medId,
           name: med.name,
           unit: med.unit || 'Hộp',
+          price: med.price || 0,
+          supplierId: med.supplierId || '',
           batches: batchesByMedId.get(medId) || []
         };
       });
