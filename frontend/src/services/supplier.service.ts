@@ -2,10 +2,11 @@ import api from './api';
 
 export interface SupplierData {
   name: string;
-  contactName: string;
-  phone: string;
-  email: string;
-  address: string;
+  contact_info?: string;
+  business_registration_number?: string;
+  gdp_certificate_number: string;
+  gdp_expiry_date: string;
+  status?: string;
 }
 
 export const supplierService = {
