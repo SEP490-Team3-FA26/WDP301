@@ -162,4 +162,65 @@ export class PurchaseController {
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy báo cáo nhập xuất tồn');
     }
   }
+
+  // ===========================================================================================
+  // BƯỚC 5: LUỒNG CHUYỂN KHO NỘI BỘ (STOCK TRANSFER)
+  // ===========================================================================================
+
+  @MessagePattern('inventory.transfer.create')
+  async createStockTransfer(@Payload() data: { prId: string; shippedBy: string; fromBranchId?: string }) {
+    try {
+      return await this.purchaseService.createStockTransfer(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tạo phiếu chuyển kho');
+    }
+  }
+
+  @MessagePattern('inventory.transfer.create_direct')
+  async createDirectStockTransfer(
+    @Payload() data: {
+      fromBranchId: string;
+      toBranchId: string;
+      toBranchName: string;
+      shippedBy: string;
+      items: { medicineId: string; medicineName: string; quantity: number; unit?: string }[];
+    }
+  ) {
+    try {
+      return await this.purchaseService.createDirectStockTransfer(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tạo chuyển kho trực tiếp');
+    }
+  }
+
+  @MessagePattern('inventory.transfer.receive')
+  async confirmStockTransferReceipt(@Payload() data: { transferId: string; receivedBy: string }) {
+    try {
+      return await this.purchaseService.confirmStockTransferReceipt(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi xác nhận nhận hàng');
+    }
+  }
+
+  @MessagePattern('inventory.transfer.list')
+  async listStockTransfers(@Payload() query: any) {
+    try {
+      return await this.purchaseService.listStockTransfers(query);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách chuyển kho');
+    }
+  }
+
+  @MessagePattern('inventory.transfer.get_by_id')
+  async getStockTransferById(@Payload() data: { id: string }) {
+    try {
+      return await this.purchaseService.getStockTransferById(data.id);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy chi tiết chuyển kho');
+    }
+  }
 }

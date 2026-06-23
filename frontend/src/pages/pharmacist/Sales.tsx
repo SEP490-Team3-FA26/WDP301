@@ -48,7 +48,7 @@ export function Sales() {
         {activeTab === "BÁN LẺ / RETAIL" && <RetailView showToast={showToast} />}
         {activeTab === "KÊ ĐƠN / PRESCRIPTION" && <PrescriptionView showToast={showToast} />}
         {activeTab === "BÁN SỈ / WHOLESALE" && <WholesaleView />}
-        {activeTab === "TRÀ HÀNG / RETURNS" && <ReturnsView />}
+        {activeTab === "TRÀ HÀNG / RETURNS" && <ReturnsView showToast={showToast} />}
       </div>
 
       {/* Custom Toast Container */}
