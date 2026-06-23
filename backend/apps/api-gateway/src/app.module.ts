@@ -17,9 +17,10 @@ import { MedicineController } from './controllers/medicine.controller';
 import { AuthController } from './controllers/auth.controller';
 import { OrderController } from './controllers/order.controller';
 import { BranchController } from './controllers/branch.controller';
-import { StockTransferController } from './controllers/stock-transfer.controller';
+import { PricingGatewayController } from './controllers/pricing.controller';
 import { MediaController } from './storage/media.controller';
 import { InventoryCheckController } from './controllers/inventory-check.controller';
+import { SupplierCreditController } from './controllers/supplier-credit.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -156,9 +157,10 @@ import { ClientKafka } from '@nestjs/microservices';
     AuthController,
     OrderController,
     BranchController,
-    StockTransferController,
+    PricingGatewayController,
     MediaController,
     InventoryCheckController,
+    SupplierCreditController,
   ],
   providers: [
     JwtAuthGuard,

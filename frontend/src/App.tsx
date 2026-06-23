@@ -47,6 +47,8 @@ import { Finance } from "./pages/admin/Finance";
 import { Reports } from "./pages/admin/Reports";
 import { Branches } from "./pages/admin/Branches";
 import { HQApproval } from "./pages/admin/HQApproval";
+import { PriceManagement } from "./pages/admin/PriceManagement";
+import { SupplierCreditManagement } from "./pages/admin/SupplierCreditManagement";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
@@ -105,6 +107,7 @@ export default function App() {
             <Route path="branches" element={<Branches />} />
             <Route path="approvals" element={<HQApproval />} />
             <Route path="finance" element={<Finance />} />
+            <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="profile" element={<Profile />} />
@@ -146,11 +149,13 @@ export default function App() {
           <Route path="/branch" element={<BranchLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="sales" element={<Sales />} />
+            <Route path="pricing" element={<PriceManagement />} />
             <Route path="requisitions" element={<BranchRequisition />} />
             <Route path="receive-transfers" element={<BranchStockReceive />} />
             <Route path="inventory" element={<BranchInventory />} />
             <Route path="transfers" element={<BranchTransfer />} />
             <Route path="finance" element={<Finance />} />
+            <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />
             <Route path="profile" element={<Profile />} />
           </Route>

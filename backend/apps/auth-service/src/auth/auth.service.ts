@@ -102,6 +102,7 @@ export class AuthService {
       role: userFromDb.role,
       fullName: userFromDb.fullName,
       branchId: userFromDb.branchId || null,
+      branchId: userFromDb.branchId,
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -153,6 +154,7 @@ export class AuthService {
       role: userFromDb.role,
       fullName: userFromDb.fullName,
       branchId: userFromDb.branchId || null,
+      branchId: userFromDb.branchId,
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -514,6 +516,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       fullName: user.fullName,
+      branchId: user.branchId,
     };
 
     const access_token = this.jwtService.sign(finalPayload);

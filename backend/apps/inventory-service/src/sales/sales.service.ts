@@ -6,6 +6,7 @@ import { SalesOrder } from './schemas/sales-order.schema';
 import { Prescription } from './schemas/prescription.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
+import { PricingService } from '../pricing/pricing.service';
 import { InventoryTransaction } from '../purchase/schemas/inventory-transaction.schema';
 
 @Injectable()
@@ -17,6 +18,7 @@ export class SalesService {
     @InjectModel(Prescription.name) private readonly prescriptionModel: Model<Prescription>,
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
+    private readonly pricingService: PricingService,
     @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
   ) {}
 
@@ -171,6 +173,7 @@ export class SalesService {
       }
     }
 
+
     const today = new Date();
     const orderItems = [];
     let totalAmount = 0;
@@ -252,18 +255,21 @@ export class SalesService {
         });
       }
 
-      // Lấy đơn giá theo loại hình sỉ / lẻ
-      let itemPrice = medicine.price || 50000;
-      if (data.type === 'WHOLESALE') {
-        itemPrice = this.getTieredPrice(medicine, item.quantity);
-      }
-      totalAmount += itemPrice * item.quantity;
+      // Resolve giá theo chi nhánh và loại bán hàng (UC-48)
+      const itemPrice = await this.pricingService.resolvePrice(
+        data.branchId,
+        item.medicineId,
+        data.type || 'RETAIL',
+        item.quantity,
+      );
+      const resolvedPrice = itemPrice || medicine.price || 50000;
+      totalAmount += resolvedPrice * item.quantity;
 
       orderItems.push({
         medicineId: item.medicineId,
         name: medicine.name,
         quantity: item.quantity,
-        price: itemPrice,
+        price: resolvedPrice,
         unit: medicine.unit || 'Hộp',
         batches: allocatedBatches
       });
