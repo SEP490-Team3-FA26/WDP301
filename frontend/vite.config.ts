@@ -22,7 +22,7 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       proxy: {
         '/api': {
-          target: process.env.DOCKER ? 'http://backend:4000' : 'http://backend:4000', // Or just 'http://backend:4000'
+          target: process.env.DOCKER ? 'http://backend:4000' : 'http://localhost:4000',
           changeOrigin: true,
         },
       },

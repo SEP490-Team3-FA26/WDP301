@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Search, Filter, ArrowDownToLine, ArrowUpFromLine, Trash2,
   Calendar, FileText, Plus, ChevronRight, X, Package,
@@ -18,6 +18,7 @@ interface InventoryHistoryProps {
 
 export function InventoryHistory({ type }: InventoryHistoryProps) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [activeSubTab, setActiveSubTab] = useState<"grn" | "po">("grn");
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
@@ -94,7 +95,8 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
 
   const handleCreate = () => {
     if (type === "import") {
-      navigate("new");
+      const basePath = pathname.endsWith("/") ? pathname : `${pathname}/`;
+      navigate(`${basePath}new`);
     }
   };
 

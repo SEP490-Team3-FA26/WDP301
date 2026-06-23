@@ -4,8 +4,9 @@ import {
   Building2, DollarSign, Layers, AlertCircle, RefreshCw, Save
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
+import { branchService } from "../../services/branch.service";
+import { medicineService } from "../../services/medicine.service";
+import { pricingService } from "../../services/pricing.service";
 
 interface WholesaleTier {
   minQuantity: number;
@@ -90,10 +91,7 @@ export function PriceManagement() {
 
   // Fetch branches
   useEffect(() => {
-    fetch(`${API_BASE}/api/branches`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => res.json())
+    branchService.getBranches()
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
         setBranches(list);
@@ -109,15 +107,11 @@ export function PriceManagement() {
     if (!selectedBranch) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: String(pagination.page),
-        limit: String(pagination.limit),
+      const data = await pricingService.getBranchPrices(selectedBranch, {
+        page: pagination.page,
+        limit: pagination.limit,
         search,
       });
-      const res = await fetch(`${API_BASE}/api/pricing/${selectedBranch}?${params}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      const data = await res.json();
       setPriceList(data.data || []);
       if (data.pagination) setPagination(data.pagination);
     } catch {
@@ -134,11 +128,11 @@ export function PriceManagement() {
   // Fetch medicines (for add modal)
   const fetchMedicines = async (q: string = "") => {
     try {
-      const params = new URLSearchParams({ page: "1", limit: "50", search: q });
-      const res = await fetch(`${API_BASE}/api/medicines?${params}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      const data = await medicineService.getMedicines({
+        page: 1,
+        limit: 50,
+        search: q,
       });
-      const data = await res.json();
       setMedicines(data.data || []);
     } catch {
       setMedicines([]);
@@ -176,14 +170,7 @@ export function PriceManagement() {
       if (formWholesalePrice !== "") body.wholesalePrice = Number(formWholesalePrice);
       if (formTiers.length > 0) body.wholesaleTiers = formTiers;
 
-      await fetch(`${API_BASE}/api/pricing/${selectedBranch}/${medicineId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(body),
-      });
+      await pricingService.saveBranchPrice(selectedBranch, medicineId, body);
       setShowEditModal(false);
       setShowAddModal(false);
       fetchPriceList();
@@ -196,10 +183,7 @@ export function PriceManagement() {
   const handleDelete = async (medicineId: string) => {
     if (!window.confirm("Xóa override giá? Chi nhánh sẽ dùng giá mặc định.")) return;
     try {
-      await fetch(`${API_BASE}/api/pricing/${selectedBranch}/${medicineId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
+      await pricingService.deleteBranchPrice(selectedBranch, medicineId);
       fetchPriceList();
     } catch (err) {
       console.error("Lỗi xóa bảng giá", err);
@@ -211,14 +195,7 @@ export function PriceManagement() {
     if (!selectedBranch || !copyToBranch || selectedBranch === copyToBranch) return;
     setCopyLoading(true);
     try {
-      await fetch(`${API_BASE}/api/pricing/copy`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ fromBranchId: selectedBranch, toBranchId: copyToBranch }),
-      });
+      await pricingService.copyPrices(selectedBranch, copyToBranch);
       setShowCopyModal(false);
       alert("Sao chép bảng giá thành công!");
     } catch (err) {

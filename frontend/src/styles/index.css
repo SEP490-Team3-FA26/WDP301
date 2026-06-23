@@ -1,5 +1,33 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: light;
+  --foreground: #171717;
+  --background: #ffffff;
+}
+
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+}
+
+/* Force high-contrast text color for form inputs and dropdowns on light backgrounds */
+input, select, textarea, button {
+  color: #0f172a !important;
+}
+
+option {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+}
+
+/* Ensure placeholders are visible but slightly muted */
+input::placeholder, textarea::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+
 /* Custom scrollbar - slim & elegant */
 .custom-scrollbar {
   scrollbar-width: thin;
