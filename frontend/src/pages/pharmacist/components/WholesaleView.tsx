@@ -138,7 +138,14 @@ export default function WholesaleView() {
             setPayosPolling(false);
             setShowPayOSModal(false);
             alert("Thanh toán PayOS thành công!");
-            await finalizeSale(pendingSalePayload);
+            
+            const saleRes = data.saleResult || data;
+            setInvoiceData(saleRes.data || saleRes);
+            setShowInvoiceModal(true);
+            setCart([]);
+            setAgentName("");
+            setAgentPhone("");
+            setAgentAddress("");
           }
         } catch (err) {
           console.error("Lỗi polling status thanh toán:", err);
@@ -156,7 +163,14 @@ export default function WholesaleView() {
         setPayosPolling(false);
         setShowPayOSModal(false);
         alert("Thanh toán PayOS thành công!");
-        await finalizeSale(pendingSalePayload);
+        
+        const saleRes = data.saleResult || data;
+        setInvoiceData(saleRes.data || saleRes);
+        setShowInvoiceModal(true);
+        setCart([]);
+        setAgentName("");
+        setAgentPhone("");
+        setAgentAddress("");
       } else {
         alert("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.");
       }

@@ -56,7 +56,9 @@ export default function RetailView({ showToast }: RetailViewProps) {
             setPayosPolling(false);
             setShowPayOSModal(false);
             showToast("Thanh toán PayOS thành công!", "success");
-            await finalizeSalesOrder(pendingSalePayload);
+            setInvoiceData(data.saleResult || data);
+            setShowInvoiceModal(true);
+            setCart([]); // Clear cart
           }
         } catch (err) {
           console.error("Lỗi polling status thanh toán:", err);
@@ -74,7 +76,9 @@ export default function RetailView({ showToast }: RetailViewProps) {
         setPayosPolling(false);
         setShowPayOSModal(false);
         showToast("Thanh toán PayOS thành công!", "success");
-        await finalizeSalesOrder(pendingSalePayload);
+        setInvoiceData(data.saleResult || data);
+        setShowInvoiceModal(true);
+        setCart([]); // Clear cart
       } else {
         showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
       }
