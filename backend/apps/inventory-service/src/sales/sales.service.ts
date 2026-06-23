@@ -135,7 +135,20 @@ export class SalesService {
   }
 
   async createSalesOrder(data: any) {
-    this.logger.log(`Creating Sales Order. Type: ${data.type}`);
+    this.logger.log(`Creating Sales Order. Type: ${data.type}, OrderCode: ${data.orderCode}`);
+
+    // Check for duplicate sales order (idempotency check)
+    if (data.orderCode) {
+      const existingSale = await this.saleModel.findOne({ orderCode: data.orderCode }).exec();
+      if (existingSale) {
+        this.logger.log(`Sales Order for orderCode ${data.orderCode} already exists. Skipping inventory deduction.`);
+        return {
+          success: true,
+          message: 'Trừ kho đã được thực hiện thành công từ trước!',
+          data: existingSale,
+        };
+      }
+    }
 
     let prescription = null;
     if (data.type === 'PRESCRIPTION') {
@@ -285,7 +298,8 @@ export class SalesService {
       type: data.type,
       patientName: data.patientName || (prescription ? prescription.patientName : undefined),
       patientPhone: data.patientPhone || (prescription ? prescription.patientPhone : undefined),
-      soldBy: data.soldBy || 'Dược sĩ'
+      soldBy: data.soldBy || 'Dược sĩ',
+      orderCode: data.orderCode,
     });
     await salesOrder.save();
 
@@ -309,7 +323,7 @@ export class SalesService {
     };
   }
 
-  async listSalesOrders(search?: string) {
+  async listSalesOrders(search?: string, type?: string) {
     const filter: any = {};
     if (search) {
       if (search.match(/^[0-9a-fA-F]{24}$/)) {
@@ -320,6 +334,9 @@ export class SalesService {
           { patientName: { $regex: search, $options: 'i' } }
         ];
       }
+    }
+    if (type) {
+      filter.type = type;
     }
     return this.saleModel.find(filter).sort({ createdAt: -1 }).limit(20).exec();
   }

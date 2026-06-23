@@ -159,6 +159,7 @@ export class OrdersServiceService implements OnModuleInit {
   private async deductInventory(order: any) {
     this.logger.log(`Sending stock deduction to inventory-service for orderCode: ${order.orderCode}`);
     const payload = {
+      orderCode: order.orderCode,
       type: order.type === 'ONLINE' ? 'RETAIL' : order.type,
       paymentMethod: order.paymentMethod,
       items: order.items.map((it: any) => ({

@@ -24,8 +24,8 @@ export class SalesController implements OnModuleInit {
   }
 
   @Get()
-  async listSalesOrders(@Query('search') search?: string) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.sale.list', { search });
+  async listSalesOrders(@Query('search') search?: string, @Query('type') type?: string) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.sale.list', { search, type });
   }
 
   @Get(':id')

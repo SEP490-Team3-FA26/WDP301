@@ -65,6 +65,9 @@ export class SalesOrder extends Document {
   @Prop({ type: String })
   soldBy: string;
 
+  @Prop({ type: Number })
+  orderCode: number; // Linked to orders.orderCode to guarantee idempotency and avoid duplicate deductions
+
   @Prop({ type: [Object], default: [] })
   returns: any[];
 

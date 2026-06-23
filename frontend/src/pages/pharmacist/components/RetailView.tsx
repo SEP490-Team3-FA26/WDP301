@@ -7,6 +7,30 @@ import { medicineService } from "../../../services/medicine.service";
 import { orderService } from "../../../services/order.service";
 import { prescriptionService } from "../../../services/prescription.service";
 
+// Helper to decode JWT token to extract branchId and user info
+function getBranchInfoFromToken() {
+  const token = localStorage.getItem("token");
+  if (!token) return { branchId: null, fullName: "Dược sĩ Trần Thị A" };
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const decoded = JSON.parse(jsonPayload);
+    return {
+      branchId: decoded.branchId || null,
+      fullName: decoded.fullName || "Dược sĩ Trần Thị A"
+    };
+  } catch (e) {
+    console.error("Lỗi giải mã token:", e);
+    return { branchId: null, fullName: "Dược sĩ Trần Thị A" };
+  }
+}
+
 interface RetailViewProps {
   showToast: (message: string, type?: "success" | "error" | "warning") => void;
 }
@@ -40,7 +64,9 @@ export default function RetailView({ showToast }: RetailViewProps) {
       setShowInvoiceModal(true);
       setCart([]); // Clear cart
     } catch (err: any) {
-      setError(err.message || "Lỗi khi bán lẻ");
+      const msg = err.response?.data?.message || err.message || "Lỗi khi bán lẻ";
+      setError(msg);
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -56,7 +82,9 @@ export default function RetailView({ showToast }: RetailViewProps) {
             setPayosPolling(false);
             setShowPayOSModal(false);
             showToast("Thanh toán PayOS thành công!", "success");
-            await finalizeSalesOrder(pendingSalePayload);
+            setInvoiceData(data.saleResult || data);
+            setShowInvoiceModal(true);
+            setCart([]); // Clear cart
           }
         } catch (err) {
           console.error("Lỗi polling status thanh toán:", err);
@@ -74,7 +102,9 @@ export default function RetailView({ showToast }: RetailViewProps) {
         setPayosPolling(false);
         setShowPayOSModal(false);
         showToast("Thanh toán PayOS thành công!", "success");
-        await finalizeSalesOrder(pendingSalePayload);
+        setInvoiceData(data.saleResult || data);
+        setShowInvoiceModal(true);
+        setCart([]); // Clear cart
       } else {
         showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
       }
@@ -258,14 +288,19 @@ export default function RetailView({ showToast }: RetailViewProps) {
     if (cart.length === 0) return;
     setError("");
     try {
+      const { branchId: currentBranchId, fullName: currentUserName } = getBranchInfoFromToken();
+      
+      const generatedOrderCode = Math.floor(10000000 + Math.random() * 90000000);
       const payload = {
         type: "RETAIL",
+        branchId: currentBranchId || undefined,
         items: cart.map(it => ({
           medicineId: it.id,
           quantity: it.quantity
         })),
         paymentMethod,
-        soldBy: "Dược sĩ Trần Thị A"
+        soldBy: currentUserName || "Dược sĩ Trần Thị A",
+        orderCode: generatedOrderCode
       };
 
       if (paymentMethod === "QR_PAY") {
@@ -282,6 +317,8 @@ export default function RetailView({ showToast }: RetailViewProps) {
           }))
         });
 
+        payload.orderCode = payosResult.orderCode;
+
         setPayosCheckoutUrl(payosResult.checkoutUrl);
         setPayosOrderCode(payosResult.orderCode);
         setPendingSalePayload(payload);
@@ -291,7 +328,9 @@ export default function RetailView({ showToast }: RetailViewProps) {
         await finalizeSalesOrder(payload);
       }
     } catch (err: any) {
-      setError(err.message || "Lỗi khi bán lẻ");
+      const msg = err.response?.data?.message || err.message || "Lỗi khi bán lẻ";
+      setError(msg);
+      showToast(msg, "error");
     }
   };
 
@@ -458,7 +497,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
       </div>
 
       {/* Cột phải: Thanh toán */}
-      <div className="w-full xl:w-[380px] flex flex-col gap-6 shrink-0 pb-6 pl-1">
+      <div className="w-full xl:w-[380px] flex flex-col gap-6 shrink-0 pb-6 pl-1 overflow-y-auto custom-scrollbar">
 
         {/* Tóm tắt khách sỉ/ VIP */}
         <div className="bg-white border border-slate-200 rounded-[16px] p-5 shadow-sm text-center">
@@ -521,7 +560,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
         <button
           onClick={handleCheckout}
-          disabled={cart.length === 0}
+          disabled={cart.length === 0 || loading}
           className="w-full bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl py-5 shadow-sm transition-all flex items-center justify-center gap-2 font-black text-[16px] uppercase tracking-wide mt-auto"
         >
           <Printer size={20} />
