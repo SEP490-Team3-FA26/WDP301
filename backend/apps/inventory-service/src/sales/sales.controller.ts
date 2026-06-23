@@ -37,9 +37,9 @@ export class SalesController {
   }
 
   @MessagePattern('inventory.sale.list')
-  async listSalesOrders(@Payload() data: { search?: string }) {
+  async listSalesOrders(@Payload() data: { search?: string; type?: string }) {
     try {
-      return await this.salesService.listSalesOrders(data?.search);
+      return await this.salesService.listSalesOrders(data?.search, data?.type);
     } catch (error) {
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách đơn bán hàng');
     }

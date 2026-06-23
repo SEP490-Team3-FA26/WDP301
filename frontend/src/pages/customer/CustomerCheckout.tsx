@@ -47,11 +47,10 @@ export function CustomerCheckout() {
       setCheckingPayment(true);
       setOrderId(`PayOS Code: ${orderCode}`);
 
-      // Call endpoint to verify payment status and trigger stock deduction
       orderService.checkOrderStatus(orderCode)
         .then((res) => {
           setCheckingPayment(false);
-          const data = res.data;
+          const data = res; // res is already response.data
           if (data && data.status === "PAID") {
             setFullname(data.order.patientName);
             setPhone(data.order.patientPhone);

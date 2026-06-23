@@ -323,7 +323,7 @@ export class SalesService {
     };
   }
 
-  async listSalesOrders(search?: string) {
+  async listSalesOrders(search?: string, type?: string) {
     const filter: any = {};
     if (search) {
       if (search.match(/^[0-9a-fA-F]{24}$/)) {
@@ -334,6 +334,9 @@ export class SalesService {
           { patientName: { $regex: search, $options: 'i' } }
         ];
       }
+    }
+    if (type) {
+      filter.type = type;
     }
     return this.saleModel.find(filter).sort({ createdAt: -1 }).limit(20).exec();
   }
