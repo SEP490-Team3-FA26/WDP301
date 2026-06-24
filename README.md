@@ -5,7 +5,7 @@
 Chạy lệnh duy nhất tại thư mục gốc để khởi động Frontend, Backend, Redis và Kafka:
 
 ```bash
-docker compose up -d
+docker compose up
 ```
 
 *Để dừng dự án:* `docker compose down`

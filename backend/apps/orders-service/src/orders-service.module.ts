@@ -5,6 +5,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { OrdersServiceController } from './orders-service.controller';
 import { OrdersServiceService } from './orders-service.service';
 import { Order, OrderSchema } from './schemas/order.schema';
+import { Voucher, VoucherSchema } from './schemas/voucher.schema';
 
 @Module({
   imports: [
@@ -16,7 +17,10 @@ import { Order, OrderSchema } from './schemas/order.schema';
       }),
       inject: [ConfigService],
     }),
-    MongooseModule.forFeature([{ name: Order.name, schema: OrderSchema }]),
+    MongooseModule.forFeature([
+      { name: Order.name, schema: OrderSchema },
+      { name: Voucher.name, schema: VoucherSchema },
+    ]),
     ClientsModule.registerAsync([
       {
         name: 'INVENTORY_SERVICE',

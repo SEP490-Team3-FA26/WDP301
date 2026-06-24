@@ -16,6 +16,7 @@ import { UserController } from './controllers/user.controller';
 import { MedicineController } from './controllers/medicine.controller';
 import { AuthController } from './controllers/auth.controller';
 import { OrderController } from './controllers/order.controller';
+import { VoucherController } from './controllers/voucher.controller';
 import { BranchController } from './controllers/branch.controller';
 import { PricingGatewayController } from './controllers/pricing.controller';
 import { MediaController } from './storage/media.controller';
@@ -157,6 +158,7 @@ import { ClientKafka } from '@nestjs/microservices';
     MedicineController,
     AuthController,
     OrderController,
+    VoucherController,
     BranchController,
     PricingGatewayController,
     MediaController,

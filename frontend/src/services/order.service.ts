@@ -17,6 +17,7 @@ export interface OrderPayload {
   soldBy?: string;
   shippingAddress?: string;
   notes?: string;
+  voucherCode?: string;
 }
 
 export interface SalePayload {
@@ -43,6 +44,7 @@ export interface PayOSLinkPayload {
   patientName: string;
   patientPhone: string;
   totalAmount: number;
+  voucherCode?: string;
   items: {
     medicineId: string;
     name: string;
