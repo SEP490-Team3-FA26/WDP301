@@ -51,5 +51,11 @@ export class Order extends Document {
 
   @Prop({ type: String, default: 'ONLINE', enum: ['ONLINE', 'RETAIL'] })
   type: string;
+
+  @Prop({ type: String })
+  voucherCode?: string;
+
+  @Prop({ type: Number, default: 0 })
+  voucherDiscount?: number;
 }
 export const OrderSchema = SchemaFactory.createForClass(Order);

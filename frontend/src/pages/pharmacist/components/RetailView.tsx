@@ -6,6 +6,7 @@ import {
 import { medicineService } from "../../../services/medicine.service";
 import { orderService } from "../../../services/order.service";
 import { prescriptionService } from "../../../services/prescription.service";
+import { voucherService } from "../../../services/voucher.service";
 
 interface RetailViewProps {
   showToast: (message: string, type?: "success" | "error" | "warning") => void;
@@ -18,6 +19,12 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [remarks, setRemarks] = useState("");
+
+  const [voucherCode, setVoucherCode] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+  const [invoiceVoucher, setInvoiceVoucher] = useState<any>(null);
+  const [voucherError, setVoucherError] = useState("");
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
 
   // Checkout Modal
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -39,6 +46,22 @@ export default function RetailView({ showToast }: RetailViewProps) {
       setInvoiceData(result);
       setShowInvoiceModal(true);
       setCart([]); // Clear cart
+
+      if (appliedVoucher) {
+        setInvoiceVoucher(appliedVoucher);
+        try {
+          await voucherService.updateVoucher(appliedVoucher._id, {
+            usedCount: (appliedVoucher.usedCount || 0) + 1
+          });
+        } catch (e) {
+          console.error("Lỗi cập nhật lượt sử dụng voucher:", e);
+        }
+      } else {
+        setInvoiceVoucher(null);
+      }
+      setAppliedVoucher(null);
+      setVoucherCode("");
+      setVoucherError("");
     } catch (err: any) {
       setError(err.message || "Lỗi khi bán lẻ");
     } finally {
@@ -273,6 +296,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
           patientName: "Khách lẻ vãng lai",
           patientPhone: "0900000000",
           totalAmount: total,
+          voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
           items: cart.map(it => ({
             medicineId: it.id || it._id,
             name: it.name,
@@ -470,6 +494,47 @@ export default function RetailView({ showToast }: RetailViewProps) {
           <div className="text-[12px] text-slate-500 mt-1">Được áp dụng ưu đãi thành viên 5% khi bán hàng.</div>
         </div>
 
+        {/* Voucher Box */}
+        <div className="bg-white border border-slate-200 rounded-[16px] p-5 shadow-sm flex flex-col gap-2">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">ÁP DỤNG MÃ GIẢM GIÁ</span>
+          {appliedVoucher ? (
+            <div className="flex items-center justify-between bg-emerald-50 border border-emerald-150 p-2.5 rounded-xl text-xs font-semibold text-emerald-800">
+              <div>
+                Mã đã dùng: <span className="font-extrabold uppercase">{appliedVoucher.code}</span>
+                <span className="block text-[10px] text-emerald-600 mt-0.5">Giảm -{appliedVoucher.discount.toLocaleString()}₫</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveVoucher}
+                className="text-emerald-500 hover:text-emerald-800 font-bold ml-2 text-md"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Nhập mã voucher..."
+                value={voucherCode}
+                onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#0057cd] focus:bg-white transition-all uppercase"
+              />
+              <button
+                type="button"
+                onClick={handleApplyVoucher}
+                disabled={isValidatingVoucher}
+                className="px-4 py-2 bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
+              >
+                {isValidatingVoucher ? "..." : "Áp dụng"}
+              </button>
+            </div>
+          )}
+          {voucherError && (
+            <span className="text-[10px] font-bold text-rose-600 uppercase mt-0.5">{voucherError}</span>
+          )}
+        </div>
+
         {/* Thanh toán tóm tắt */}
         <div className="bg-white rounded-[16px] border border-slate-200 p-6 shadow-sm">
           <h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3">Tóm tắt đơn hàng</h3>
@@ -482,6 +547,12 @@ export default function RetailView({ showToast }: RetailViewProps) {
               <span>Ưu đãi VIP (5%)</span>
               <span className="font-bold">-{discount.toLocaleString()}₫</span>
             </div>
+            {appliedVoucher && (
+              <div className="flex justify-between items-center text-[#ba1a1a]">
+                <span>Khuyến mãi Voucher ({appliedVoucher.code})</span>
+                <span className="font-bold">-{voucherDiscount.toLocaleString()}₫</span>
+              </div>
+            )}
             <div className="flex justify-between items-center text-slate-600">
               <span>Thuế VAT (8%)</span>
               <span className="text-slate-900 font-bold">{vat.toLocaleString()}₫</span>
@@ -613,14 +684,26 @@ export default function RetailView({ showToast }: RetailViewProps) {
                     <span>Ưu đãi thành viên (5%):</span>
                     <span>-{Math.round(invoiceData.data.totalAmount * 0.05).toLocaleString()}₫</span>
                   </div>
+                  {invoiceVoucher && (
+                    <div className="flex justify-between text-[#ba1a1a]">
+                      <span>Khuyến mãi Voucher ({invoiceVoucher.code}):</span>
+                      <span>-{invoiceVoucher.discount.toLocaleString()}₫</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-slate-600">
                     <span>Thuế VAT (8%):</span>
-                    <span>{Math.round(invoiceData.data.totalAmount * 0.95 * 0.08).toLocaleString()}₫</span>
+                    <span>
+                      {Math.round(
+                        Math.max(0, invoiceData.data.totalAmount * 0.95 - (invoiceVoucher ? invoiceVoucher.discount : 0)) * 0.08
+                      ).toLocaleString()}₫
+                    </span>
                   </div>
                   <div className="flex justify-between font-black text-slate-900 text-[16px] border-t border-slate-200 pt-2.5">
                     <span>TỔNG THÀNH TIỀN:</span>
                     <span className="text-[#0057cd]">
-                      {Math.round(invoiceData.data.totalAmount * 0.95 * 1.08).toLocaleString()}₫
+                      {Math.round(
+                        Math.max(0, invoiceData.data.totalAmount * 0.95 - (invoiceVoucher ? invoiceVoucher.discount : 0)) * 1.08
+                      ).toLocaleString()}₫
                     </span>
                   </div>
                 </div>

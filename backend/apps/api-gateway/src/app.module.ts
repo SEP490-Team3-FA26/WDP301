@@ -16,6 +16,7 @@ import { UserController } from './controllers/user.controller';
 import { MedicineController } from './controllers/medicine.controller';
 import { AuthController } from './controllers/auth.controller';
 import { OrderController } from './controllers/order.controller';
+import { VoucherController } from './controllers/voucher.controller';
 import { BranchController } from './controllers/branch.controller';
 import { PricingGatewayController } from './controllers/pricing.controller';
 import { MediaController } from './storage/media.controller';
@@ -153,6 +154,7 @@ import { S3StorageService } from './storage/s3-storage.service';
     MedicineController,
     AuthController,
     OrderController,
+    VoucherController,
     BranchController,
     PricingGatewayController,
     MediaController,

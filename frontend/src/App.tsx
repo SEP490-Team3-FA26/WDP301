@@ -46,6 +46,7 @@ import { InventoryCheck } from "./pages/warehouse/InventoryCheck";
 import { Finance } from "./pages/admin/Finance";
 import { Reports } from "./pages/admin/Reports";
 import { Branches } from "./pages/admin/Branches";
+import { VoucherManagement } from "./pages/admin/VoucherManagement";
 import { HQApproval } from "./pages/admin/HQApproval";
 import { PriceManagement } from "./pages/admin/PriceManagement";
 import { SupplierCreditManagement } from "./pages/admin/SupplierCreditManagement";
@@ -102,6 +103,7 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="branches" element={<Branches />} />
+            <Route path="vouchers" element={<VoucherManagement />} />
             <Route path="approvals" element={<HQApproval />} />
             <Route path="finance" element={<Finance />} />
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
