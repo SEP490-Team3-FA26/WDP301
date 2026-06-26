@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Inject, OnModuleInit } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 
@@ -12,6 +12,9 @@ export class SalesController implements OnModuleInit {
     await subscribeToKafkaTopics(this.inventoryClient, [
       'inventory.sale.create',
       'inventory.sale.list',
+      'inventory.sale.get',
+      'inventory.sale.return',
+      'inventory.sale.exchange',
     ]);
   }
 
@@ -21,7 +24,22 @@ export class SalesController implements OnModuleInit {
   }
 
   @Get()
-  async listSalesOrders() {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.sale.list', {});
+  async listSalesOrders(@Query('search') search?: string, @Query('type') type?: string) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.sale.list', { search, type });
+  }
+
+  @Get(':id')
+  async getSalesOrderById(@Param('id') id: string) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.sale.get', { id });
+  }
+
+  @Post('return')
+  async processReturn(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.sale.return', data);
+  }
+
+  @Post('exchange')
+  async processExchange(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.sale.exchange', data);
   }
 }

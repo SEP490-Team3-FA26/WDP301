@@ -35,4 +35,54 @@ export class OrdersServiceController {
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách đơn hàng');
     }
   }
+
+  @MessagePattern('vouchers.create')
+  async createVoucher(@Payload() data: any) {
+    try {
+      return await this.ordersServiceService.createVoucher(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tạo voucher');
+    }
+  }
+
+  @MessagePattern('vouchers.update')
+  async updateVoucher(@Payload() data: any) {
+    try {
+      return await this.ordersServiceService.updateVoucher(data.id, data.payload);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật voucher');
+    }
+  }
+
+  @MessagePattern('vouchers.delete')
+  async deleteVoucher(@Payload() data: { id: string }) {
+    try {
+      return await this.ordersServiceService.deleteVoucher(data.id);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi xóa voucher');
+    }
+  }
+
+  @MessagePattern('vouchers.list')
+  async listVouchers() {
+    try {
+      return await this.ordersServiceService.listVouchers();
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách voucher');
+    }
+  }
+
+  @MessagePattern('vouchers.validate')
+  async validateVoucher(@Payload() data: { code: string; subtotal: number }) {
+    try {
+      return await this.ordersServiceService.validateVoucher(data.code, data.subtotal);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi kiểm tra voucher');
+    }
+  }
 }

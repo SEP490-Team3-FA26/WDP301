@@ -20,13 +20,41 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { medicineService } from "../../services/medicine.service";
 
 export function DashboardHome() {
   const [role, setRole] = useState("admin");
+  const [stats, setStats] = useState<any>(null);
+  const [lowStockList, setLowStockList] = useState<any[]>([]);
+  const [expiringList, setExpiringList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setRole(localStorage.getItem("userRole") || "admin");
   }, []);
+
+  useEffect(() => {
+    const fetchRealData = async () => {
+      if (role === "warehouse" || role === "admin" || role === "head_branch" || role === "branch") {
+        setLoading(true);
+        try {
+          const [statsData, lowStockData, expiringData] = await Promise.all([
+            medicineService.getMedicineStats().catch(() => null),
+            medicineService.getLowStockReport().catch(() => []),
+            medicineService.getExpirationReport().catch(() => []),
+          ]);
+          setStats(statsData);
+          setLowStockList(lowStockData || []);
+          setExpiringList(expiringData || []);
+        } catch (error) {
+          console.error("Error fetching dashboard real data:", error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    fetchRealData();
+  }, [role]);
 
   const getDashboardData = () => {
     switch (role) {
@@ -64,9 +92,16 @@ export function DashboardHome() {
         return {
           title: "Quản trị Kho vận (Logistics)",
           subtitle: "Theo dõi quy trình xuất nhập tồn, điều chuyển nội bộ và cảnh báo HSD.",
-          stats: [
-            { title: "Tổng số Lô đang quản lý", value: "12,980", icon: <Package size={20} />, trend: "+150 lô nhập mới", trendUp: true },
-            { title: "Lô cần xuất Hủy/Trả đổi", value: "45", icon: <AlertTriangle size={20} />, trend: "Quá hạn xử lý 2 ngày", trendUp: false },
+          stats: stats ? [
+            { title: "Tổng loại thuốc", value: String(stats.totalMedicines), icon: <Package size={20} />, trend: "Dược phẩm hoạt động", trendUp: true },
+            { title: "Tổng tồn kho", value: `${stats.totalStock.toLocaleString('vi-VN')} đv`, icon: <Activity size={20} />, trend: "Tổng số lượng tồn", trendUp: true },
+            { title: "Cần bổ sung hàng", value: `${stats.lowStockCount} sắp hết | ${stats.outOfStockCount} hết`, icon: <AlertTriangle size={20} />, trend: "Dưới mức tối thiểu", trendUp: false },
+            { title: "Hạn sử dụng lô", value: `${stats.soonToExpireCount} cận | ${stats.expiredCount} hết hạn`, icon: <Clock size={20} />, trend: "Lô cần xử lý", trendUp: false },
+          ] : [
+            { title: "Tổng loại thuốc", value: "...", icon: <Package size={20} />, trend: "Đang tải...", trendUp: true },
+            { title: "Tổng tồn kho", value: "...", icon: <Activity size={20} />, trend: "Đang tải...", trendUp: true },
+            { title: "Cần bổ sung hàng", value: "...", icon: <AlertTriangle size={20} />, trend: "Đang tải...", trendUp: false },
+            { title: "Hạn sử dụng lô", value: "...", icon: <Clock size={20} />, trend: "Đang tải...", trendUp: false },
           ],
           actions: [
             { id: "UC-13", name: "Tạo Phiếu Nhập kho", icon: <Package size={24} />, color: "bg-blue-50 text-blue-600 border-blue-200" },
@@ -107,8 +142,32 @@ export function DashboardHome() {
     { id: 4, type: "expiring", item: "Panadol Extra", branch: "CN2 (Q.2)", expiryDate: "15/12/2026", time: "Hệ thống AI" },
   ];
 
+  const displayLowStock = lowStockList.length > 0 
+    ? lowStockList.slice(0, 10).map((item, index) => ({
+        id: item.id || String(index),
+        item: item.name,
+        branch: "Kho trung tâm",
+        current: item.stock,
+        min: item.minStock,
+        status: item.stock === 0 ? "Hết hàng" : "Sắp hết",
+        badgeClass: item.stock === 0 ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-amber-50 text-amber-700 border-amber-200"
+      }))
+    : issues.filter(i => i.type === 'low_stock').map(i => ({ ...i, badgeClass: "bg-amber-50 text-amber-700 border-amber-200", status: "Sắp hết" }));
+
+  const displayExpiring = expiringList.length > 0 
+    ? expiringList.slice(0, 10).map((item, index) => ({
+        id: item.id || String(index),
+        item: item.medicineName,
+        branch: `Lô: ${item.batchNo} (${item.unit})`,
+        expiryDate: item.expDate,
+        time: item.status === 'EXPIRED' ? 'Đã hết hạn' : 'Hệ thống AI',
+        badgeText: item.status === 'EXPIRED' ? 'Hết hạn' : 'Gần hết hạn',
+        badgeClass: item.status === 'EXPIRED' ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-amber-50 text-amber-700 border-amber-200"
+      }))
+    : issues.filter(i => i.type === 'expiring').map(i => ({ ...i, badgeText: 'Gần hết hạn', badgeClass: "bg-rose-50 text-rose-700 border-rose-200" }));
+
   return (
-    <div className="space-y-8 pb-10">
+    <div className="space-y-8 pb-10 p-6 lg:p-8 bg-[#faf8ff]">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{data.title}</h1>
         <p className="text-slate-500 mt-1">{data.subtitle}</p>
@@ -176,11 +235,11 @@ export function DashboardHome() {
                 Cảnh Báo Tồn Kho (UC-38)
               </h3>
               <span className="px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-lg border border-amber-200">
-                 {issues.filter(i => i.type === 'low_stock').length} mục
+                 {lowStockList.length > 0 ? lowStockList.length : issues.filter(i => i.type === 'low_stock').length} mục
               </span>
             </div>
             <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
-               {issues.filter(i => i.type === 'low_stock').map(alert => (
+               {displayLowStock.map(alert => (
                    <div key={alert.id} className="p-4 hover:bg-slate-50 transition-colors flex items-start gap-4">
                       <div className="p-2 bg-amber-100 text-amber-600 rounded-xl shrink-0 mt-0.5">
                          <RotateCcw size={20} />
@@ -191,8 +250,8 @@ export function DashboardHome() {
                               <h4 className="font-bold text-slate-800 text-sm">{alert.item}</h4>
                               <div className="text-xs text-slate-500 font-medium mt-0.5"><Building2 size={10} className="inline mr-1"/>{alert.branch}</div>
                             </div>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
-                               Sắp hết
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${alert.badgeClass}`}>
+                               {alert.status}
                             </span>
                          </div>
                          <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">
@@ -211,11 +270,11 @@ export function DashboardHome() {
                 AI Cảnh Báo Hết Hạn (UC-32)
               </h3>
               <span className="px-2.5 py-1 bg-rose-100 text-rose-700 text-xs font-bold rounded-lg border border-rose-200">
-                 {issues.filter(i => i.type === 'expiring').length} mục
+                 {expiringList.length > 0 ? expiringList.length : issues.filter(i => i.type === 'expiring').length} mục
               </span>
             </div>
             <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
-               {issues.filter(i => i.type === 'expiring').map(alert => (
+               {displayExpiring.map(alert => (
                    <div key={alert.id} className="p-4 hover:bg-slate-50 transition-colors flex items-start gap-4">
                       <div className="p-2 bg-rose-100 text-rose-600 rounded-xl shrink-0 mt-0.5">
                          <AlertTriangle size={20} />
@@ -226,8 +285,8 @@ export function DashboardHome() {
                               <h4 className="font-bold text-slate-800 text-sm">{alert.item}</h4>
                               <div className="text-xs text-slate-500 font-medium mt-0.5"><Building2 size={10} className="inline mr-1"/>{alert.branch}</div>
                             </div>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-rose-50 text-rose-700 border-rose-200">
-                               Gần hết hạn
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${alert.badgeClass}`}>
+                               {alert.badgeText}
                             </span>
                          </div>
                          <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">

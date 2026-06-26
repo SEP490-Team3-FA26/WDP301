@@ -4,6 +4,9 @@
 
 Tài liệu này là **"công thức nấu ăn" (Recipe Book)** dành cho đội ngũ phát triển (Dev Team) để triển khai đồng bộ các tác vụ CRUD (Create, Read, Update, Delete) trên hệ thống.
 
+không đuơợc su dung api truc tiep trong code
+
+
 Mọi Entity mới (ví dụ: `Product`, `Order`, `Inventory`...) khi được phát triển cần tuân thủ tuyệt đối cấu trúc và luồng xử lý chuẩn hóa dưới đây.
 
 ---

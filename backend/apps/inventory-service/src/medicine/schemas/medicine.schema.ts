@@ -51,6 +51,9 @@ export class Medicine extends Document {
   @Prop()
   status: string;
 
+  @Prop({ default: 0, min: 0 })
+  stock: number;
+
   @Prop()
   unit: string;
 
@@ -62,6 +65,9 @@ export class Medicine extends Document {
 
   @Prop({ sparse: true })
   barcode?: string;
+
+  @Prop({ type: [{ minQuantity: Number, price: Number }], default: [] })
+  priceTiers?: { minQuantity: number; price: number }[];
 }
 
 export const MedicineSchema = SchemaFactory.createForClass(Medicine);

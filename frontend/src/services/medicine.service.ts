@@ -53,5 +53,28 @@ export const medicineService = {
   async checkInteraction(medicines: string[]) {
     const response = await api.post('/api/medicines/check-interaction', { medicines });
     return response.data;
+  },
+
+  async updatePriceTiers(id: string, priceTiers: { minQuantity: number; price: number }[]) {
+    const response = await api.patch(`/api/medicines/${id}/price-tiers`, { priceTiers });
+    return response.data;
+  },
+
+  async getImportExportReport(startDate?: string, endDate?: string) {
+    const response = await api.get('/api/inventory-transactions/report', {
+      params: { startDate, endDate }
+    });
+    return response.data;
+  },
+
+  async getLowStockReport() {
+    const response = await api.get('/api/medicines/low-stock-report');
+    return response.data;
+  },
+
+  async getMedicinesDropdown() {
+    const response = await api.get('/api/medicines/dropdown');
+    return response.data;
   }
 };
+

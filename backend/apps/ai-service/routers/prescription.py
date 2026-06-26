@@ -9,6 +9,8 @@ import re
 import traceback
 import pymongo
 
+router = APIRouter()
+
 def get_mongo_collection():
     uri = os.getenv("MONGODB_URI") or os.getenv("MONGODB_CONNECTION_STRING")
     if not uri:
