@@ -39,6 +39,23 @@ import { Voucher, VoucherSchema } from './schemas/voucher.schema';
         }),
         inject: [ConfigService],
       },
+      {
+        name: 'USER_SERVICE',
+        imports: [ConfigModule],
+        useFactory: async (configService: ConfigService) => ({
+          transport: Transport.KAFKA,
+          options: {
+            client: {
+              clientId: 'orders-to-user-client',
+              brokers: (configService.get<string>('KAFKA_BROKERS') || 'localhost:9092').split(','),
+            },
+            consumer: {
+              groupId: 'orders-to-user-group',
+            },
+          },
+        }),
+        inject: [ConfigService],
+      },
     ]),
   ],
   controllers: [OrdersServiceController],

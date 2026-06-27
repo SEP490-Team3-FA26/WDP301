@@ -30,6 +30,26 @@ export function CustomerCheckout() {
   const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
   const [payosPolling, setPayosPolling] = useState(false);
 
+  // Loyalty Points States
+  const [availablePoints, setAvailablePoints] = useState(0);
+  const [usePoints, setUsePoints] = useState(false);
+  const [redeemedPoints, setRedeemedPoints] = useState(0);
+  const [loyaltyInfo, setLoyaltyInfo] = useState<any>(null);
+
+  const fetchLoyalty = async () => {
+    try {
+      const res = await api.get("/api/users/loyalty");
+      if (res.data && !res.data.error) {
+        setLoyaltyInfo(res.data);
+        setAvailablePoints(res.data.points || 0);
+        if (res.data.fullName && !fullname) setFullname(res.data.fullName);
+        if (res.data.phone && !phone) setPhone(res.data.phone);
+      }
+    } catch (err) {
+      console.error("Error fetching loyalty in checkout:", err);
+    }
+  };
+
   // Custom premium non-blocking alert modal state
   const [alertModal, setAlertModal] = useState<{ message: string; title?: string; onConfirm?: () => void } | null>(null);
 
@@ -80,22 +100,23 @@ export function CustomerCheckout() {
           setPaymentError("Lỗi kết nối khi xác thực thanh toán đơn hàng.");
           console.error(err);
         });
-    } else {
-      try {
-        const data = localStorage.getItem("customer_cart");
-        if (data) {
-          setCartItems(JSON.parse(data));
+      } else {
+        try {
+          const data = localStorage.getItem("customer_cart");
+          if (data) {
+            setCartItems(JSON.parse(data));
+          }
+          const savedVoucher = localStorage.getItem("applied_voucher");
+          if (savedVoucher) {
+            const parsed = JSON.parse(savedVoucher);
+            setAppliedVoucher(parsed);
+            setVoucherCode(parsed.code);
+          }
+          fetchLoyalty();
+        } catch (err) {
+          console.error(err);
         }
-        const savedVoucher = localStorage.getItem("applied_voucher");
-        if (savedVoucher) {
-          const parsed = JSON.parse(savedVoucher);
-          setAppliedVoucher(parsed);
-          setVoucherCode(parsed.code);
-        }
-      } catch (err) {
-        console.error(err);
       }
-    }
   }, []);
 
   useEffect(() => {
@@ -202,8 +223,13 @@ export function CustomerCheckout() {
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const memberDiscount = Math.round(subtotal * 0.05);
   const voucherDiscount = appliedVoucher ? appliedVoucher.discount : 0;
-  const vat = Math.round(Math.max(0, subtotal - memberDiscount - voucherDiscount) * 0.08);
-  const total = Math.max(0, subtotal - memberDiscount - voucherDiscount + vat);
+  
+  // 1 point = 1 VND
+  const pointsDiscount = usePoints ? Math.min(redeemedPoints, Math.max(0, subtotal - memberDiscount - voucherDiscount)) : 0;
+  
+  const vat = Math.round(Math.max(0, subtotal - memberDiscount - voucherDiscount - pointsDiscount) * 0.08);
+  const total = Math.max(0, subtotal - memberDiscount - voucherDiscount - pointsDiscount + vat);
+  const earnedPoints = Math.round(total / 100);
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,6 +250,7 @@ export function CustomerCheckout() {
           totalAmount: total,
           type: "ONLINE",
           voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
+          redeemedPoints: usePoints ? redeemedPoints : 0,
           items: cartItems.map(it => ({
             medicineId: it.id || it._id,
             name: it.name,
@@ -236,6 +263,7 @@ export function CustomerCheckout() {
         const result = await orderService.createOrder(payload);
 
         setIsSubmitting(false);
+        window.dispatchEvent(new Event("loyaltyUpdated"));
 
         if (paymentMethod === "QR_PAY" && result.checkoutUrl) {
           // Show PayOS Modal instead of redirecting
@@ -447,6 +475,54 @@ export function CustomerCheckout() {
                   {voucherError && (
                     <span className="text-[10px] font-bold text-rose-600 uppercase mt-0.5">{voucherError}</span>
                   )}
+
+                  {/* Loyalty Points Panel */}
+                  {availablePoints > 0 && (
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-2.5">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={usePoints}
+                          onChange={(e) => {
+                            setUsePoints(e.target.checked);
+                            if (e.target.checked) {
+                              const maxRedeem = Math.floor((subtotal - memberDiscount - voucherDiscount) * 0.5);
+                              setRedeemedPoints(Math.min(availablePoints, maxRedeem));
+                            } else {
+                              setRedeemedPoints(0);
+                            }
+                          }}
+                          className="rounded border-slate-350 text-[#0d6efd] focus:ring-[#0d6efd] w-4 h-4 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-slate-700">Dùng điểm thành viên ({loyaltyInfo?.tier || "Bronze"})</span>
+                      </label>
+                      
+                      {usePoints && (
+                        <div className="flex flex-col gap-1.5 pl-6">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={Math.floor((subtotal - memberDiscount - voucherDiscount) * 0.5)}
+                              value={redeemedPoints}
+                              onChange={(e) => {
+                                const maxRedeem = Math.floor((subtotal - memberDiscount - voucherDiscount) * 0.5);
+                                const pts = Math.min(availablePoints, maxRedeem, Number(e.target.value));
+                                setRedeemedPoints(pts);
+                              }}
+                              className="w-28 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#0d6efd] focus:bg-white transition-all"
+                            />
+                            <span className="text-xs font-bold text-slate-500">
+                              / {availablePoints.toLocaleString()} điểm (Giảm {(redeemedPoints * 1).toLocaleString()}₫)
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-bold">
+                            * Tối đa 50% giá trị đơn hàng (tối đa {Math.floor((subtotal - memberDiscount - voucherDiscount) * 0.5).toLocaleString()} điểm)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-slate-150 pt-4 mt-2 flex flex-col gap-2 text-xs font-semibold text-slate-500">
@@ -464,9 +540,19 @@ export function CustomerCheckout() {
                       <span className="font-bold">-{voucherDiscount.toLocaleString()}₫</span>
                     </div>
                   )}
+                  {usePoints && redeemedPoints > 0 && (
+                    <div className="flex justify-between items-center text-[#ba1a1a]">
+                      <span>Tiêu điểm tích lũy</span>
+                      <span className="font-bold">-{redeemedPoints.toLocaleString()}₫</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span>Thuế giá trị gia tăng (VAT 8%)</span>
                     <span className="font-bold text-slate-900">{vat.toLocaleString()}₫</span>
+                  </div>
+                  <div className="flex justify-between items-center text-emerald-600 font-bold">
+                    <span>Tích lũy đơn này</span>
+                    <span>+{earnedPoints.toLocaleString()} điểm</span>
                   </div>
                   <div className="flex justify-between items-end border-t border-slate-100 pt-3.5 mt-1">
                     <span className="text-slate-900 font-black uppercase tracking-wider text-[11px] pb-0.5">Tổng thanh toán</span>
@@ -575,9 +661,19 @@ export function CustomerCheckout() {
                         <span>-{voucherDiscount.toLocaleString()}₫</span>
                       </div>
                     )}
+                    {usePoints && redeemedPoints > 0 && (
+                      <div className="flex justify-between text-[#ba1a1a]">
+                        <span>Tiêu điểm tích lũy:</span>
+                        <span>-{redeemedPoints.toLocaleString()}₫</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-slate-500">
                       <span>Thuế VAT (8%):</span>
                       <span>{vat.toLocaleString()}₫</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>Tích lũy từ đơn này:</span>
+                      <span>+{earnedPoints.toLocaleString()} điểm</span>
                     </div>
                     <div className="flex justify-between font-black text-slate-900 text-xs border-t border-slate-250 pt-2">
                       <span>TỔNG THÀNH TIỀN:</span>

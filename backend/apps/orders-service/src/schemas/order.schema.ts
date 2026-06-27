@@ -57,5 +57,14 @@ export class Order extends Document {
 
   @Prop({ type: Number, default: 0 })
   voucherDiscount?: number;
+
+  @Prop({ type: Number, default: 0 })
+  redeemedPoints?: number;
+
+  @Prop({ type: Number, default: 0 })
+  pointsDiscount?: number;
+
+  @Prop({ type: Number, default: 0 })
+  earnedPoints?: number;
 }
 export const OrderSchema = SchemaFactory.createForClass(Order);

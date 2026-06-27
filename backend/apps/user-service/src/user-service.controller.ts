@@ -67,5 +67,20 @@ export class UserServiceController {
   handleDeleteBranch(@Payload() data: { id: string }) {
     return this.branchService.delete(data.id);
   }
+
+  @MessagePattern('user.loyalty.get')
+  handleGetLoyalty(@Payload() data: { userId: string }) {
+    return this.userService.getLoyaltyInfo(data.userId);
+  }
+
+  @MessagePattern('user.loyalty.lookup')
+  handleLookupLoyalty(@Payload() data: { phone: string }) {
+    return this.userService.lookupLoyaltyByPhone(data.phone);
+  }
+
+  @MessagePattern('user.loyalty.update_points')
+  handleUpdatePoints(@Payload() data: { phone?: string; userId?: string; pointsDelta: number; accumulatedDelta?: number }) {
+    return this.userService.updatePoints(data);
+  }
 }
 
