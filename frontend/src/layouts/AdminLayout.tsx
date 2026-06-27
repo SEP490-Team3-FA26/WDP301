@@ -5,6 +5,7 @@ export function AdminLayout() {
   const adminNavItems = [
     { name: "Tổng quan Admin", href: "/admin", icon: <LayoutDashboard size={20} /> },
     { name: "Quản lý chi nhánh", href: "/admin/branches", icon: <Building2 size={20} /> },
+    { name: "Quản lý Voucher", href: "/admin/vouchers", icon: <Tag size={20} /> },
     { name: "Phê duyệt mua hàng", href: "/admin/approvals", icon: <ShieldCheck size={20} /> },
     { 
       name: "Kho tổng (Warehouse)", 

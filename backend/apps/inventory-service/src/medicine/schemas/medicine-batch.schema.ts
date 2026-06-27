@@ -3,8 +3,11 @@ import { Document } from 'mongoose';
 
 @Schema({ timestamps: true, collection: 'medicinebatches' })
 export class MedicineBatch extends Document {
-  @Prop({ type: String, required: true })
+  @Prop({ type: String, required: true, index: true })
   medicineId: string;
+
+  @Prop({ type: String, default: 'CENTRAL_WH', index: true })
+  branchId: string;
 
   @Prop({ type: String, required: true })
   batchNo: string;
@@ -20,3 +23,7 @@ export class MedicineBatch extends Document {
 }
 
 export const MedicineBatchSchema = SchemaFactory.createForClass(MedicineBatch);
+
+// đánh chỉ mục - tăng tốc độ read database
+MedicineBatchSchema.index({ branchId: 1, status: 1, stock: 1, medicineId: 1 });
+

@@ -7,6 +7,7 @@ import { PurchaseRequisition, PurchaseRequisitionSchema } from './schemas/purcha
 import { PurchaseOrder, PurchaseOrderSchema } from './schemas/purchase-order.schema';
 import { GoodsReceiptNote, GoodsReceiptNoteSchema } from './schemas/goods-receipt-note.schema';
 import { InventoryTransaction, InventoryTransactionSchema } from './schemas/inventory-transaction.schema';
+import { StockTransfer, StockTransferSchema } from './schemas/stock-transfer.schema';
 import { MedicineModule } from '../medicine/medicine.module';
 
 @Module({
@@ -16,6 +17,7 @@ import { MedicineModule } from '../medicine/medicine.module';
       { name: PurchaseOrder.name, schema: PurchaseOrderSchema },
       { name: GoodsReceiptNote.name, schema: GoodsReceiptNoteSchema },
       { name: InventoryTransaction.name, schema: InventoryTransactionSchema },
+      { name: StockTransfer.name, schema: StockTransferSchema },
     ]),
     MedicineModule, // To access Medicine and MedicineBatch schemas
     ClientsModule.register([

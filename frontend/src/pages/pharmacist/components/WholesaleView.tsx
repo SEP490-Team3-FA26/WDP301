@@ -5,6 +5,30 @@ import {
 import { medicineService } from "../../../services/medicine.service";
 import { orderService } from "../../../services/order.service";
 
+// Helper to decode JWT token to extract branchId and user info
+function getBranchInfoFromToken() {
+  const token = localStorage.getItem("token");
+  if (!token) return { branchId: null, fullName: "Dược sĩ phòng sỉ" };
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const decoded = JSON.parse(jsonPayload);
+    return {
+      branchId: decoded.branchId || null,
+      fullName: decoded.fullName || "Dược sĩ phòng sỉ"
+    };
+  } catch (e) {
+    console.error("Lỗi giải mã token:", e);
+    return { branchId: null, fullName: "Dược sĩ phòng sỉ" };
+  }
+}
+
 export default function WholesaleView() {
   const [cart, setCart] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -138,7 +162,14 @@ export default function WholesaleView() {
             setPayosPolling(false);
             setShowPayOSModal(false);
             alert("Thanh toán PayOS thành công!");
-            await finalizeSale(pendingSalePayload);
+            
+            const saleRes = data.saleResult || data;
+            setInvoiceData(saleRes.data || saleRes);
+            setShowInvoiceModal(true);
+            setCart([]);
+            setAgentName("");
+            setAgentPhone("");
+            setAgentAddress("");
           }
         } catch (err) {
           console.error("Lỗi polling status thanh toán:", err);
@@ -156,7 +187,14 @@ export default function WholesaleView() {
         setPayosPolling(false);
         setShowPayOSModal(false);
         alert("Thanh toán PayOS thành công!");
-        await finalizeSale(pendingSalePayload);
+        
+        const saleRes = data.saleResult || data;
+        setInvoiceData(saleRes.data || saleRes);
+        setShowInvoiceModal(true);
+        setCart([]);
+        setAgentName("");
+        setAgentPhone("");
+        setAgentAddress("");
       } else {
         alert("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.");
       }
@@ -197,8 +235,12 @@ export default function WholesaleView() {
     setLoading(true);
     setError("");
     try {
+      const { branchId: currentBranchId, fullName: currentUserName } = getBranchInfoFromToken();
+      
+      const generatedOrderCode = Math.floor(10000000 + Math.random() * 90000000);
       const payload = {
         type: "WHOLESALE" as const,
+        branchId: currentBranchId || undefined,
         items: cart.map(it => ({
           medicineId: it.medicineId,
           quantity: it.quantity
@@ -206,7 +248,8 @@ export default function WholesaleView() {
         paymentMethod,
         patientName: agentName, // Mapped to patientName field
         patientPhone: agentPhone || "0900000000",
-        soldBy: "Dược sĩ phòng sỉ"
+        soldBy: currentUserName || "Dược sĩ phòng sỉ",
+        orderCode: generatedOrderCode
       };
 
       if (paymentMethod === "QR_PAY") {
@@ -222,6 +265,8 @@ export default function WholesaleView() {
             unit: it.unit
           }))
         });
+
+        payload.orderCode = payosResult.orderCode;
 
         setPayosCheckoutUrl(payosResult.checkoutUrl);
         setPayosQrCode(payosResult.qrCode || "");

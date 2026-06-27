@@ -46,12 +46,16 @@ import { InventoryCheck } from "./pages/warehouse/InventoryCheck";
 import { Finance } from "./pages/admin/Finance";
 import { Reports } from "./pages/admin/Reports";
 import { Branches } from "./pages/admin/Branches";
+import { VoucherManagement } from "./pages/admin/VoucherManagement";
 import { HQApproval } from "./pages/admin/HQApproval";
 import { PriceManagement } from "./pages/admin/PriceManagement";
 import { SupplierCreditManagement } from "./pages/admin/SupplierCreditManagement";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
+import { BranchStockReceive } from "./pages/branch/BranchStockReceive";
+import { BranchInventory } from "./pages/branch/BranchInventory";
+import { BranchTransfer } from "./pages/branch/BranchTransfer";
 
 // Pharmacist / Branch Pages
 import { Sales } from "./pages/pharmacist/Sales";
@@ -88,13 +92,14 @@ export default function App() {
         <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
 
         {/* --- Customer Routes --- */}
-        <Route path="/customer/shop" element={<Landing />} />
         <Route path="/customer" element={<CustomerLayout />}>
           <Route index element={<Navigate to="shop" replace />} />
+          <Route path="shop" element={<CustomerShop />} />
           <Route path="cart" element={<CustomerCart />} />
           <Route path="checkout" element={<CustomerCheckout />} />
           <Route path="interactions" element={<DrugInteractions />} />
           <Route path="ai-consult" element={<AIConsultant />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
 
         {/* --- Admin / HQ Routes --- */}
@@ -102,6 +107,7 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="branches" element={<Branches />} />
+            <Route path="vouchers" element={<VoucherManagement />} />
             <Route path="approvals" element={<HQApproval />} />
             <Route path="finance" element={<Finance />} />
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
@@ -148,6 +154,9 @@ export default function App() {
             <Route path="sales" element={<Sales />} />
             <Route path="pricing" element={<PriceManagement />} />
             <Route path="requisitions" element={<BranchRequisition />} />
+            <Route path="receive-transfers" element={<BranchStockReceive />} />
+            <Route path="inventory" element={<BranchInventory />} />
+            <Route path="transfers" element={<BranchTransfer />} />
             <Route path="finance" element={<Finance />} />
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />

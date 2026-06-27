@@ -17,6 +17,7 @@ export interface OrderPayload {
   soldBy?: string;
   shippingAddress?: string;
   notes?: string;
+  voucherCode?: string;
 }
 
 export interface SalePayload {
@@ -43,6 +44,7 @@ export interface PayOSLinkPayload {
   patientName: string;
   patientPhone: string;
   totalAmount: number;
+  voucherCode?: string;
   items: {
     medicineId: string;
     name: string;
@@ -70,6 +72,26 @@ export const orderService = {
 
   async createSale(payload: SalePayload) {
     const response = await api.post('/api/sales', payload);
+    return response.data;
+  },
+
+  async listSalesOrders(search?: string, type?: string) {
+    const response = await api.get('/api/sales', { params: { search, type } });
+    return response.data;
+  },
+
+  async getSaleById(id: string) {
+    const response = await api.get(`/api/sales/${id}`);
+    return response.data;
+  },
+
+  async processReturn(payload: any) {
+    const response = await api.post('/api/sales/return', payload);
+    return response.data;
+  },
+
+  async processExchange(payload: any) {
+    const response = await api.post('/api/sales/exchange', payload);
     return response.data;
   }
 };

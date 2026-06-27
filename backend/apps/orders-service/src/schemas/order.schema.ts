@@ -32,6 +32,9 @@ export class Order extends Document {
   patientPhone: string;
 
   @Prop({ type: String })
+  patientEmail?: string;
+
+  @Prop({ type: String })
   shippingAddress: string;
 
   @Prop({ type: [OrderItemSchema], required: true })
@@ -51,5 +54,20 @@ export class Order extends Document {
 
   @Prop({ type: String, default: 'ONLINE', enum: ['ONLINE', 'RETAIL'] })
   type: string;
+
+  @Prop({ type: String })
+  voucherCode?: string;
+
+  @Prop({ type: Number, default: 0 })
+  voucherDiscount?: number;
+
+  @Prop({ type: Number, default: 0 })
+  redeemedPoints?: number;
+
+  @Prop({ type: Number, default: 0 })
+  pointsDiscount?: number;
+
+  @Prop({ type: Number, default: 0 })
+  earnedPoints?: number;
 }
 export const OrderSchema = SchemaFactory.createForClass(Order);
