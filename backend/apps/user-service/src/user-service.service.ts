@@ -5,6 +5,7 @@ import { ClientKafka } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { User } from '../../auth-service/src/auth/user.schema';
 import { Cart } from './schemas/cart.schema';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UserService implements OnModuleInit {
@@ -352,6 +353,90 @@ export class UserService implements OnModuleInit {
       tier: tierInfo.name,
       multiplier: tierInfo.multiplier,
     };
+  }
+
+  // --- ADMIN EMPLOYEE MANAGEMENT ---
+
+  async createEmployee(data: any) {
+    this.logger.log(`Admin creating new employee: ${data.email}`);
+    const existing = await this.userModel.findOne({ email: data.email }).exec();
+    if (existing) {
+      return { error: true, message: 'Email đã tồn tại', statusCode: 409 };
+    }
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
+
+    const newUser = new this.userModel({
+      email: data.email,
+      passwordHash,
+      fullName: data.fullName,
+      role: data.role,
+      branchId: data.branchId || null,
+      isActive: true,
+      isEmailVerified: true, // Auto verify for employee
+    });
+
+    await newUser.save();
+    const result = newUser.toObject();
+    delete result.passwordHash;
+    return result;
+  }
+
+  async listEmployees(query: any) {
+    this.logger.log('Admin listing employees');
+    // Mặc định bỏ qua role 'user' (khách hàng)
+    const filter: any = { role: { $ne: 'user' } };
+    if (query?.role) {
+      filter.role = query.role;
+    }
+    if (query?.branchId) {
+      filter.branchId = query.branchId;
+    }
+
+    const employees = await this.userModel.find(filter).select('-passwordHash').sort({ createdAt: -1 }).exec();
+    return employees;
+  }
+
+  async getEmployeeById(id: string) {
+    this.logger.log(`Admin fetching employee: ${id}`);
+    const employee = await this.userModel.findById(id).select('-passwordHash').exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+    return employee;
+  }
+
+  async updateEmployee(id: string, data: any) {
+    this.logger.log(`Admin updating employee: ${id}`);
+    const employee = await this.userModel.findById(id).exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+
+    if (data.fullName) employee.fullName = data.fullName;
+    if (data.role) employee.role = data.role;
+    if (data.branchId !== undefined) employee.branchId = data.branchId;
+
+    await employee.save();
+    const result = employee.toObject();
+    delete result.passwordHash;
+    return result;
+  }
+
+  async toggleBanEmployee(id: string) {
+    this.logger.log(`Admin toggling ban for employee: ${id}`);
+    const employee = await this.userModel.findById(id).exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+
+    // Toggle trạng thái isActive
+    employee.isActive = !employee.isActive;
+    await employee.save();
+    
+    const result = employee.toObject();
+    delete result.passwordHash;
+    return result;
   }
 }
 

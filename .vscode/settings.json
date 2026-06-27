@@ -1,4 +1,19 @@
 {
     "markdown.extension.completion.enabled": false,
-    "markdown.extension.tableFormatter.enabled": false
+    "markdown.extension.tableFormatter.enabled": false,
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/**": true,
+        "**/dist/**": true,
+        "**/.next/**": true,
+        "**/build/**": true,
+        "**/coverage/**": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "**/.next": true,
+        "**/build": true
+    }
 }

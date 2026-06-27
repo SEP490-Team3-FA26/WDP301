@@ -23,6 +23,7 @@ import { MediaController } from './storage/media.controller';
 import { InventoryCheckController } from './controllers/inventory-check.controller';
 import { SupplierCreditController } from './controllers/supplier-credit.controller';
 import { StockTransferController } from './controllers/stock-transfer.controller';
+import { AdminEmployeeController } from './controllers/admin-employee.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -165,6 +166,7 @@ import { ClientKafka } from '@nestjs/microservices';
     InventoryCheckController,
     SupplierCreditController,
     StockTransferController,
+    AdminEmployeeController,
   ],
   providers: [
     JwtAuthGuard,
@@ -240,6 +242,11 @@ export class AppGatewayModule {
       'user.branch.create',
       'user.branch.update',
       'user.branch.delete',
+      'user.admin.employee.create',
+      'user.admin.employee.list',
+      'user.admin.employee.get',
+      'user.admin.employee.update',
+      'user.admin.employee.ban_unban',
     ];
     for (const t of userTopics) {
       this.userClient.subscribeToResponseOf(t);
