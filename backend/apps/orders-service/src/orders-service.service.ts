@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { ClientKafka } from '@nestjs/microservices';
 import { PayOS } from '@payos/node';
 import { Order } from './schemas/order.schema';
+import { Voucher } from './schemas/voucher.schema';
 
 @Injectable()
 export class OrdersServiceService implements OnModuleInit {
@@ -14,8 +15,10 @@ export class OrdersServiceService implements OnModuleInit {
 
   constructor(
     @InjectModel(Order.name) private readonly orderModel: Model<Order>,
+    @InjectModel(Voucher.name) private readonly voucherModel: Model<Voucher>,
     private readonly configService: ConfigService,
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
+    @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
   ) {
     const clientId = this.configService.get<string>('PAYOS_CLIENT_ID');
     const apiKey = this.configService.get<string>('PAYOS_API_KEY');
@@ -27,7 +30,10 @@ export class OrdersServiceService implements OnModuleInit {
 
   async onModuleInit() {
     this.inventoryClient.subscribeToResponseOf('inventory.sale.create');
+    this.userClient.subscribeToResponseOf('user.loyalty.lookup');
+    this.userClient.subscribeToResponseOf('user.loyalty.update_points');
     await this.inventoryClient.connect();
+    await this.userClient.connect();
   }
 
   async createOrder(data: any) {
@@ -35,6 +41,77 @@ export class OrdersServiceService implements OnModuleInit {
 
     // Generate a unique 64-bit int order code for PayOS
     const orderCode = Math.floor(100000 + Math.random() * 90000000);
+
+    let voucherCode = undefined;
+    let voucherDiscount = 0;
+
+    if (data.voucherCode) {
+      const subtotal = data.items.reduce((sum: number, it: any) => sum + it.price * it.quantity, 0);
+      const valRes = await this.validateVoucher(data.voucherCode, subtotal);
+      if (valRes.error) {
+        throw new RpcException(valRes.message);
+      }
+      voucherCode = valRes.code;
+      voucherDiscount = valRes.discount;
+    }
+
+    let redeemedPoints = data.redeemedPoints || 0;
+    let pointsDiscount = 0;
+    let earnedPoints = 0;
+
+    if (data.patientPhone && data.patientPhone !== '0900000000') {
+      try {
+        const userLoyalty = await lastValueFrom(
+          this.userClient.send('user.loyalty.lookup', { phone: data.patientPhone })
+        );
+        if (userLoyalty && !userLoyalty.error) {
+          const userPoints = userLoyalty.points || 0;
+          if (redeemedPoints > userPoints) {
+            throw new RpcException(`Số điểm quy đổi (${redeemedPoints}) lớn hơn số điểm bạn đang có (${userPoints})`);
+          }
+          
+          // Enforce 50% max point redemption constraint
+          const subtotal = data.items.reduce((sum: number, it: any) => sum + it.price * it.quantity, 0);
+          const memberDiscount = Math.round(subtotal * 0.05);
+          const payableBeforePoints = subtotal - memberDiscount - voucherDiscount;
+          const maxRedeemPoints = Math.floor(payableBeforePoints * 0.5);
+
+          if (redeemedPoints > maxRedeemPoints) {
+            throw new RpcException(`Chỉ được phép tiêu điểm tối đa 50% giá trị đơn hàng (tối đa quy đổi ${maxRedeemPoints} điểm)`);
+          }
+
+          pointsDiscount = redeemedPoints * (userLoyalty.conversionRate || 1);
+          
+          // Earned points: 1% * tier multiplier
+          earnedPoints = Math.round((data.totalAmount / 100) * (userLoyalty.multiplier || 1.0));
+        } else {
+          if (redeemedPoints > 0) {
+            throw new RpcException('Số điện thoại chưa đăng ký thành viên thân thiết');
+          }
+          earnedPoints = Math.round(data.totalAmount / 100);
+        }
+      } catch (err: any) {
+        this.logger.error(`Error looking up customer: ${err.message}`);
+        if (redeemedPoints > 0) {
+          throw new RpcException(err.message || 'Không thể xác thực điểm tích lũy của khách hàng.');
+        }
+        earnedPoints = Math.round(data.totalAmount / 100);
+      }
+    } else {
+      if (redeemedPoints > 0) {
+        throw new RpcException('Vui lòng cung cấp số điện thoại để tiêu điểm tích lũy.');
+      }
+    }
+
+    // Instantly deduct points from user balance if redeeming
+    if (redeemedPoints > 0) {
+      await lastValueFrom(
+        this.userClient.send('user.loyalty.update_points', {
+          phone: data.patientPhone,
+          pointsDelta: -redeemedPoints,
+        })
+      );
+    }
 
     const newOrder = new this.orderModel({
       orderCode,
@@ -46,6 +123,11 @@ export class OrdersServiceService implements OnModuleInit {
       paymentMethod: data.paymentMethod || 'QR_PAY',
       paymentStatus: 'PENDING',
       type: data.type || 'ONLINE',
+      voucherCode,
+      voucherDiscount,
+      redeemedPoints,
+      pointsDiscount,
+      earnedPoints,
     });
 
     if (data.paymentMethod === 'QR_PAY') {
@@ -91,9 +173,29 @@ export class OrdersServiceService implements OnModuleInit {
       newOrder.paymentStatus = 'PAID';
       await newOrder.save();
 
+      // Increment voucher usage on successful payment
+      if (newOrder.voucherCode) {
+        await this.voucherModel.updateOne(
+          { code: newOrder.voucherCode },
+          { $inc: { usedCount: 1 } }
+        ).exec();
+      }
+
       // Deduct inventory and record sale
       try {
         const saleRes = await this.deductInventory(newOrder);
+        
+        // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
+        if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: newOrder.patientPhone,
+              pointsDelta: newOrder.earnedPoints,
+              accumulatedDelta: newOrder.earnedPoints,
+            })
+          );
+        }
+
         return {
           success: true,
           orderCode,
@@ -135,19 +237,49 @@ export class OrdersServiceService implements OnModuleInit {
         order.paymentStatus = 'PAID';
         await order.save();
 
+        // Increment voucher usage on successful payment
+        if (order.voucherCode) {
+          await this.voucherModel.updateOne(
+            { code: order.voucherCode },
+            { $inc: { usedCount: 1 } }
+          ).exec();
+        }
+
         // Deduct inventory
         const saleRes = await this.deductInventory(order);
+
+        // CREDIT POINTS ON SUCCESSFUL PAYOS PAYMENT
+        if (order.earnedPoints > 0 && order.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: order.patientPhone,
+              pointsDelta: order.earnedPoints,
+              accumulatedDelta: order.earnedPoints,
+            })
+          );
+        }
+
         return { success: true, status: 'PAID', order, saleResult: saleRes };
       } else if (paymentInfo.status === 'CANCELLED') {
         order.paymentStatus = 'CANCELLED';
         await order.save();
+
+        // REFUND REDEEMED POINTS ON CANCEL
+        if (order.redeemedPoints > 0 && order.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: order.patientPhone,
+              pointsDelta: order.redeemedPoints,
+            })
+          );
+        }
+
         return { success: true, status: 'CANCELLED', order };
       }
 
       return { success: true, status: 'PENDING', order };
     } catch (err) {
       this.logger.error(`Error querying PayOS for ${orderCode}:`, err);
-      // Return pending if transaction is not found or fails
       return { success: true, status: 'PENDING', order };
     }
   }
@@ -177,5 +309,173 @@ export class OrdersServiceService implements OnModuleInit {
         error: (err) => reject(err),
       });
     });
+  }
+
+  // ============================
+  // VOUCHER MANAGEMENT LOGIC
+  // ============================
+
+  async createVoucher(data: any) {
+    const code = data.code.toUpperCase().trim();
+    
+    // Check start and expiry date validity
+    const start = new Date(data.startDate);
+    const expiry = new Date(data.expiryDate);
+    if (isNaN(start.getTime()) || isNaN(expiry.getTime())) {
+      return { error: true, message: 'Ngày bắt đầu hoặc ngày kết thúc không hợp lệ', statusCode: 400 };
+    }
+    if (expiry <= start) {
+      return { error: true, message: 'Ngày kết thúc phải lớn hơn ngày bắt đầu', statusCode: 400 };
+    }
+
+    // Check numerical fields validity
+    if (data.usageLimit !== undefined && data.usageLimit !== null && data.usageLimit <= 0) {
+      return { error: true, message: 'Tổng lượt dùng phải lớn hơn hoặc bằng 1', statusCode: 400 };
+    }
+    if (data.discountValue <= 0) {
+      return { error: true, message: 'Giá trị giảm phải lớn hơn 0', statusCode: 400 };
+    }
+    if (data.discountType === 'PERCENTAGE' && (data.discountValue <= 0 || data.discountValue > 100)) {
+      return { error: true, message: 'Phần trăm giảm giá phải từ 1 đến 100', statusCode: 400 };
+    }
+    if (data.minOrderValue < 0) {
+      return { error: true, message: 'Giá trị đơn hàng tối thiểu không được âm', statusCode: 400 };
+    }
+    if (data.maxDiscountValue !== undefined && data.maxDiscountValue !== null && data.maxDiscountValue <= 0) {
+      return { error: true, message: 'Giá trị giảm tối đa phải lớn hơn 0', statusCode: 400 };
+    }
+
+    const existing = await this.voucherModel.findOne({ code }).exec();
+    if (existing) {
+      return { error: true, message: 'Mã voucher đã tồn tại', statusCode: 400 };
+    }
+
+    const newVoucher = new this.voucherModel({
+      ...data,
+      code,
+      usedCount: 0,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+    });
+    await newVoucher.save();
+    return newVoucher;
+  }
+
+  async updateVoucher(id: string, payload: any) {
+    if (payload.code) {
+      payload.code = payload.code.toUpperCase().trim();
+    }
+
+    // Check start and expiry date validity
+    if (payload.startDate || payload.expiryDate) {
+      const voucher = await this.voucherModel.findById(id).exec();
+      if (voucher) {
+        const finalStart = payload.startDate ? new Date(payload.startDate) : new Date(voucher.startDate);
+        const finalExpiry = payload.expiryDate ? new Date(payload.expiryDate) : new Date(voucher.expiryDate);
+        if (isNaN(finalStart.getTime()) || isNaN(finalExpiry.getTime())) {
+          return { error: true, message: 'Ngày bắt đầu hoặc ngày kết thúc không hợp lệ', statusCode: 400 };
+        }
+        if (finalExpiry <= finalStart) {
+          return { error: true, message: 'Ngày kết thúc phải lớn hơn ngày bắt đầu', statusCode: 400 };
+        }
+      }
+    }
+
+    // Check numerical fields validity
+    if (payload.usageLimit !== undefined && payload.usageLimit !== null && payload.usageLimit <= 0) {
+      return { error: true, message: 'Tổng lượt dùng phải lớn hơn hoặc bằng 1', statusCode: 400 };
+    }
+    if (payload.discountValue !== undefined && payload.discountValue <= 0) {
+      return { error: true, message: 'Giá trị giảm phải lớn hơn 0', statusCode: 400 };
+    }
+    if (payload.minOrderValue !== undefined && payload.minOrderValue < 0) {
+      return { error: true, message: 'Giá trị đơn hàng tối thiểu không được âm', statusCode: 400 };
+    }
+    if (payload.maxDiscountValue !== undefined && payload.maxDiscountValue !== null && payload.maxDiscountValue <= 0) {
+      return { error: true, message: 'Giá trị giảm tối đa phải lớn hơn 0', statusCode: 400 };
+    }
+
+    // Validate final percentage constraint
+    if (payload.discountType !== undefined || payload.discountValue !== undefined) {
+      const voucher = await this.voucherModel.findById(id).exec();
+      if (voucher) {
+        const finalType = payload.discountType !== undefined ? payload.discountType : voucher.discountType;
+        const finalValue = payload.discountValue !== undefined ? payload.discountValue : voucher.discountValue;
+        if (finalType === 'PERCENTAGE' && (finalValue <= 0 || finalValue > 100)) {
+          return { error: true, message: 'Phần trăm giảm giá phải từ 1 đến 100', statusCode: 400 };
+        }
+      }
+    }
+
+    const updated = await this.voucherModel.findByIdAndUpdate(id, payload, { new: true }).exec();
+    if (!updated) {
+      return { error: true, message: 'Không tìm thấy voucher để cập nhật', statusCode: 404 };
+    }
+    return updated;
+  }
+
+  async deleteVoucher(id: string) {
+    const updated = await this.voucherModel.findByIdAndUpdate(id, { isActive: false }, { new: true }).exec();
+    if (!updated) {
+      return { error: true, message: 'Không tìm thấy voucher để vô hiệu hóa', statusCode: 404 };
+    }
+    return { success: true, message: 'Vô hiệu hóa voucher thành công' };
+  }
+
+  async listVouchers() {
+    return this.voucherModel.find().sort({ createdAt: -1 }).exec();
+  }
+
+  async validateVoucher(code: string, subtotal: number) {
+    if (!code) {
+      return { error: true, message: 'Chưa nhập mã giảm giá', statusCode: 400 };
+    }
+    const voucher = await this.voucherModel.findOne({ code: code.toUpperCase().trim() }).exec();
+    if (!voucher) {
+      return { error: true, message: 'Mã giảm giá không tồn tại', statusCode: 404 };
+    }
+    if (!voucher.isActive) {
+      return { error: true, message: 'Mã giảm giá đã bị vô hiệu hóa', statusCode: 400 };
+    }
+
+    const now = new Date();
+    if (now < new Date(voucher.startDate)) {
+      return { error: true, message: 'Chương trình khuyến mãi chưa bắt đầu', statusCode: 400 };
+    }
+    if (now > new Date(voucher.expiryDate)) {
+      return { error: true, message: 'Mã giảm giá đã hết hạn sử dụng', statusCode: 400 };
+    }
+
+    if (voucher.usageLimit !== null && voucher.usageLimit !== undefined && voucher.usedCount >= voucher.usageLimit) {
+      return { error: true, message: 'Mã giảm giá đã hết lượt sử dụng', statusCode: 400 };
+    }
+
+    if (subtotal < voucher.minOrderValue) {
+      return {
+        error: true,
+        message: `Mã giảm giá chỉ áp dụng cho đơn hàng từ ${voucher.minOrderValue.toLocaleString('vi-VN')}₫ trở lên`,
+        statusCode: 400
+      };
+    }
+
+    let discount = 0;
+    if (voucher.discountType === 'PERCENTAGE') {
+      discount = Math.round(subtotal * (voucher.discountValue / 100));
+      if (voucher.maxDiscountValue && discount > voucher.maxDiscountValue) {
+        discount = voucher.maxDiscountValue;
+      }
+    } else if (voucher.discountType === 'FIXED_AMOUNT') {
+      discount = voucher.discountValue;
+      if (discount > subtotal) {
+        discount = subtotal;
+      }
+    }
+
+    return {
+      success: true,
+      code: voucher.code,
+      discountType: voucher.discountType,
+      discountValue: voucher.discountValue,
+      discount,
+    };
   }
 }

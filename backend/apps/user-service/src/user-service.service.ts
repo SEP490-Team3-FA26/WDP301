@@ -271,5 +271,87 @@ export class UserService implements OnModuleInit {
     }
     return { success: true, message: 'Làm trống giỏ hàng thành công!' };
   }
+
+  getMemberTier(accumulatedPoints: number): { name: string; multiplier: number } {
+    if (accumulatedPoints >= 10000) return { name: 'Diamond', multiplier: 2.0 };
+    if (accumulatedPoints >= 5000) return { name: 'Gold', multiplier: 1.5 };
+    if (accumulatedPoints >= 1000) return { name: 'Silver', multiplier: 1.2 };
+    return { name: 'Bronze', multiplier: 1.0 };
+  }
+
+  async getLoyaltyInfo(userId: string) {
+    this.logger.log(`Getting loyalty info for user ${userId}`);
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      return { error: true, message: 'User not found', statusCode: 404 };
+    }
+    const accPoints = user.accumulatedPoints || 0;
+    const currentPoints = user.points || 0;
+    const tierInfo = this.getMemberTier(accPoints);
+
+    return {
+      userId: user._id.toString(),
+      fullName: user.fullName,
+      phone: user.phone || '',
+      email: user.email,
+      points: currentPoints,
+      accumulatedPoints: accPoints,
+      tier: tierInfo.name,
+      multiplier: tierInfo.multiplier,
+      conversionRate: 1, // 1 point = 1 VND
+    };
+  }
+
+  async lookupLoyaltyByPhone(phone: string) {
+    this.logger.log(`Looking up loyalty for phone ${phone}`);
+    const user = await this.userModel.findOne({ phone }).exec();
+    if (!user) {
+      return { error: true, message: 'Khách hàng chưa đăng ký thành viên', statusCode: 404 };
+    }
+    const accPoints = user.accumulatedPoints || 0;
+    const currentPoints = user.points || 0;
+    const tierInfo = this.getMemberTier(accPoints);
+
+    return {
+      userId: user._id.toString(),
+      fullName: user.fullName,
+      phone: user.phone,
+      email: user.email,
+      points: currentPoints,
+      accumulatedPoints: accPoints,
+      tier: tierInfo.name,
+      multiplier: tierInfo.multiplier,
+      conversionRate: 1,
+    };
+  }
+
+  async updatePoints(data: { phone?: string; userId?: string; pointsDelta: number; accumulatedDelta?: number }) {
+    this.logger.log(`Updating points: phone=${data.phone}, userId=${data.userId}, delta=${data.pointsDelta}`);
+    let user;
+    if (data.userId) {
+      user = await this.userModel.findById(data.userId);
+    } else if (data.phone) {
+      user = await this.userModel.findOne({ phone: data.phone });
+    }
+
+    if (!user) {
+      return { error: true, message: 'User not found', statusCode: 404 };
+    }
+
+    user.points = Math.max(0, (user.points || 0) + data.pointsDelta);
+    if (data.accumulatedDelta && data.accumulatedDelta > 0) {
+      user.accumulatedPoints = (user.accumulatedPoints || 0) + data.accumulatedDelta;
+    }
+
+    await user.save();
+    const tierInfo = this.getMemberTier(user.accumulatedPoints);
+    return {
+      success: true,
+      points: user.points,
+      accumulatedPoints: user.accumulatedPoints,
+      tier: tierInfo.name,
+      multiplier: tierInfo.multiplier,
+    };
+  }
 }
 

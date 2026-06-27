@@ -6,6 +6,8 @@ import {
 import { medicineService } from "../../../services/medicine.service";
 import { orderService } from "../../../services/order.service";
 import { prescriptionService } from "../../../services/prescription.service";
+import { voucherService } from "../../../services/voucher.service";
+import api from "../../../services/api";
 
 // Helper to decode JWT token to extract branchId and user info
 function getBranchInfoFromToken() {
@@ -43,6 +45,12 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [remarks, setRemarks] = useState("");
 
+  const [voucherCode, setVoucherCode] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+  const [invoiceVoucher, setInvoiceVoucher] = useState<any>(null);
+  const [voucherError, setVoucherError] = useState("");
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
+
   // Checkout Modal
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceData, setInvoiceData] = useState<any>(null);
@@ -54,6 +62,42 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const [payosPolling, setPayosPolling] = useState(false);
   const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
 
+  // Loyalty states
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [loyaltyInfo, setLoyaltyInfo] = useState<any>(null);
+  const [usePoints, setUsePoints] = useState(false);
+  const [redeemedPoints, setRedeemedPoints] = useState(0);
+  const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
+
+  const handleSearchCustomer = async () => {
+    if (!customerPhone) return;
+    setIsSearchingCustomer(true);
+    setLoyaltyInfo(null);
+    setUsePoints(false);
+    setRedeemedPoints(0);
+    try {
+      const res = await api.get(`/api/users/loyalty/lookup?phone=${customerPhone}`);
+      if (res.data && !res.data.error) {
+        setLoyaltyInfo(res.data);
+        showToast("Đã tìm thấy khách hàng thành viên!", "success");
+      } else {
+        showToast("Không tìm thấy thông tin thành viên.", "warning");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Không tìm thấy thông tin thành viên.", "warning");
+    } finally {
+      setIsSearchingCustomer(false);
+    }
+  };
+
+  const handleClearCustomer = () => {
+    setLoyaltyInfo(null);
+    setCustomerPhone("");
+    setUsePoints(false);
+    setRedeemedPoints(0);
+  };
+
   const finalizeSalesOrder = async (payload: any) => {
     setLoading(true);
     setError("");
@@ -63,6 +107,22 @@ export default function RetailView({ showToast }: RetailViewProps) {
       setInvoiceData(result);
       setShowInvoiceModal(true);
       setCart([]); // Clear cart
+
+      if (appliedVoucher) {
+        setInvoiceVoucher(appliedVoucher);
+        try {
+          await voucherService.updateVoucher(appliedVoucher._id, {
+            usedCount: (appliedVoucher.usedCount || 0) + 1
+          });
+        } catch (e) {
+          console.error("Lỗi cập nhật lượt sử dụng voucher:", e);
+        }
+      } else {
+        setInvoiceVoucher(null);
+      }
+      setAppliedVoucher(null);
+      setVoucherCode("");
+      setVoucherError("");
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || "Lỗi khi bán lẻ";
       setError(msg);
@@ -291,6 +351,9 @@ export default function RetailView({ showToast }: RetailViewProps) {
       const { branchId: currentBranchId, fullName: currentUserName } = getBranchInfoFromToken();
       
       const generatedOrderCode = Math.floor(10000000 + Math.random() * 90000000);
+      const patientName = loyaltyInfo ? loyaltyInfo.fullName : "Khách lẻ vãng lai";
+      const patientPhone = loyaltyInfo ? loyaltyInfo.phone : "0900000000";
+
       const payload = {
         type: "RETAIL",
         branchId: currentBranchId || undefined,
@@ -300,14 +363,19 @@ export default function RetailView({ showToast }: RetailViewProps) {
         })),
         paymentMethod,
         soldBy: currentUserName || "Dược sĩ Trần Thị A",
-        orderCode: generatedOrderCode
+        orderCode: generatedOrderCode,
+        patientName,
+        patientPhone,
+        redeemedPoints: usePoints ? redeemedPoints : 0,
       };
 
       if (paymentMethod === "QR_PAY") {
         const payosResult = await orderService.createPayOSLink({
-          patientName: "Khách lẻ vãng lai",
-          patientPhone: "0900000000",
+          patientName,
+          patientPhone,
           totalAmount: total,
+          voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
+          redeemedPoints: usePoints ? redeemedPoints : 0,
           items: cart.map(it => ({
             medicineId: it.id || it._id,
             name: it.name,
@@ -336,9 +404,15 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
   // Tính toán
   const subtotal = cart.reduce((sum, it) => sum + (it.price * it.quantity), 0);
-  const discount = Math.round(subtotal * 0.05); // VIP discount
-  const vat = Math.round((subtotal - discount) * 0.08);
-  const total = subtotal - discount + vat;
+  const vipDiscount = Math.round(subtotal * 0.05); // VIP discount
+  const voucherDiscount = appliedVoucher ? appliedVoucher.discount : 0;
+  
+  // 1 point = 1 VND
+  const pointsDiscount = usePoints ? Math.min(redeemedPoints, Math.max(0, subtotal - vipDiscount - voucherDiscount)) : 0;
+  
+  const vat = Math.round(Math.max(0, subtotal - vipDiscount - voucherDiscount - pointsDiscount) * 0.08);
+  const total = Math.max(0, subtotal - vipDiscount - voucherDiscount - pointsDiscount + vat);
+  const earnedPoints = Math.round(total / 100) * (loyaltyInfo ? loyaltyInfo.multiplier || 1.0 : 1.0);
 
   // Cảnh báo tương tác thuốc trong giỏ hàng lẻ
   const hasCiprofloxacin = cart.some(it => it.name.toLowerCase().includes("ciprofloxacin") || it.active_ingredient.toLowerCase().includes("ciprofloxacin"));
@@ -500,13 +574,149 @@ export default function RetailView({ showToast }: RetailViewProps) {
       <div className="w-full xl:w-[380px] flex flex-col gap-6 shrink-0 pb-6 pl-1 overflow-y-auto custom-scrollbar">
 
         {/* Tóm tắt khách sỉ/ VIP */}
-        <div className="bg-white border border-slate-200 rounded-[16px] p-5 shadow-sm text-center">
+        {/* Tóm tắt khách sỉ/ VIP */}
+        <div className="bg-white border border-slate-200 rounded-[16px] p-5 shadow-sm">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-widest">KHÁCH HÀNG THÂN THIẾT</h3>
-            <span className="text-[10px] font-bold text-[#0057cd] bg-[#f2f3ff] px-2 py-0.5 rounded">Silver VIP</span>
+            {loyaltyInfo ? (
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded uppercase">
+                {loyaltyInfo.tier} VIP
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase">
+                Khách Lẻ
+              </span>
+            )}
           </div>
-          <div className="text-left font-bold text-slate-800 text-[15px]">Khách lẻ vãng lai</div>
-          <div className="text-[12px] text-slate-500 mt-1">Được áp dụng ưu đãi thành viên 5% khi bán hàng.</div>
+
+          {!loyaltyInfo ? (
+            <div className="flex flex-col gap-2.5">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="SĐT khách hàng..."
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#0057cd] focus:bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={handleSearchCustomer}
+                  disabled={isSearchingCustomer}
+                  className="px-4 py-2 bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
+                >
+                  Tìm kiếm
+                </button>
+              </div>
+              <div className="text-[11px] text-slate-400 font-bold text-left italic">
+                * Nhập số điện thoại để tích điểm & quy đổi ưu đãi thành viên.
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 text-left">
+              <div className="flex justify-between items-center">
+                <span className="font-extrabold text-slate-800 text-[14px]">{loyaltyInfo.fullName}</span>
+                <button
+                  type="button"
+                  onClick={handleClearCustomer}
+                  className="text-xs text-rose-500 hover:text-rose-700 font-bold"
+                >
+                  Hủy chọn
+                </button>
+              </div>
+              <div className="text-[12px] text-slate-500 font-bold">
+                SĐT: {loyaltyInfo.phone} | Điểm khả dụng: <span className="text-[#0057cd]">{loyaltyInfo.points.toLocaleString()}đ</span>
+              </div>
+
+              {loyaltyInfo.points > 0 && (
+                <div className="pt-2.5 border-t border-slate-100 flex flex-col gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={usePoints}
+                      onChange={(e) => {
+                        setUsePoints(e.target.checked);
+                        if (e.target.checked) {
+                          const maxRedeem = Math.floor((subtotal - vipDiscount - voucherDiscount) * 0.5);
+                          setRedeemedPoints(Math.min(loyaltyInfo.points, maxRedeem));
+                        } else {
+                          setRedeemedPoints(0);
+                        }
+                      }}
+                      className="rounded border-slate-350 text-[#0057cd] focus:ring-[#0057cd] w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-700">Tiêu điểm giảm giá</span>
+                  </label>
+                  
+                  {usePoints && (
+                    <div className="flex flex-col gap-1 pl-6">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          max={Math.floor((subtotal - vipDiscount - voucherDiscount) * 0.5)}
+                          value={redeemedPoints}
+                          onChange={(e) => {
+                            const maxRedeem = Math.floor((subtotal - vipDiscount - voucherDiscount) * 0.5);
+                            const pts = Math.min(loyaltyInfo.points, maxRedeem, Number(e.target.value));
+                            setRedeemedPoints(pts);
+                          }}
+                          className="w-24 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:border-[#0057cd] focus:bg-white"
+                        />
+                        <span className="text-xs font-bold text-slate-500">
+                          điểm (Giảm {redeemedPoints.toLocaleString()}₫)
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-bold">
+                        * Tối đa 50% đơn (tối đa {Math.floor((subtotal - vipDiscount - voucherDiscount) * 0.5).toLocaleString()} điểm)
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Voucher Box */}
+        <div className="bg-white border border-slate-200 rounded-[16px] p-5 shadow-sm flex flex-col gap-2">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">ÁP DỤNG MÃ GIẢM GIÁ</span>
+          {appliedVoucher ? (
+            <div className="flex items-center justify-between bg-emerald-50 border border-emerald-150 p-2.5 rounded-xl text-xs font-semibold text-emerald-800">
+              <div>
+                Mã đã dùng: <span className="font-extrabold uppercase">{appliedVoucher.code}</span>
+                <span className="block text-[10px] text-emerald-600 mt-0.5">Giảm -{appliedVoucher.discount.toLocaleString()}₫</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveVoucher}
+                className="text-emerald-500 hover:text-emerald-800 font-bold ml-2 text-md"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Nhập mã voucher..."
+                value={voucherCode}
+                onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#0057cd] focus:bg-white transition-all uppercase"
+              />
+              <button
+                type="button"
+                onClick={handleApplyVoucher}
+                disabled={isValidatingVoucher}
+                className="px-4 py-2 bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
+              >
+                {isValidatingVoucher ? "..." : "Áp dụng"}
+              </button>
+            </div>
+          )}
+          {voucherError && (
+            <span className="text-[10px] font-bold text-rose-600 uppercase mt-0.5">{voucherError}</span>
+          )}
         </div>
 
         {/* Thanh toán tóm tắt */}
@@ -519,11 +729,27 @@ export default function RetailView({ showToast }: RetailViewProps) {
             </div>
             <div className="flex justify-between items-center text-[#ba1a1a]">
               <span>Ưu đãi VIP (5%)</span>
-              <span className="font-bold">-{discount.toLocaleString()}₫</span>
+              <span className="font-bold">-{vipDiscount.toLocaleString()}₫</span>
             </div>
+            {appliedVoucher && (
+              <div className="flex justify-between items-center text-[#ba1a1a]">
+                <span>Khuyến mãi Voucher ({appliedVoucher.code})</span>
+                <span className="font-bold">-{voucherDiscount.toLocaleString()}₫</span>
+              </div>
+            )}
+            {usePoints && redeemedPoints > 0 && (
+              <div className="flex justify-between items-center text-[#ba1a1a]">
+                <span>Quy đổi điểm tích lũy</span>
+                <span className="font-bold">-{redeemedPoints.toLocaleString()}₫</span>
+              </div>
+            )}
             <div className="flex justify-between items-center text-slate-600">
               <span>Thuế VAT (8%)</span>
               <span className="text-slate-900 font-bold">{vat.toLocaleString()}₫</span>
+            </div>
+            <div className="flex justify-between items-center text-emerald-600 font-bold text-xs pt-1 border-t border-slate-100">
+              <span>Tích lũy từ đơn này</span>
+              <span>+{Math.round(total / 100 * (loyaltyInfo ? loyaltyInfo.multiplier || 1.0 : 1.0)).toLocaleString()} điểm</span>
             </div>
           </div>
 
@@ -621,7 +847,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
                   </div>
                   <div className="flex justify-between">
                     <span>Khách hàng:</span>
-                    <span>Khách lẻ vãng lai</span>
+                    <span>{invoiceData.data.patientName || "Khách lẻ vãng lai"}</span>
                   </div>
                 </div>
 
@@ -636,7 +862,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
                           <span>{it.quantity} {it.unit}</span>
                         </div>
                         <div className="text-[11px] text-slate-500 italic mt-0.5 pl-2">
-                          Lô xuất: {it.batches.map((b: any) => `${b.batchNo} (${b.quantity} ${it.unit})`).join(", ")}
+                          Lô xuất: {it.batches?.map((b: any) => `${b.batchNo} (${b.quantity} ${it.unit})`).join(", ") || "Kho quầy"}
                         </div>
                       </div>
                     ))}
@@ -645,23 +871,21 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
                 <div className="border-t border-slate-200 pt-3 flex flex-col gap-1.5">
                   <div className="flex justify-between text-slate-600">
-                    <span>Tổng tiền hàng:</span>
-                    <span>{invoiceData.data.totalAmount.toLocaleString()}₫</span>
+                    <span>Tổng tiền thanh toán:</span>
+                    <span className="font-bold">{invoiceData.data.totalAmount.toLocaleString()}₫</span>
                   </div>
-                  <div className="flex justify-between text-[#ba1a1a]">
-                    <span>Ưu đãi thành viên (5%):</span>
-                    <span>-{Math.round(invoiceData.data.totalAmount * 0.05).toLocaleString()}₫</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Thuế VAT (8%):</span>
-                    <span>{Math.round(invoiceData.data.totalAmount * 0.95 * 0.08).toLocaleString()}₫</span>
-                  </div>
-                  <div className="flex justify-between font-black text-slate-900 text-[16px] border-t border-slate-200 pt-2.5">
-                    <span>TỔNG THÀNH TIỀN:</span>
-                    <span className="text-[#0057cd]">
-                      {Math.round(invoiceData.data.totalAmount * 0.95 * 1.08).toLocaleString()}₫
-                    </span>
-                  </div>
+                  {invoiceData.data.redeemedPoints > 0 && (
+                    <div className="flex justify-between text-[#ba1a1a]">
+                      <span>Tiêu điểm tích lũy:</span>
+                      <span>-{invoiceData.data.redeemedPoints.toLocaleString()}₫</span>
+                    </div>
+                  )}
+                  {invoiceData.data.earnedPoints > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>Tích lũy từ đơn này:</span>
+                      <span>+{invoiceData.data.earnedPoints.toLocaleString()} điểm</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
