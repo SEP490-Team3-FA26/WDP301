@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { RpcException } from '@nestjs/microservices';
+import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
+import { RpcException, ClientKafka } from '@nestjs/microservices';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { SalesOrder } from './schemas/sales-order.schema';
@@ -10,7 +10,7 @@ import { PricingService } from '../pricing/pricing.service';
 import { InventoryTransaction } from '../purchase/schemas/inventory-transaction.schema';
 
 @Injectable()
-export class SalesService {
+export class SalesService implements OnModuleInit {
   private readonly logger = new Logger(SalesService.name);
 
   constructor(
@@ -20,7 +20,12 @@ export class SalesService {
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
     private readonly pricingService: PricingService,
     @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
+    @Inject('KAFKA_CLIENT') private readonly kafkaClient: ClientKafka,
   ) {}
+
+  async onModuleInit() {
+    await this.kafkaClient.connect();
+  }
 
   async getPrescriptionByCode(code: string, branchId?: string) {
     this.logger.log(`Fetching prescription by code: ${code}`);
@@ -268,6 +273,9 @@ export class SalesService {
         });
       }
 
+      // Cập nhật tồn kho tổng của thuốc để đồng bộ ngay lập tức
+      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: -item.quantity } }).exec();
+
       // Resolve giá theo chi nhánh và loại bán hàng (UC-48)
       const itemPrice = await this.pricingService.resolvePrice(
         data.branchId,
@@ -314,6 +322,13 @@ export class SalesService {
       prescription.status = 'FILLED';
       await prescription.save();
     }
+
+    // Broadcast Real-time event cho WebSockets
+    this.kafkaClient.emit('broadcast.inventory_updated', {
+      event: 'SALE_COMPLETED',
+      timestamp: new Date().toISOString(),
+      orderId: salesOrder._id.toString()
+    });
 
     return {
       success: true,
@@ -432,6 +447,13 @@ export class SalesService {
     salesOrder.markModified('items');
     salesOrder.markModified('returns');
     await salesOrder.save();
+
+    // Broadcast Real-time event cho WebSockets
+    this.kafkaClient.emit('broadcast.inventory_updated', {
+      event: 'RETURN_COMPLETED',
+      timestamp: new Date().toISOString(),
+      orderId: salesOrder._id.toString()
+    });
 
     return {
       success: true,
@@ -599,6 +621,13 @@ export class SalesService {
     salesOrder.markModified('items');
     salesOrder.markModified('exchanges');
     await salesOrder.save();
+
+    // Broadcast Real-time event cho WebSockets
+    this.kafkaClient.emit('broadcast.inventory_updated', {
+      event: 'EXCHANGE_COMPLETED',
+      timestamp: new Date().toISOString(),
+      orderId: salesOrder._id.toString()
+    });
 
     return {
       success: true,

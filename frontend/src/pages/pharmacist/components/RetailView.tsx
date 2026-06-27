@@ -8,6 +8,7 @@ import { orderService } from "../../../services/order.service";
 import { prescriptionService } from "../../../services/prescription.service";
 import { voucherService } from "../../../services/voucher.service";
 import api from "../../../services/api";
+import { useSocket } from "../../../hooks/useSocket";
 
 // Helper to decode JWT token to extract branchId and user info
 function getBranchInfoFromToken() {
@@ -296,6 +297,23 @@ export default function RetailView({ showToast }: RetailViewProps) {
     }, 300);
     return () => clearTimeout(delay);
   }, [searchQuery]);
+
+  const { onEvent, offEvent } = useSocket();
+
+  useEffect(() => {
+    const handleInventoryUpdate = (data: any) => {
+      console.log('Inventory updated event received in RetailView:', data);
+      if (searchQuery) {
+        searchMedicines(searchQuery);
+      }
+    };
+
+    onEvent('broadcast.inventory_updated', handleInventoryUpdate);
+
+    return () => {
+      offEvent('broadcast.inventory_updated', handleInventoryUpdate);
+    };
+  }, [onEvent, offEvent, searchQuery]);
 
   const searchMedicines = async (query: string) => {
     setLoading(true);

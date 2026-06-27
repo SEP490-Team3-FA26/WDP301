@@ -34,6 +34,51 @@ export class OrdersServiceService implements OnModuleInit {
     this.userClient.subscribeToResponseOf('user.loyalty.update_points');
     await this.inventoryClient.connect();
     await this.userClient.connect();
+
+    // Background job to cancel PENDING orders older than 15 minutes
+    setInterval(() => {
+      this.cancelExpiredOrdersInBackground().catch(err => {
+        this.logger.error('Failed to run cancel expired orders job:', err);
+      });
+    }, 5 * 60 * 1000); // Check every 5 minutes
+  }
+
+  private async cancelExpiredOrdersInBackground() {
+    this.logger.log('Running background job to cancel expired PENDING orders...');
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    const expiredOrders = await this.orderModel.find({
+      paymentStatus: 'PENDING',
+      createdAt: { $lt: fifteenMinutesAgo },
+      paymentMethod: 'QR_PAY'
+    }).exec();
+
+    for (const order of expiredOrders) {
+      try {
+        if (order.payosPaymentLinkId) {
+           await this.payos.paymentRequests.cancel(order.orderCode, 'Hết hạn thanh toán (Quá 15 phút)');
+        }
+        order.paymentStatus = 'CANCELLED';
+        await order.save();
+
+        // Refund points if they were redeemed
+        if (order.redeemedPoints > 0 && order.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: order.patientPhone,
+              pointsDelta: order.redeemedPoints,
+            })
+          );
+        }
+        this.logger.log(`Cancelled expired order: ${order.orderCode}`);
+      } catch (err: any) {
+        this.logger.error(`Error cancelling expired order ${order.orderCode}: ${err.message}`);
+        // If PayOS already cancelled or not found, just mark as cancelled in DB
+        if (err.message?.includes('not found') || err.message?.includes('already')) {
+           order.paymentStatus = 'CANCELLED';
+           await order.save();
+        }
+      }
+    }
   }
 
   async createOrder(data: any) {
@@ -113,6 +158,26 @@ export class OrdersServiceService implements OnModuleInit {
       );
     }
 
+    // Pre-check stock before generating order
+    const medicineIds = data.items.map((it: any) => it.medicineId);
+    try {
+      const stockRes = await lastValueFrom(
+        this.inventoryClient.send('inventory.medicine.get_by_ids', { ids: medicineIds })
+      );
+      if (stockRes && Array.isArray(stockRes)) {
+        for (const item of data.items) {
+          const med = stockRes.find(m => m.id === item.medicineId);
+          if (!med || med.stock < item.quantity) {
+             throw new RpcException(`Thuốc ${item.name || item.medicineId} không đủ tồn kho (Khả dụng: ${med?.stock || 0})`);
+          }
+        }
+      }
+    } catch (err: any) {
+       this.logger.error('Error pre-checking stock', err);
+       if (err instanceof RpcException) throw err;
+       // Otherwise ignore and let deductInventory fail later
+    }
+
     const newOrder = new this.orderModel({
       orderCode,
       patientName: data.patientName,
@@ -172,6 +237,13 @@ export class OrdersServiceService implements OnModuleInit {
       // CASH or CARD: Complete order instantly
       newOrder.paymentStatus = 'PAID';
       await newOrder.save();
+
+      // Broadcast Real-time event cho WebSockets
+      this.inventoryClient.emit('broadcast.dashboard_updated', {
+        event: 'ORDER_PAID',
+        timestamp: new Date().toISOString(),
+        orderCode: orderCode
+      });
 
       // Increment voucher usage on successful payment
       if (newOrder.voucherCode) {
@@ -246,7 +318,14 @@ export class OrdersServiceService implements OnModuleInit {
         }
 
         // Deduct inventory
-        const saleRes = await this.deductInventory(order);
+        let saleRes = null;
+        let warning = undefined;
+        try {
+          saleRes = await this.deductInventory(order);
+        } catch (err) {
+          this.logger.error('Inventory deduction failed after payment', err);
+          warning = `Đơn hàng đã thanh toán nhưng trừ kho thất bại: ${err.message}`;
+        }
 
         // CREDIT POINTS ON SUCCESSFUL PAYOS PAYMENT
         if (order.earnedPoints > 0 && order.patientPhone !== '0900000000') {
@@ -259,7 +338,14 @@ export class OrdersServiceService implements OnModuleInit {
           );
         }
 
-        return { success: true, status: 'PAID', order, saleResult: saleRes };
+        // Broadcast Real-time event cho WebSockets
+        this.inventoryClient.emit('broadcast.dashboard_updated', {
+          event: 'ORDER_PAID',
+          timestamp: new Date().toISOString(),
+          orderCode: order.orderCode
+        });
+
+        return { success: true, status: 'PAID', order, saleResult: saleRes, warning };
       } else if (paymentInfo.status === 'CANCELLED') {
         order.paymentStatus = 'CANCELLED';
         await order.save();

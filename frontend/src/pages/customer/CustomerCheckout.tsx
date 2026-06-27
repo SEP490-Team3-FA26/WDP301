@@ -29,6 +29,7 @@ export function CustomerCheckout() {
   const [payosQrCode, setPayosQrCode] = useState("");
   const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
   const [payosPolling, setPayosPolling] = useState(false);
+  const [payosTimeLeft, setPayosTimeLeft] = useState<number>(15 * 60);
 
   // Loyalty Points States
   const [availablePoints, setAvailablePoints] = useState(0);
@@ -118,6 +119,27 @@ export function CustomerCheckout() {
         }
       }
   }, []);
+
+  useEffect(() => {
+    let interval: any;
+    if (showPayOSModal && payosTimeLeft > 0) {
+      interval = setInterval(() => {
+        setPayosTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setShowPayOSModal(false);
+            setPayosPolling(false);
+            showAlert("Mã QR đã hết hạn. Vui lòng tạo lại đơn hàng mới.", "Hết hạn thanh toán");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (!showPayOSModal) {
+      setPayosTimeLeft(15 * 60); // Reset timer when modal closes
+    }
+    return () => clearInterval(interval);
+  }, [showPayOSModal, payosTimeLeft]);
 
   useEffect(() => {
     let interval: any;
@@ -727,9 +749,14 @@ export function CustomerCheckout() {
                   />
                 </div>
 
-                <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5 justify-center">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
-                  Đang chờ bạn chuyển khoản (Tự động cập nhật...)
+                <div className="text-[10px] text-slate-400 font-semibold flex flex-col items-center gap-1.5 justify-center">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                    Đang chờ bạn chuyển khoản (Tự động cập nhật...)
+                  </div>
+                  <div className="mt-1 font-bold text-rose-500 text-xs bg-rose-50 px-3 py-1 rounded-full border border-rose-100">
+                    Mã QR hết hạn sau: {Math.floor(payosTimeLeft / 60).toString().padStart(2, '0')}:{(payosTimeLeft % 60).toString().padStart(2, '0')}
+                  </div>
                 </div>
               </div>
 

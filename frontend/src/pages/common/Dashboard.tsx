@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { medicineService } from "../../services/medicine.service";
+import { useSocket } from "../../hooks/useSocket";
 
 export function DashboardHome() {
   const [role, setRole] = useState("admin");
@@ -29,32 +30,49 @@ export function DashboardHome() {
   const [expiringList, setExpiringList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const { isConnected, onEvent, offEvent } = useSocket();
+
   useEffect(() => {
     setRole(localStorage.getItem("userRole") || "admin");
   }, []);
 
-  useEffect(() => {
-    const fetchRealData = async () => {
-      if (role === "warehouse" || role === "admin" || role === "head_branch" || role === "branch") {
-        setLoading(true);
-        try {
-          const [statsData, lowStockData, expiringData] = await Promise.all([
-            medicineService.getMedicineStats().catch(() => null),
-            medicineService.getLowStockReport().catch(() => []),
-            medicineService.getExpirationReport().catch(() => []),
-          ]);
-          setStats(statsData);
-          setLowStockList(lowStockData || []);
-          setExpiringList(expiringData || []);
-        } catch (error) {
-          console.error("Error fetching dashboard real data:", error);
-        } finally {
-          setLoading(false);
-        }
+  const fetchRealData = async () => {
+    if (role === "warehouse" || role === "admin" || role === "head_branch" || role === "branch") {
+      setLoading(true);
+      try {
+        const [statsData, lowStockData, expiringData] = await Promise.all([
+          medicineService.getMedicineStats().catch(() => null),
+          medicineService.getLowStockReport().catch(() => []),
+          medicineService.getExpirationReport().catch(() => []),
+        ]);
+        setStats(statsData);
+        setLowStockList(lowStockData || []);
+        setExpiringList(expiringData || []);
+      } catch (error) {
+        console.error("Error fetching dashboard real data:", error);
+      } finally {
+        setLoading(false);
       }
-    };
+    }
+  };
+
+  useEffect(() => {
     fetchRealData();
   }, [role]);
+
+  // Real-time update for Dashboard
+  useEffect(() => {
+    const handleDashboardUpdate = (data: any) => {
+      console.log('Dashboard updated event received:', data);
+      fetchRealData(); // Re-fetch to update stats
+    };
+
+    onEvent('broadcast.dashboard_updated', handleDashboardUpdate);
+
+    return () => {
+      offEvent('broadcast.dashboard_updated', handleDashboardUpdate);
+    };
+  }, [onEvent, offEvent, role]);
 
   const getDashboardData = () => {
     switch (role) {
