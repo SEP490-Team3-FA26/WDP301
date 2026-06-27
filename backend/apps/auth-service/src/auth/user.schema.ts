@@ -41,6 +41,15 @@ export class User extends Document {
 
   @Prop({ default: false })
   isTwoFactorEnabled: boolean;
+
+  @Prop({ unique: true, sparse: true })
+  phone?: string;
+
+  @Prop({ default: 0 })
+  points: number;
+
+  @Prop({ default: 0 })
+  accumulatedPoints: number;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

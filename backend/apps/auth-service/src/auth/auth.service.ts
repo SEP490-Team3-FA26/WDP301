@@ -43,6 +43,7 @@ export class AuthService {
       passwordHash,
       role: dto.role ?? UserRole.PHARMACIST,
       isEmailVerified: false,
+      phone: dto.phone,
     });
 
     const savedUser = await newUser.save();

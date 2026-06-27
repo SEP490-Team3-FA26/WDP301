@@ -18,6 +18,7 @@ export class OrdersServiceService implements OnModuleInit {
     @InjectModel(Voucher.name) private readonly voucherModel: Model<Voucher>,
     private readonly configService: ConfigService,
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
+    @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
   ) {
     const clientId = this.configService.get<string>('PAYOS_CLIENT_ID');
     const apiKey = this.configService.get<string>('PAYOS_API_KEY');
@@ -29,7 +30,10 @@ export class OrdersServiceService implements OnModuleInit {
 
   async onModuleInit() {
     this.inventoryClient.subscribeToResponseOf('inventory.sale.create');
+    this.userClient.subscribeToResponseOf('user.loyalty.lookup');
+    this.userClient.subscribeToResponseOf('user.loyalty.update_points');
     await this.inventoryClient.connect();
+    await this.userClient.connect();
   }
 
   async createOrder(data: any) {
@@ -51,6 +55,64 @@ export class OrdersServiceService implements OnModuleInit {
       voucherDiscount = valRes.discount;
     }
 
+    let redeemedPoints = data.redeemedPoints || 0;
+    let pointsDiscount = 0;
+    let earnedPoints = 0;
+
+    if (data.patientPhone && data.patientPhone !== '0900000000') {
+      try {
+        const userLoyalty = await lastValueFrom(
+          this.userClient.send('user.loyalty.lookup', { phone: data.patientPhone })
+        );
+        if (userLoyalty && !userLoyalty.error) {
+          const userPoints = userLoyalty.points || 0;
+          if (redeemedPoints > userPoints) {
+            throw new RpcException(`Số điểm quy đổi (${redeemedPoints}) lớn hơn số điểm bạn đang có (${userPoints})`);
+          }
+          
+          // Enforce 50% max point redemption constraint
+          const subtotal = data.items.reduce((sum: number, it: any) => sum + it.price * it.quantity, 0);
+          const memberDiscount = Math.round(subtotal * 0.05);
+          const payableBeforePoints = subtotal - memberDiscount - voucherDiscount;
+          const maxRedeemPoints = Math.floor(payableBeforePoints * 0.5);
+
+          if (redeemedPoints > maxRedeemPoints) {
+            throw new RpcException(`Chỉ được phép tiêu điểm tối đa 50% giá trị đơn hàng (tối đa quy đổi ${maxRedeemPoints} điểm)`);
+          }
+
+          pointsDiscount = redeemedPoints * (userLoyalty.conversionRate || 1);
+          
+          // Earned points: 1% * tier multiplier
+          earnedPoints = Math.round((data.totalAmount / 100) * (userLoyalty.multiplier || 1.0));
+        } else {
+          if (redeemedPoints > 0) {
+            throw new RpcException('Số điện thoại chưa đăng ký thành viên thân thiết');
+          }
+          earnedPoints = Math.round(data.totalAmount / 100);
+        }
+      } catch (err: any) {
+        this.logger.error(`Error looking up customer: ${err.message}`);
+        if (redeemedPoints > 0) {
+          throw new RpcException(err.message || 'Không thể xác thực điểm tích lũy của khách hàng.');
+        }
+        earnedPoints = Math.round(data.totalAmount / 100);
+      }
+    } else {
+      if (redeemedPoints > 0) {
+        throw new RpcException('Vui lòng cung cấp số điện thoại để tiêu điểm tích lũy.');
+      }
+    }
+
+    // Instantly deduct points from user balance if redeeming
+    if (redeemedPoints > 0) {
+      await lastValueFrom(
+        this.userClient.send('user.loyalty.update_points', {
+          phone: data.patientPhone,
+          pointsDelta: -redeemedPoints,
+        })
+      );
+    }
+
     const newOrder = new this.orderModel({
       orderCode,
       patientName: data.patientName,
@@ -63,6 +125,9 @@ export class OrdersServiceService implements OnModuleInit {
       type: data.type || 'ONLINE',
       voucherCode,
       voucherDiscount,
+      redeemedPoints,
+      pointsDiscount,
+      earnedPoints,
     });
 
     if (data.paymentMethod === 'QR_PAY') {
@@ -119,6 +184,18 @@ export class OrdersServiceService implements OnModuleInit {
       // Deduct inventory and record sale
       try {
         const saleRes = await this.deductInventory(newOrder);
+        
+        // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
+        if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: newOrder.patientPhone,
+              pointsDelta: newOrder.earnedPoints,
+              accumulatedDelta: newOrder.earnedPoints,
+            })
+          );
+        }
+
         return {
           success: true,
           orderCode,
@@ -170,17 +247,39 @@ export class OrdersServiceService implements OnModuleInit {
 
         // Deduct inventory
         const saleRes = await this.deductInventory(order);
+
+        // CREDIT POINTS ON SUCCESSFUL PAYOS PAYMENT
+        if (order.earnedPoints > 0 && order.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: order.patientPhone,
+              pointsDelta: order.earnedPoints,
+              accumulatedDelta: order.earnedPoints,
+            })
+          );
+        }
+
         return { success: true, status: 'PAID', order, saleResult: saleRes };
       } else if (paymentInfo.status === 'CANCELLED') {
         order.paymentStatus = 'CANCELLED';
         await order.save();
+
+        // REFUND REDEEMED POINTS ON CANCEL
+        if (order.redeemedPoints > 0 && order.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: order.patientPhone,
+              pointsDelta: order.redeemedPoints,
+            })
+          );
+        }
+
         return { success: true, status: 'CANCELLED', order };
       }
 
       return { success: true, status: 'PENDING', order };
     } catch (err) {
       this.logger.error(`Error querying PayOS for ${orderCode}:`, err);
-      // Return pending if transaction is not found or fails
       return { success: true, status: 'PENDING', order };
     }
   }
