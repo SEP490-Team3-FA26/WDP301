@@ -5,6 +5,7 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { ClientKafka } from '@nestjs/microservices';
 import { PayOS } from '@payos/node';
+import { lastValueFrom } from 'rxjs';
 import { Order } from './schemas/order.schema';
 import { Voucher } from './schemas/voucher.schema';
 
@@ -19,6 +20,7 @@ export class OrdersServiceService implements OnModuleInit {
     private readonly configService: ConfigService,
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
     @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientKafka,
   ) {
     const clientId = this.configService.get<string>('PAYOS_CLIENT_ID');
     const apiKey = this.configService.get<string>('PAYOS_API_KEY');
@@ -34,6 +36,7 @@ export class OrdersServiceService implements OnModuleInit {
     this.userClient.subscribeToResponseOf('user.loyalty.update_points');
     await this.inventoryClient.connect();
     await this.userClient.connect();
+    await this.authClient.connect();
   }
 
   async createOrder(data: any) {
@@ -58,6 +61,7 @@ export class OrdersServiceService implements OnModuleInit {
     let redeemedPoints = data.redeemedPoints || 0;
     let pointsDiscount = 0;
     let earnedPoints = 0;
+    let patientEmail = data.patientEmail || undefined;
 
     if (data.patientPhone && data.patientPhone !== '0900000000') {
       try {
@@ -70,6 +74,10 @@ export class OrdersServiceService implements OnModuleInit {
             throw new RpcException(`Số điểm quy đổi (${redeemedPoints}) lớn hơn số điểm bạn đang có (${userPoints})`);
           }
           
+          if (userLoyalty.email && !patientEmail) {
+            patientEmail = userLoyalty.email;
+          }
+
           // Enforce 50% max point redemption constraint
           const subtotal = data.items.reduce((sum: number, it: any) => sum + it.price * it.quantity, 0);
           const memberDiscount = Math.round(subtotal * 0.05);
@@ -117,6 +125,7 @@ export class OrdersServiceService implements OnModuleInit {
       orderCode,
       patientName: data.patientName,
       patientPhone: data.patientPhone,
+      patientEmail,
       shippingAddress: data.shippingAddress || 'Mua tại quầy',
       items: data.items,
       totalAmount: data.totalAmount,
@@ -196,6 +205,9 @@ export class OrdersServiceService implements OnModuleInit {
           );
         }
 
+        // Asynchronously trigger sending invoice email
+        this.sendInvoiceEmailAsync(newOrder);
+
         return {
           success: true,
           orderCode,
@@ -205,6 +217,10 @@ export class OrdersServiceService implements OnModuleInit {
         };
       } catch (err) {
         this.logger.error('Error deducting inventory:', err);
+        
+        // Asynchronously trigger sending invoice email even if inventory deduction fails
+        this.sendInvoiceEmailAsync(newOrder);
+
         // Save with warning
         return {
           success: true,
@@ -259,6 +275,9 @@ export class OrdersServiceService implements OnModuleInit {
           );
         }
 
+        // Asynchronously trigger sending invoice email
+        this.sendInvoiceEmailAsync(order);
+
         return { success: true, status: 'PAID', order, saleResult: saleRes };
       } else if (paymentInfo.status === 'CANCELLED') {
         order.paymentStatus = 'CANCELLED';
@@ -281,6 +300,32 @@ export class OrdersServiceService implements OnModuleInit {
     } catch (err) {
       this.logger.error(`Error querying PayOS for ${orderCode}:`, err);
       return { success: true, status: 'PENDING', order };
+    }
+  }
+
+  private sendInvoiceEmailAsync(order: any) {
+    if (order.patientEmail) {
+      this.logger.log(`Emitting orders.invoice.send event to auth-service for orderCode: ${order.orderCode} to email: ${order.patientEmail}`);
+      this.authClient.emit('orders.invoice.send', {
+        orderCode: order.orderCode,
+        patientName: order.patientName,
+        patientPhone: order.patientPhone,
+        patientEmail: order.patientEmail,
+        shippingAddress: order.shippingAddress,
+        items: order.items,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        type: order.type,
+        voucherCode: order.voucherCode,
+        voucherDiscount: order.voucherDiscount,
+        redeemedPoints: order.redeemedPoints,
+        pointsDiscount: order.pointsDiscount,
+        earnedPoints: order.earnedPoints,
+        createdAt: order.createdAt || new Date(),
+      });
+    } else {
+      this.logger.warn(`No patientEmail configured for orderCode: ${order.orderCode} — skipping invoice email`);
     }
   }
 

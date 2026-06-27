@@ -32,6 +32,9 @@ export class Order extends Document {
   patientPhone: string;
 
   @Prop({ type: String })
+  patientEmail?: string;
+
+  @Prop({ type: String })
   shippingAddress: string;
 
   @Prop({ type: [OrderItemSchema], required: true })

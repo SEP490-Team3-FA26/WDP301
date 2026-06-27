@@ -166,6 +166,7 @@ export class UserService implements OnModuleInit {
   }
 
   async addToCart(userId: string, medicineId: string, quantity: number) {
+    this.logger.log(`Adding medicine ${medicineId} to cart for user ${userId}`);
     let medicine: any;
     
     try {
@@ -182,7 +183,7 @@ export class UserService implements OnModuleInit {
 
     const currentStock = medicine.stock || 0;
     if (currentStock <= 0) {
-      return { error: true, message: 'Thuốc hiện tại đã hết hàng. Vui lòng chọn sản phẩm khác.', statusCode: 400 };
+      return { error: true, message: 'Thuốc hiện tại đã hết hàng', statusCode: 400 };
     }
 
     let cart = await this.cartModel.findOne({ userId }).exec();
