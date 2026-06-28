@@ -1,0 +1,37 @@
+{{- if .Values.supplier.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-supplier
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: backend-supplier
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.supplier.replicaCount }}
+  selector:
+    matchLabels:
+      app: backend-supplier
+  template:
+    metadata:
+      labels:
+        app: backend-supplier
+        version: {{ .Values.supplier.image.tag | quote }}
+    spec:
+      containers:
+        - name: backend-supplier
+          image: "{{ .Values.supplier.image.repository }}:{{ .Values.supplier.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["npm", "run", "start:supplier"]
+          envFrom:
+            - secretRef:
+                name: backend-secret
+          env:
+            {{- range $key, $value := .Values.supplier.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.supplier.resources | nindent 12 }}
+{{- end }}

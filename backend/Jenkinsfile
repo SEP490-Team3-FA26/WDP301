@@ -1,0 +1,174 @@
+pipeline {
+    agent any
+
+    environment {
+        // Docker Hub credentials ID stored in Jenkins Credentials
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        DOCKERHUB_USERNAME    = "${DOCKERHUB_CREDENTIALS_USR}"
+
+        // Image names
+        FRONTEND_IMAGE = "${DOCKERHUB_USERNAME}/wdp301-frontend"
+        BACKEND_IMAGE  = "${DOCKERHUB_USERNAME}/wdp301-backend"
+
+        // Git tag derived from commit SHA
+        IMAGE_TAG = "${env.GIT_COMMIT[0..7]}"
+
+        // GitOps repo
+        GITOPS_REPO      = "https://github.com/YOUR_ORG/gitops-repo.git"
+        GITOPS_REPO_NAME = "gitops-repo"
+        GIT_CREDENTIALS  = "github-credentials"
+
+        // Deployment environment (branch-based)
+        DEPLOY_ENV = "${env.BRANCH_NAME == 'main' ? 'prod' : 'dev'}"
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        // ─────────────────────────────────────────
+        // STAGE 1: Checkout
+        // ─────────────────────────────────────────
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'git log --oneline -5'
+            }
+        }
+
+        // ─────────────────────────────────────────
+        // STAGE 2: Test
+        // ─────────────────────────────────────────
+        stage('Test') {
+            parallel {
+                stage('Test Frontend') {
+                    steps {
+                        dir('frontend') {
+                            sh 'npm ci'
+                            sh 'npm run lint || true'
+                            sh 'npm test -- --passWithNoTests || true'
+                        }
+                    }
+                }
+                stage('Test Backend') {
+                    steps {
+                        dir('backend') {
+                            sh 'npm ci'
+                            sh 'npm run lint || true'
+                            sh 'npm test -- --passWithNoTests || true'
+                        }
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────
+        // STAGE 3: Build Docker Images
+        // ─────────────────────────────────────────
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Frontend') {
+                    steps {
+                        sh """
+                            docker build \
+                              -f backend/docker/frontend.Dockerfile \
+                              -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
+                              -t ${FRONTEND_IMAGE}:latest \
+                              .
+                        """
+                    }
+                }
+                stage('Build Backend') {
+                    steps {
+                        sh """
+                            docker build \
+                              -f backend/docker/backend.Dockerfile \
+                              -t ${BACKEND_IMAGE}:${IMAGE_TAG} \
+                              -t ${BACKEND_IMAGE}:latest \
+                              .
+                        """
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────
+        // STAGE 4: Security Scan (Trivy)
+        // ─────────────────────────────────────────
+        stage('Security Scan') {
+            steps {
+                sh """
+                    # Install trivy if not present
+                    if ! command -v trivy &> /dev/null; then
+                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                    fi
+                    trivy image --exit-code 0 --severity HIGH,CRITICAL ${FRONTEND_IMAGE}:${IMAGE_TAG} || true
+                    trivy image --exit-code 0 --severity HIGH,CRITICAL ${BACKEND_IMAGE}:${IMAGE_TAG} || true
+                """
+            }
+        }
+
+        // ─────────────────────────────────────────
+        // STAGE 5: Push to Docker Hub
+        // ─────────────────────────────────────────
+        stage('Push to Docker Hub') {
+            steps {
+                sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+                sh "docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}"
+                sh "docker push ${FRONTEND_IMAGE}:latest"
+                sh "docker push ${BACKEND_IMAGE}:${IMAGE_TAG}"
+                sh "docker push ${BACKEND_IMAGE}:latest"
+            }
+        }
+
+        // ─────────────────────────────────────────
+        // STAGE 6: Update GitOps Repo (Image Tag)
+        // ─────────────────────────────────────────
+        stage('Update GitOps Repo') {
+            steps {
+                script {
+                    def targetBranch = env.BRANCH_NAME ?: 'main'
+                    withCredentials([usernamePassword(
+                        credentialsId: "${GIT_CREDENTIALS}",
+                        usernameVariable: 'GIT_USER',
+                        passwordVariable: 'GIT_TOKEN'
+                    )]) {
+                        sh """
+                            # Configure Git identity
+                            git config user.email "jenkins@ci.local"
+                            git config user.name "Jenkins CI"
+
+                            # Update image tags in gitops overlays directory
+                            sed -i 's|tag: .*|tag: "${IMAGE_TAG}"|g' gitops/overlays/${DEPLOY_ENV}/values-override.yaml
+
+                            # Set authenticated remote URL
+                            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/SUMMER2026SE/wdp301-rbl-project-wdp_se18d08_group-7.git
+
+                            # Add, commit and push back with [skip ci]
+                            git add gitops/overlays/${DEPLOY_ENV}/values-override.yaml
+                            git diff --cached --quiet || (git commit -m "ci: update image tag to ${IMAGE_TAG} [${DEPLOY_ENV}] [skip ci]" && git push origin HEAD:${targetBranch})
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // POST ACTIONS
+    // ─────────────────────────────────────────
+    post {
+        always {
+            sh 'docker logout || true'
+            cleanWs()
+        }
+        success {
+            echo "✅ Build & deploy pipeline succeeded! Image tag: ${IMAGE_TAG}"
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs above."
+        }
+    }
+}

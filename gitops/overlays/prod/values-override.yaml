@@ -1,0 +1,105 @@
+# Prod environment overrides
+global:
+  environment: prod
+  domain: wdp301.local
+
+frontend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+gateway:
+  replicaCount: 1
+  env:
+    NODE_ENV: "production"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-prod"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+auth:
+  replicaCount: 1
+  env:
+    NODE_ENV: "production"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-prod"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+user:
+  replicaCount: 1
+  env:
+    NODE_ENV: "production"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-prod"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+inventory:
+  replicaCount: 1
+  env:
+    NODE_ENV: "production"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-prod"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+supplier:
+  replicaCount: 1
+  env:
+    NODE_ENV: "production"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-prod"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+mongodb:
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+ingress:
+  hosts:
+    - host: wdp301.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /health
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /
+          pathType: Prefix
+          serviceName: frontend-svc
+          servicePort: 3000

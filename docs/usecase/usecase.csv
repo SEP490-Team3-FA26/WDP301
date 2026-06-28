@@ -1,0 +1,124 @@
+STT,Nhóm Module,Mã UC,Tên Chức Năng,QL Chi nhánh,NV Bán hàng,Dược sĩ,Thủ kho,Khách hàng,Admin Tổng,Microservice
+1,Bán hàng,UC-01,Bán lẻ – tìm kiếm & thêm thuốc vào giỏ hàng,-,-,✓,-,-,-,orders-service
+2,Bán hàng,UC-02,Bán lẻ – áp dụng khuyến mãi / mã giảm giá,-,-,✓,-,-,-,orders-service
+3,Bán hàng,UC-03,Bán lẻ – xác nhận thanh toán & in hóa đơn,-,-,✓,-,-,-,orders-service
+4,Bán hàng,UC-04,Bán theo đơn thuốc – quét QR đơn điện tử,-,-,✓,-,-,-,orders-service
+5,Bán hàng,UC-05,Bán theo đơn thuốc – kiểm tra tương tác thuốc,-,-,✓,-,-,-,orders-service
+6,Bán hàng,UC-06,Bán sỉ – lập hóa đơn sỉ & áp giá bậc thang,-,-,✓,-,-,-,orders-service
+7,Bán hàng,UC-07,Bán sỉ – quản lý hạn mức công nợ đại lý,-,-,-,-,-,-,orders-service
+8,Bán hàng,UC-08,Hoàn trả – xử lý đổi / trả hàng,-,-,✓,-,-,-,orders-service
+9,Bán hàng,UC-09,Hoàn trả – hoàn tiền & cập nhật tồn kho,-,-,✓,-,-,-,orders-service
+10,Bán hàng,UC-10,Tích điểm & quy đổi điểm khách hàng thân thiết,-,-,✓,-,✓,-,user-service
+11,Bán hàng,UC-11,Tạm giữ đơn hàng (Hold order) chờ dược sĩ xác nhận,-,-,✓,-,-,-,orders-service
+12,Bán hàng,UC-12,Gửi hóa đơn điện tử qua email / Zalo OA,-,-,✓,-,-,-,orders-service
+13,Kho thông minh,UC-13,Nhập kho – tạo phiếu nhập & chọn nhà cung cấp,✓,✓,-,✓,-,-,inventory-service
+14,Kho thông minh,UC-14,Nhập kho – scan QR/Barcode bằng Mobile,✓,✓,-,✓,-,-,inventory-service
+15,Kho thông minh,UC-15,Nhập kho – nhập thông tin lô / HSD / số lô,✓,✓,-,✓,-,-,inventory-service
+16,Kho thông minh,UC-16,Xuất kho – xuất theo FIFO & cảnh báo gần HSD,✓,✓,-,✓,-,-,inventory-service
+17,Kho thông minh,UC-17,Xuất kho – tạo phiếu xuất nội bộ (không bán),✓,✓,-,✓,-,-,inventory-service
+18,Kho thông minh,UC-18,Kiểm kê – tạo phiên kiểm kê theo khu vực / toàn bộ,✓,✓,-,✓,-,-,inventory-service
+19,Kho thông minh,UC-19,Kiểm kê – scan & đối chiếu số lượng thực tế,✓,✓,-,✓,-,-,inventory-service
+20,Kho thông minh,UC-20,Kiểm kê – lưu biên bản & điều chỉnh tồn kho,✓,✓,-,✓,-,-,inventory-service
+21,Kho thông minh,UC-21,Chuyển kho – tạo phiếu điều chuyển giữa chi nhánh,✓,✓,-,-,-,-,inventory-service
+22,Kho thông minh,UC-22,Chuyển kho – xác nhận xuất / nhận hàng bằng QR,✓,✓,-,✓,-,-,inventory-service
+23,Kho thông minh,UC-23,Truy xuất nguồn gốc lô thuốc (Lot Tracking),✓,✓,-,✓,-,✓,inventory-service
+24,Chuỗi Chi nhánh,UC-24,Quản lý chi nhánh – thêm / sửa / xóa chi nhánh,-,-,-,-,-,✓,user-service
+25,Chuỗi Chi nhánh,UC-25,Dashboard tổng – xem doanh thu & tồn kho toàn chuỗi,✓,✓,-,-,-,✓,orders-service
+26,Chuỗi Chi nhánh,UC-26,So sánh hiệu suất kinh doanh giữa các chi nhánh,-,-,-,-,-,✓,orders-service
+27,Chuỗi Chi nhánh,UC-27,Phân bổ hạn mức nhập hàng cho từng chi nhánh,-,-,-,-,-,✓,user-service
+28,Chuỗi Chi nhánh,UC-28,Đồng bộ danh mục thuốc & giá bán toàn chuỗi,✓,✓,-,-,-,✓,inventory-service
+29,Chuỗi Chi nhánh,UC-29,Gợi ý điều phối hàng tự động giữa chi nhánh,✓,✓,-,-,-,✓,inventory-service
+30,Chuỗi Chi nhánh,UC-30,Xem tồn kho thời gian thực của toàn chuỗi,✓,✓,-,-,-,✓,inventory-service
+31,Chuỗi Chi nhánh,UC-31,Thông báo realtime sự kiện quan trọng toàn chuỗi,✓,✓,✓,✓,-,✓,inventory-service
+32,Tính năng AI,UC-32,Cảnh báo thuốc sắp hết hạn (phân cấp đỏ/vàng/xanh),✓,✓,-,✓,-,✓,ai-service
+33,Tính năng AI,UC-33,Đề xuất xử lý thuốc sắp hết hạn ( ),✓,✓,-,-,-,✓,ai-service
+34,Tính năng AI,UC-34,Dự báo nhu cầu nhập hàng theo kỳ (AI Forecast),✓,✓,-,-,-,✓,ai-service
+35,Tính năng AI,UC-35,Tự động tạo đơn đặt hàng từ kết quả dự báo,✓,✓,-,-,-,✓,ai-service
+36,Tính năng AI,UC-36,Gợi ý thuốc thay thế khi hết hàng (cùng hoạt chất),✓,✓,✓,-,-,✓,ai-service
+37,Tính năng AI,UC-37,"Phát hiện bất thường tồn kho (mất hàng, sai số lớn)",✓,✓,-,✓,-,✓,ai-service
+38,Tính năng AI,UC-38,Cảnh báo tồn kho dưới mức tối thiểu an toàn,✓,✓,-,✓,-,✓,ai-service
+39,Tính năng AI,UC-39,Phân tích xu hướng bán hàng theo mùa / dịch bệnh,✓,✓,-,-,-,✓,ai-service
+40,Quản lý Thông tin,UC-40,Quản lý danh mục thuốc – thêm / sửa / xóa SKU,✓,✓,-,-,-,✓,inventory-service
+41,Quản lý Thông tin,UC-41,Quản lý thuốc – nhóm thuốc & hoạt chất,✓,✓,-,-,-,✓,inventory-service
+42,Quản lý Thông tin,UC-42,Quản lý thuốc – liên kết mã QR/Barcode với SKU,✓,✓,-,✓,-,✓,inventory-service
+43,Quản lý Thông tin,UC-43,Quản lý hồ sơ khách hàng & lịch sử mua,✓,✓,✓,-,✓,✓,user-service
+44,Quản lý Thông tin,UC-44,Khách hàng tự tra cứu lịch sử đơn hàng,-,-,-,-,✓,-,user-service
+45,Quản lý Thông tin,UC-45,Nhắc tái khám & thông báo đơn thuốc sắp hết,✓,✓,-,-,✓,✓,user-service
+46,Quản lý Thông tin,UC-46,Quản lý nhà cung cấp – thêm / sửa / đánh giá NCC,✓,✓,-,-,-,✓,supplier-service
+47,Quản lý Thông tin,UC-47,Quản lý chương trình khuyến mãi & giá theo nhóm,✓,✓,-,-,-,✓,orders-service
+48,Quản lý Thông tin,UC-48,Quản lý bảng giá bán lẻ / sỉ theo từng chi nhánh,✓,✓,-,-,-,✓,orders-service
+49,Quản lý Thông tin,UC-49,"Tra cứu thông tin thuốc (hướng dẫn sử dụng, tương tác)",✓,✓,✓,✓,✓,✓,inventory-service
+50,Báo cáo & Thống kê,UC-50,Báo cáo doanh thu theo ngày / tuần / tháng / quý,✓,✓,-,-,-,✓,orders-service
+51,Báo cáo & Thống kê,UC-51,Báo cáo doanh thu theo chi nhánh & nhân viên,✓,✓,-,-,-,✓,orders-service
+52,Báo cáo & Thống kê,UC-52,Báo cáo tồn kho – nhập / xuất / tồn hiện tại,✓,✓,-,✓,-,✓,inventory-service
+53,Báo cáo & Thống kê,UC-53,Báo cáo lợi nhuận,✓,✓,-,-,-,✓,orders-service
+54,Báo cáo & Thống kê,UC-54,Báo cáo hàng bán chạy & hàng chậm luân chuyển,✓,✓,-,-,-,✓,orders-service
+55,Báo cáo & Thống kê,UC-55,Báo cáo công nợ đại lý / nhà cung cấp,✓,✓,-,-,-,✓,orders-service
+56,Báo cáo & Thống kê,UC-56,Xuất báo cáo ra Excel / PDF,✓,✓,-,-,-,✓,orders-service
+57,Báo cáo & Thống kê,UC-57,Lập lịch gửi báo cáo tự động qua email,✓,✓,-,-,-,✓,orders-service
+58,Quản lý Hệ thống,UC-58,Quản lý tài khoản người dùng & phân quyền RBAC,-,-,-,-,-,✓,auth-service
+59,Quản lý Hệ thống,UC-59,"Ghi nhận Audit Log – ai làm gì, lúc nào",-,-,-,-,-,✓,auth-service
+60,Quản lý Hệ thống,UC-60,,-,-,-,-,-,✓,auth-service
+KÌ 9,,,,,,,,,,
+61,Bán lẻ,UC-061,Tham khảo đơn thuốc mẫu,-,-,✓,-,-,-,orders-service
+62,Bán lẻ,UC-062,Gợi ý bán thêm (Cross-sell & Up-sell),-,-,✓,-,-,-,orders-service
+63,Bán lẻ,UC-063,Quản lý ca làm việc & két tiền,-,-,✓,-,-,-,orders-service
+64,Bán theo đơn,UC-064,Xác thực & phát hiện đơn bất thường,-,-,✓,-,-,-,orders-service
+65,Bán theo đơn,UC-065,Lưu trữ & tra cứu hóa đơn bán đơn,-,-,✓,-,✓,-,orders-service
+66,Bán sỉ,UC-066,Quản lý hợp đồng & điều khoản sỉ,✓,✓,-,-,-,✓,supplier-service
+67,Nhập kho,UC-067,Theo dõi & xác minh hóa đơn NCC,✓,✓,-,-,-,✓,supplier-service
+68,Nhập kho,UC-068,Cập nhật & cân bằng giá nhập,✓,✓,-,-,-,✓,inventory-service
+69,Nhập kho,UC-069,Lưu trữ & tra cứu lịch sử nhập kho,✓,✓,-,✓,-,✓,inventory-service
+70,Hoàn trả NCC,UC-070,Tạo phiếu hoàn trả nhà cung cấp,✓,✓,-,✓,-,✓,supplier-service
+71,Hoàn trả NCC,UC-071,Theo dõi tiến trình hoàn trả NCC,✓,✓,-,✓,-,✓,supplier-service
+72,Hoàn trả NCC,UC-072,Quản lý tiền hoàn & đối soát NCC,✓,✓,-,-,-,✓,supplier-service
+73,Xuất hủy,UC-073,Tạo & duyệt phiếu xuất hủy,✓,✓,-,✓,-,✓,inventory-service
+74,Xuất hủy,UC-074,Kiểm duyệt & xác nhận tiêu hủy (2 cấp),✓,✓,-,-,-,✓,inventory-service
+75,Xuất hủy,UC-075,Theo dõi & lưu lịch sử hàng hủy,✓,✓,-,✓,-,✓,inventory-service
+76,Xuất hủy,UC-076,Ghi nhận chi phí & cập nhật kế toán hủy,✓,✓,-,-,-,✓,inventory-service
+77,Danh mục,UC-077,"Quản lý ảnh & tài liệu sản phẩm (tờ HDSD, GPL)",✓,✓,-,-,-,✓,inventory-service
+78,Danh mục,UC-078,Quản lý liều lượng & hướng dẫn dùng theo đối tượng,✓,✓,✓,-,-,✓,inventory-service
+79,Danh mục,UC-079,Quản lý toa thuốc mẫu theo bệnh / triệu chứng,✓,✓,✓,-,-,✓,inventory-service
+80,Danh mục,UC-080,Quản lý giá riêng & ưu đãi khách VIP,✓,✓,-,-,-,✓,inventory-service
+81,Danh mục,UC-081,Quản lý nhân viên & phân ca làm việc,✓,✓,-,-,-,✓,user-service
+82,Tra cứu,UC-082,Tra cứu theo công dụng / triệu chứng (NLP tiếng Việt),✓,✓,✓,-,-,✓,ai-service
+83,Tra cứu,UC-083,Tra cứu giá & lịch sử thay đổi giá,✓,✓,✓,-,-,✓,inventory-service
+84,Báo cáo,UC-084,Báo cáo nhập hàng & đánh giá nhà cung cấp,✓,✓,-,-,-,✓,supplier-service
+85,Cảnh báo,UC-085,Cảnh báo công nợ quá hạn (leo thang theo ngày trễ),✓,✓,-,-,-,✓,orders-service
+86,Cảnh báo,UC-086,"Cảnh báo trùng lặp dữ liệu (khách, sản phẩm)",✓,✓,-,-,-,✓,inventory-service
+87,Cảnh báo,UC-087,Cảnh báo liều lượng vượt chuẩn WHO / Bộ Y tế,✓,✓,✓,-,-,✓,inventory-service
+88,Cảnh báo,UC-088,Cảnh báo giấy phép & chứng chỉ sắp hết hạn,✓,✓,-,-,-,✓,inventory-service
+89,Kho tập trung,UC-089,"Quản lý hàng cần bảo quản lạnh (vaccine, insulin)",✓,✓,-,✓,-,✓,inventory-service
+90,Giá bán linh hoạt,UC-090,Quản lý giá theo khu vực / địa phương,✓,✓,-,-,-,✓,orders-service
+91,Khách hàng thân thiết,UC-091,Quản lý hạng thành viên (Bạc/Vàng/Kim Cương),✓,✓,-,-,-,✓,user-service
+92,Khách hàng thân thiết,UC-092,Đồng bộ ưu đãi & điểm toàn chuỗi,✓,-,-,-,-,✓,user-service
+93,Marketing,UC-093,Chiến dịch thông báo Push / SMS / Email/ zalo mini APP,✓,✓,-,-,-,✓,orders-service
+94,Quản lý khác,UC-094,Tích hợp thanh toán trực tuyến,✓,✓,✓,-,-,✓,orders-service
+95,Quản lý khác,UC-095,App Mobile dành cho nhân viên (Flutter),✓,✓,✓,✓,-,✓,orders-service
+96,Quản lý khác,UC-096,Quản lý giấy phép & tuân thủ pháp lý dược,✓,✓,-,-,-,✓,inventory-service
+97,Quản lý khác,UC-097,"Quản lý ghi chú đặc biệt sản phẩm (bảo quản, cảnh báo)",✓,✓,-,-,-,✓,inventory-service
+98,Hoàn trả KH,UC-098,Xử lý hàng hết hạn & lập biên bản hủy (chi tiết),-,-,-,-,-,-,inventory-service
+99,Chăm sóc Khách hàng,UC-099,Tích hợp tổng đài ảo tư vấn khách hàng,-,✓,✓,-,✓,✓,user-service
+100,Chăm sóc Khách hàng,UC-100,Quản lý lịch sử cuộc gọi & ghi âm tư vấn,✓,✓,✓,-,-,✓,ai-service
+101,Chăm sóc Khách hàng,UC-101,"Gửi tin nhắn SMS/Zalo chăm sóc định kỳ (Sinh nhật, lễ)",-,✓,-,-,-,✓,user-service
+102,Chăm sóc Khách hàng,UC-102,Cổng tiếp nhận và xử lý khiếu nại khách hàng,✓,✓,-,-,✓,✓,user-service
+103,Chăm sóc Khách hàng,UC-103,"Quản lý hạng thẻ thành viên (Đồng, Bạc, Vàng)",-,-,-,-,-,✓,user-service
+104,Chăm sóc Khách hàng,UC-104,Phân nhóm khách hàng theo hành vi mua sắm (RFM),✓,✓,-,-,-,✓,user-service
+105,Kế toán & Tài chính,UC-105,Lập phiếu thu tiền mặt / chuyển khoản tự động,-,✓,✓,-,-,✓,orders-service
+106,Kế toán & Tài chính,UC-106,Lập phiếu chi trả nhà cung cấp / đối tác,-,✓,-,-,-,✓,orders-service
+107,Kế toán & Tài chính,UC-107,Quản lý sổ quỹ tiền mặt tại từng chi nhánh,-,✓,-,-,-,✓,orders-service
+108,Kế toán & Tài chính,UC-108,Đối soát thanh toán qua Ví điện tử / Ngân hàng (Webhook),-,✓,-,-,-,✓,orders-service
+109,Kế toán & Tài chính,UC-109,Báo cáo dòng tiền (Cash flow) chi nhánh & tổng,✓,✓,-,-,-,✓,orders-service
+110,Kế toán & Tài chính,UC-110,"Quản lý chi phí cố định (Mặt bằng, điện nước, lương)",✓,✓,-,-,-,✓,orders-service
+111,Giao hàng nội bộ,UC-111;Phân công tài xế giao hàng nội bộ (Shipper nhà thuốc),-,✓,✓,-,-,✓,-,orders-service
+112,Giao hàng nội bộ,UC-112,Quét mã QR xác nhận bàn giao hàng cho khách,-,-,-,-,✓,-,orders-service
+113,Giao hàng nội bộ,UC-113,Báo cáo tỷ lệ giao hàng đúng hạn & phản hồi,✓,✓,-,-,-,✓,orders-service
+114,Marketing & Promo,UC-114,Thiết lập chương trình Flash Sale theo khung giờ,-,✓,-,-,-,✓,orders-service
+115,Marketing & Promo,UC-115,"Tạo mã giảm giá theo điều kiện (Mua X tặng Y, Combo)",-,✓,-,-,-,✓,orders-service
+116,Marketing & Promo,UC-116,Tạo và gửi Email Marketing tự động (Newsletter),-,-,-,-,-,✓,orders-service
+117,Marketing & Promo,UC-117,Tích hợp Zalo Mini App để đặt thuốc nhanh,✓,-,-,-,✓,✓,orders-service
+118,Trải nghiệm KH,UC-118,Khách hàng đánh giá & review sản phẩm trên App,-,-,-,-,✓,-,user-service
+119,Trải nghiệm KH,UC-119,Đăng nhập App Khách hàng bằng Sinh trắc học (FaceID/Vân tay),-,-,-,-,✓,-,auth-service
+120,Trải nghiệm KH,UC-120,Chatbot AI tư vấn triệu chứng bệnh cơ bản,-,-,-,-,✓,✓,ai-service
+121,Tiện ích Mở rộng,UC-121,Hỗ trợ đa ngôn ngữ trên hệ thống (Việt / Anh),✓,✓,✓,✓,✓,✓,auth-service
+122,,UC-122,ghi âm cuộc hội thoại -> text -> gen ra gợi ý đơn thuốc,-,-,-,-,-,-,ai-service

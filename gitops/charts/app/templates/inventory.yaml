@@ -1,0 +1,37 @@
+{{- if .Values.inventory.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-inventory
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: backend-inventory
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.inventory.replicaCount }}
+  selector:
+    matchLabels:
+      app: backend-inventory
+  template:
+    metadata:
+      labels:
+        app: backend-inventory
+        version: {{ .Values.inventory.image.tag | quote }}
+    spec:
+      containers:
+        - name: backend-inventory
+          image: "{{ .Values.inventory.image.repository }}:{{ .Values.inventory.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["npm", "run", "start:inventory"]
+          envFrom:
+            - secretRef:
+                name: backend-secret
+          env:
+            {{- range $key, $value := .Values.inventory.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.inventory.resources | nindent 12 }}
+{{- end }}

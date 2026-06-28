@@ -1,0 +1,14 @@
+apiVersion: v2
+name: app
+description: Helm chart for WDP301 — frontend, backend, and MongoDB
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: DevOps Team
+    email: devops@wdp301.local
+keywords:
+  - nextjs
+  - nestjs
+  - mongodb
+  - kubernetes

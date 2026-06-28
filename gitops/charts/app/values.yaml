@@ -1,0 +1,224 @@
+# ─────────────────────────────────────────────────────────────
+# Default values — overridden per environment in overlays/
+# ─────────────────────────────────────────────────────────────
+
+# Global settings
+global:
+  environment: dev
+  domain: wdp301.local
+  imagePullPolicy: IfNotPresent
+
+# ─────────────────────────────────────────────────────────────
+# Frontend (Next.js)
+# ─────────────────────────────────────────────────────────────
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: wdp301-frontend
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+  env:
+    NEXT_PUBLIC_API_URL: "http://backend-svc:4000"
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    failureThreshold: 5
+    timeoutSeconds: 5
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 15
+    periodSeconds: 15
+    failureThreshold: 5
+    timeoutSeconds: 5
+
+# ─────────────────────────────────────────────────────────────
+# Microservices (Split Backend)
+# ─────────────────────────────────────────────────────────────
+gateway:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: wdp301-backend
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 4000
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "200Mi"
+    limits:
+      cpu: "800m"
+      memory: "512Mi"
+  env:
+    NODE_ENV: "production"
+    PORT: "4000"
+    APP_VERSION: "1.0.0"
+    KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
+    KAFKA_GROUP_ID: "wdp301-consumers"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 4000
+    initialDelaySeconds: 90
+    periodSeconds: 30
+    failureThreshold: 5
+    timeoutSeconds: 5
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 4000
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    failureThreshold: 5
+    timeoutSeconds: 5
+
+auth:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: wdp301-backend
+    tag: "latest"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "600m"
+      memory: "512Mi"
+  env:
+    NODE_ENV: "production"
+    APP_VERSION: "1.0.0"
+    KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
+    KAFKA_GROUP_ID: "wdp301-consumers"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
+
+user:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: wdp301-backend
+    tag: "latest"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "600m"
+      memory: "512Mi"
+  env:
+    NODE_ENV: "production"
+    APP_VERSION: "1.0.0"
+    KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
+    KAFKA_GROUP_ID: "wdp301-consumers"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
+
+inventory:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: wdp301-backend
+    tag: "latest"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "600m"
+      memory: "512Mi"
+  env:
+    NODE_ENV: "production"
+    APP_VERSION: "1.0.0"
+    KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
+    KAFKA_GROUP_ID: "wdp301-consumers"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
+
+supplier:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: wdp301-backend
+    tag: "latest"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "600m"
+      memory: "512Mi"
+  env:
+    NODE_ENV: "production"
+    APP_VERSION: "1.0.0"
+    KAFKA_BROKERS: "my-kafka.kafka.svc.cluster.local:9092"
+    KAFKA_GROUP_ID: "wdp301-consumers"
+    MONGODB_URI: "mongodb://mongodb-svc:27017/wdp301-dev"
+    NODE_OPTIONS: "--max-old-space-size=384"
+
+# ─────────────────────────────────────────────────────────────
+# MongoDB
+# ─────────────────────────────────────────────────────────────
+mongodb:
+  enabled: true
+  image:
+    repository: mongo
+    tag: "7.0"
+  service:
+    port: 27017
+  storage:
+    size: 5Gi
+    storageClass: "standard"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "768Mi"
+  auth:
+    enabled: false  # Enable with secrets in prod
+
+# ─────────────────────────────────────────────────────────────
+# Ingress
+# ─────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+  hosts:
+    - host: wdp301.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /health
+          pathType: Prefix
+          serviceName: backend-svc
+          servicePort: 4000
+        - path: /
+          pathType: Prefix
+          serviceName: frontend-svc
+          servicePort: 3000
+  tls: []
