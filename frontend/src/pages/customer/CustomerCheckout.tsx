@@ -267,6 +267,7 @@ export function CustomerCheckout() {
         const payload = {
           patientName: fullname,
           patientPhone: phone,
+          patientEmail: loyaltyInfo?.email || undefined,
           shippingAddress: address,
           paymentMethod: paymentMethod,
           totalAmount: total,

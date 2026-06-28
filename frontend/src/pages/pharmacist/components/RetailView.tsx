@@ -65,6 +65,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
   // Loyalty states
   const [customerPhone, setCustomerPhone] = useState("");
+  const [patientEmail, setPatientEmail] = useState("");
   const [loyaltyInfo, setLoyaltyInfo] = useState<any>(null);
   const [usePoints, setUsePoints] = useState(false);
   const [redeemedPoints, setRedeemedPoints] = useState(0);
@@ -80,6 +81,9 @@ export default function RetailView({ showToast }: RetailViewProps) {
       const res = await api.get(`/api/users/loyalty/lookup?phone=${customerPhone}`);
       if (res.data && !res.data.error) {
         setLoyaltyInfo(res.data);
+        if (res.data.email) {
+          setPatientEmail(res.data.email);
+        }
         showToast("Đã tìm thấy khách hàng thành viên!", "success");
       } else {
         showToast("Không tìm thấy thông tin thành viên.", "warning");
@@ -97,6 +101,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
     setCustomerPhone("");
     setUsePoints(false);
     setRedeemedPoints(0);
+    setPatientEmail("");
   };
 
   const finalizeSalesOrder = async (payload: any) => {
@@ -384,6 +389,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
         orderCode: generatedOrderCode,
         patientName,
         patientPhone,
+        patientEmail: patientEmail || undefined,
         redeemedPoints: usePoints ? redeemedPoints : 0,
       };
 
@@ -391,6 +397,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
         const payosResult = await orderService.createPayOSLink({
           patientName,
           patientPhone,
+          patientEmail: patientEmail || undefined,
           totalAmount: total,
           voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
           redeemedPoints: usePoints ? redeemedPoints : 0,
@@ -626,6 +633,13 @@ export default function RetailView({ showToast }: RetailViewProps) {
                   Tìm kiếm
                 </button>
               </div>
+              <input
+                type="email"
+                placeholder="Email nhận HDĐT (tùy chọn)..."
+                value={patientEmail}
+                onChange={(e) => setPatientEmail(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#0057cd] focus:bg-white"
+              />
               <div className="text-[11px] text-slate-400 font-bold text-left italic">
                 * Nhập số điện thoại để tích điểm & quy đổi ưu đãi thành viên.
               </div>
@@ -644,6 +658,16 @@ export default function RetailView({ showToast }: RetailViewProps) {
               </div>
               <div className="text-[12px] text-slate-500 font-bold">
                 SĐT: {loyaltyInfo.phone} | Điểm khả dụng: <span className="text-[#0057cd]">{loyaltyInfo.points.toLocaleString()}đ</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email nhận hóa đơn</label>
+                <input
+                  type="email"
+                  placeholder="Nhập email khách hàng..."
+                  value={patientEmail}
+                  onChange={(e) => setPatientEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#0057cd] focus:bg-white"
+                />
               </div>
 
               {loyaltyInfo.points > 0 && (

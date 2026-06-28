@@ -5,6 +5,7 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { ClientKafka } from '@nestjs/microservices';
 import { PayOS } from '@payos/node';
+import { lastValueFrom } from 'rxjs';
 import { Order } from './schemas/order.schema';
 import { Voucher } from './schemas/voucher.schema';
 
@@ -19,11 +20,12 @@ export class OrdersServiceService implements OnModuleInit {
     private readonly configService: ConfigService,
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
     @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientKafka,
   ) {
     const clientId = this.configService.get<string>('PAYOS_CLIENT_ID');
     const apiKey = this.configService.get<string>('PAYOS_API_KEY');
     const checksumKey = this.configService.get<string>('PAYOS_CHECKSUM_KEY');
-    
+
     this.logger.log(`Initializing PayOS client with client ID: ${clientId ? 'FOUND' : 'MISSING'}`);
     this.payos = new PayOS({ clientId, apiKey, checksumKey });
   }
@@ -34,6 +36,7 @@ export class OrdersServiceService implements OnModuleInit {
     this.userClient.subscribeToResponseOf('user.loyalty.update_points');
     await this.inventoryClient.connect();
     await this.userClient.connect();
+    await this.authClient.connect();
 
     // Background job to cancel PENDING orders older than 15 minutes
     setInterval(() => {
@@ -55,7 +58,7 @@ export class OrdersServiceService implements OnModuleInit {
     for (const order of expiredOrders) {
       try {
         if (order.payosPaymentLinkId) {
-           await this.payos.paymentRequests.cancel(order.orderCode, 'Hết hạn thanh toán (Quá 15 phút)');
+          await this.payos.paymentRequests.cancel(order.orderCode, 'Hết hạn thanh toán (Quá 15 phút)');
         }
         order.paymentStatus = 'CANCELLED';
         await order.save();
@@ -74,8 +77,8 @@ export class OrdersServiceService implements OnModuleInit {
         this.logger.error(`Error cancelling expired order ${order.orderCode}: ${err.message}`);
         // If PayOS already cancelled or not found, just mark as cancelled in DB
         if (err.message?.includes('not found') || err.message?.includes('already')) {
-           order.paymentStatus = 'CANCELLED';
-           await order.save();
+          order.paymentStatus = 'CANCELLED';
+          await order.save();
         }
       }
     }
@@ -103,6 +106,7 @@ export class OrdersServiceService implements OnModuleInit {
     let redeemedPoints = data.redeemedPoints || 0;
     let pointsDiscount = 0;
     let earnedPoints = 0;
+    let patientEmail = data.patientEmail || undefined;
 
     if (data.patientPhone && data.patientPhone !== '0900000000') {
       try {
@@ -114,7 +118,11 @@ export class OrdersServiceService implements OnModuleInit {
           if (redeemedPoints > userPoints) {
             throw new RpcException(`Số điểm quy đổi (${redeemedPoints}) lớn hơn số điểm bạn đang có (${userPoints})`);
           }
-          
+
+          if (userLoyalty.email && !patientEmail) {
+            patientEmail = userLoyalty.email;
+          }
+
           // Enforce 50% max point redemption constraint
           const subtotal = data.items.reduce((sum: number, it: any) => sum + it.price * it.quantity, 0);
           const memberDiscount = Math.round(subtotal * 0.05);
@@ -126,7 +134,7 @@ export class OrdersServiceService implements OnModuleInit {
           }
 
           pointsDiscount = redeemedPoints * (userLoyalty.conversionRate || 1);
-          
+
           // Earned points: 1% * tier multiplier
           earnedPoints = Math.round((data.totalAmount / 100) * (userLoyalty.multiplier || 1.0));
         } else {
@@ -168,20 +176,21 @@ export class OrdersServiceService implements OnModuleInit {
         for (const item of data.items) {
           const med = stockRes.find(m => m.id === item.medicineId);
           if (!med || med.stock < item.quantity) {
-             throw new RpcException(`Thuốc ${item.name || item.medicineId} không đủ tồn kho (Khả dụng: ${med?.stock || 0})`);
+            throw new RpcException(`Thuốc ${item.name || item.medicineId} không đủ tồn kho (Khả dụng: ${med?.stock || 0})`);
           }
         }
       }
     } catch (err: any) {
-       this.logger.error('Error pre-checking stock', err);
-       if (err instanceof RpcException) throw err;
-       // Otherwise ignore and let deductInventory fail later
+      this.logger.error('Error pre-checking stock', err);
+      if (err instanceof RpcException) throw err;
+      // Otherwise ignore and let deductInventory fail later
     }
 
     const newOrder = new this.orderModel({
       orderCode,
       patientName: data.patientName,
       patientPhone: data.patientPhone,
+      patientEmail,
       shippingAddress: data.shippingAddress || 'Mua tại quầy',
       items: data.items,
       totalAmount: data.totalAmount,
@@ -198,7 +207,7 @@ export class OrdersServiceService implements OnModuleInit {
     if (data.paymentMethod === 'QR_PAY') {
       try {
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-        
+
         // Clean description to avoid PayOS validation error (alphanumeric, no spaces, max 25 chars)
         const description = `WDP${orderCode}`.substring(0, 25);
 
@@ -256,7 +265,7 @@ export class OrdersServiceService implements OnModuleInit {
       // Deduct inventory and record sale
       try {
         const saleRes = await this.deductInventory(newOrder);
-        
+
         // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
         if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
           await lastValueFrom(
@@ -268,6 +277,9 @@ export class OrdersServiceService implements OnModuleInit {
           );
         }
 
+        // Asynchronously trigger sending invoice email
+        this.sendInvoiceEmailAsync(newOrder);
+
         return {
           success: true,
           orderCode,
@@ -277,6 +289,10 @@ export class OrdersServiceService implements OnModuleInit {
         };
       } catch (err) {
         this.logger.error('Error deducting inventory:', err);
+
+        // Asynchronously trigger sending invoice email even if inventory deduction fails
+        this.sendInvoiceEmailAsync(newOrder);
+
         // Save with warning
         return {
           success: true,
@@ -338,6 +354,12 @@ export class OrdersServiceService implements OnModuleInit {
           );
         }
 
+        // Asynchronously trigger sending invoice email
+        this.sendInvoiceEmailAsync(order);
+
+        // Asynchronously trigger sending invoice email
+        this.sendInvoiceEmailAsync(order);
+
         // Broadcast Real-time event cho WebSockets
         this.inventoryClient.emit('broadcast.dashboard_updated', {
           event: 'ORDER_PAID',
@@ -367,6 +389,32 @@ export class OrdersServiceService implements OnModuleInit {
     } catch (err) {
       this.logger.error(`Error querying PayOS for ${orderCode}:`, err);
       return { success: true, status: 'PENDING', order };
+    }
+  }
+
+  private sendInvoiceEmailAsync(order: any) {
+    if (order.patientEmail) {
+      this.logger.log(`Emitting orders.invoice.send event to auth-service for orderCode: ${order.orderCode} to email: ${order.patientEmail}`);
+      this.authClient.emit('orders.invoice.send', {
+        orderCode: order.orderCode,
+        patientName: order.patientName,
+        patientPhone: order.patientPhone,
+        patientEmail: order.patientEmail,
+        shippingAddress: order.shippingAddress,
+        items: order.items,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        type: order.type,
+        voucherCode: order.voucherCode,
+        voucherDiscount: order.voucherDiscount,
+        redeemedPoints: order.redeemedPoints,
+        pointsDiscount: order.pointsDiscount,
+        earnedPoints: order.earnedPoints,
+        createdAt: order.createdAt || new Date(),
+      });
+    } else {
+      this.logger.warn(`No patientEmail configured for orderCode: ${order.orderCode} — skipping invoice email`);
     }
   }
 
@@ -403,7 +451,7 @@ export class OrdersServiceService implements OnModuleInit {
 
   async createVoucher(data: any) {
     const code = data.code.toUpperCase().trim();
-    
+
     // Check start and expiry date validity
     const start = new Date(data.startDate);
     const expiry = new Date(data.expiryDate);

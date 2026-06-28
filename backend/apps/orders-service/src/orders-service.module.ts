@@ -56,6 +56,23 @@ import { Voucher, VoucherSchema } from './schemas/voucher.schema';
         }),
         inject: [ConfigService],
       },
+      {
+        name: 'AUTH_SERVICE',
+        imports: [ConfigModule],
+        useFactory: async (configService: ConfigService) => ({
+          transport: Transport.KAFKA,
+          options: {
+            client: {
+              clientId: 'orders-to-auth-client',
+              brokers: (configService.get<string>('KAFKA_BROKERS') || 'localhost:9092').split(','),
+            },
+            consumer: {
+              groupId: 'orders-to-auth-group',
+            },
+          },
+        }),
+        inject: [ConfigService],
+      },
     ]),
   ],
   controllers: [OrdersServiceController],
