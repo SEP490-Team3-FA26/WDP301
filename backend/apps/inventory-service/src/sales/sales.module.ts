@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { MongooseModule } from '@nestjs/mongoose';
 import { SalesController } from './sales.controller';
 import { SalesService } from './sales.service';
@@ -17,6 +18,18 @@ import { InventoryTransaction, InventoryTransactionSchema } from '../purchase/sc
     ]),
     MedicineModule, // To access Medicine and MedicineBatch schemas
     PricingModule,  // To access PricingService for branch price resolution
+    ClientsModule.register([
+      {
+        name: 'KAFKA_CLIENT',
+        transport: Transport.KAFKA,
+        options: {
+          client: {
+            brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+          },
+          producer: { allowAutoTopicCreation: true },
+        },
+      },
+    ]),
   ],
   controllers: [SalesController],
   providers: [SalesService],

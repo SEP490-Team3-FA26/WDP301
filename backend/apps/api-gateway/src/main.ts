@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppGatewayModule } from './app.module';
 import { Request, Response } from 'express';
+import { Transport } from '@nestjs/microservices';
 
 async function bootstrap() {
   process.env.KAFKAJS_NO_PARTITIONER_WARNING = '1';
@@ -58,6 +59,21 @@ async function bootstrap() {
       SwaggerModule.setup('api/docs', app, document);
 
       const port = process.env.PORT || 4000;
+      
+      // Khởi tạo Kafka Consumer cho API Gateway
+      app.connectMicroservice({
+        transport: Transport.KAFKA,
+        options: {
+          client: {
+            brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+          },
+          consumer: {
+            groupId: 'api-gw-events-consumer',
+          },
+        },
+      });
+      await app.startAllMicroservices();
+      
       await app.listen(port);
       console.log(`\n🚀 API Gateway running at: http://localhost:${port}`);
       console.log(`📚 Swagger Docs at:        http://localhost:${port}/api/docs\n`);
