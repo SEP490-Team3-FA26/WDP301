@@ -15,7 +15,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -44,15 +45,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       ),
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0.0, 0.2),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _animController,
-        curve: const Interval(0.2, 1.0, curve: Curves.easeOutCubic),
-      ),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0.0, 0.2), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animController,
+            curve: const Interval(0.2, 1.0, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _animController.forward();
   }
@@ -110,13 +109,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           child: SafeArea(
             child: SingleChildScrollView(
               child: Container(
-                height: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom,
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                height:
+                    MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 16.0,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Spacer(),
-                    
+
                     // Animated Logo & Title
                     FadeTransition(
                       opacity: _fadeAnimation,
@@ -128,7 +133,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               child: Container(
                                 padding: const EdgeInsets.all(20),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
+                                  color: const Color(
+                                    0xFF1A73E8,
+                                  ).withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
@@ -141,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             const SizedBox(height: 16),
                             const Center(
                               child: Text(
-                                'VinaPharmacy',
+                                'ABC Pharmacy',
                                 style: TextStyle(
                                   fontSize: 32,
                                   fontWeight: FontWeight.bold,
@@ -164,9 +171,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                       ),
                     ),
-                    
+
                     const Spacer(),
-                    
+
                     // Animated Form Inputs
                     FadeTransition(
                       opacity: _fadeAnimation,
@@ -179,14 +186,22 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               controller: _emailController,
                               style: const TextStyle(color: Colors.black87),
                               decoration: InputDecoration(
-                                prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF1A73E8)),
+                                prefixIcon: const Icon(
+                                  Icons.email_outlined,
+                                  color: Color(0xFF1A73E8),
+                                ),
                                 hintText: 'Email nhân viên',
-                                hintStyle: const TextStyle(color: Colors.black38),
+                                hintStyle: const TextStyle(
+                                  color: Colors.black38,
+                                ),
                                 filled: true,
                                 fillColor: const Color(0xFFF1F5F9),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(color: Color(0xFF1A73E8), width: 2),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFF1A73E8),
+                                    width: 2,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
@@ -200,14 +215,22 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               obscureText: true,
                               style: const TextStyle(color: Colors.black87),
                               decoration: InputDecoration(
-                                prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF1A73E8)),
+                                prefixIcon: const Icon(
+                                  Icons.lock_outline,
+                                  color: Color(0xFF1A73E8),
+                                ),
                                 hintText: 'Mật khẩu',
-                                hintStyle: const TextStyle(color: Colors.black38),
+                                hintStyle: const TextStyle(
+                                  color: Colors.black38,
+                                ),
                                 filled: true,
                                 fillColor: const Color(0xFFF1F5F9),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(color: Color(0xFF1A73E8), width: 2),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFF1A73E8),
+                                    width: 2,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
@@ -216,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               ),
                             ),
                             const SizedBox(height: 24),
-                            
+
                             // Login Button
                             ElevatedButton(
                               onPressed: () {
@@ -225,7 +248,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF1A73E8),
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -233,16 +258,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               ),
                               child: const Text(
                                 'Đăng nhập',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                    
+
                     const Spacer(),
-                    
+
                     // Animated Demo Panel
                     FadeTransition(
                       opacity: _fadeAnimation,
@@ -302,10 +330,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       color = Colors.purple.shade700;
                                       break;
                                   }
-                                  
+
                                   return ActionChip(
-                                    backgroundColor: color.withValues(alpha: 0.08),
-                                    side: BorderSide(color: color.withValues(alpha: 0.2)),
+                                    backgroundColor: color.withValues(
+                                      alpha: 0.08,
+                                    ),
+                                    side: BorderSide(
+                                      color: color.withValues(alpha: 0.2),
+                                    ),
                                     label: Text(
                                       role.label,
                                       style: TextStyle(
@@ -343,7 +375,8 @@ class FloatingBackground extends StatefulWidget {
   State<FloatingBackground> createState() => _FloatingBackgroundState();
 }
 
-class _FloatingBackgroundState extends State<FloatingBackground> with SingleTickerProviderStateMixin {
+class _FloatingBackgroundState extends State<FloatingBackground>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   final List<BackgroundParticle> _particles = [];
   final math.Random _random = math.Random();
@@ -361,17 +394,22 @@ class _FloatingBackgroundState extends State<FloatingBackground> with SingleTick
       if (!mounted) return;
       final size = MediaQuery.of(context).size;
       for (int i = 0; i < 15; i++) {
-        _particles.add(BackgroundParticle(
-          x: _random.nextDouble() * size.width,
-          y: _random.nextDouble() * size.height,
-          speedX: (_random.nextDouble() - 0.5) * 0.5,
-          speedY: (_random.nextDouble() - 0.5) * 0.5,
-          size: _random.nextDouble() * 26 + 18,
-          rotation: _random.nextDouble() * math.pi * 2,
-          rotationSpeed: (_random.nextDouble() - 0.5) * 0.015,
-          type: ParticleType.values[_random.nextInt(ParticleType.values.length)],
-          opacity: _random.nextDouble() * 0.08 + 0.04, // Keep it subtle so it does not interfere with reading
-        ));
+        _particles.add(
+          BackgroundParticle(
+            x: _random.nextDouble() * size.width,
+            y: _random.nextDouble() * size.height,
+            speedX: (_random.nextDouble() - 0.5) * 0.5,
+            speedY: (_random.nextDouble() - 0.5) * 0.5,
+            size: _random.nextDouble() * 26 + 18,
+            rotation: _random.nextDouble() * math.pi * 2,
+            rotationSpeed: (_random.nextDouble() - 0.5) * 0.015,
+            type: ParticleType
+                .values[_random.nextInt(ParticleType.values.length)],
+            opacity:
+                _random.nextDouble() * 0.08 +
+                0.04, // Keep it subtle so it does not interfere with reading
+          ),
+        );
       }
     });
   }
@@ -477,16 +515,24 @@ class BackgroundParticlesPainter extends CustomPainter {
 
   // Draws capsule tablet shape
   void _drawPill(Canvas canvas, double size, Paint paint) {
-    final rect = Rect.fromCenter(center: Offset.zero, width: size, height: size * 0.45);
+    final rect = Rect.fromCenter(
+      center: Offset.zero,
+      width: size,
+      height: size * 0.45,
+    );
     final rrect = RRect.fromRectAndRadius(rect, Radius.circular(size * 0.225));
     canvas.drawRRect(rrect, paint);
-    
+
     // Draw capsule division seam line
     final linePaint = Paint()
       ..color = Colors.white.withValues(alpha: paint.color.a * 0.8)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(0, -size * 0.225), Offset(0, size * 0.225), linePaint);
+    canvas.drawLine(
+      Offset(0, -size * 0.225),
+      Offset(0, size * 0.225),
+      linePaint,
+    );
   }
 
   // Draws virus safety shield shape
@@ -494,7 +540,7 @@ class BackgroundParticlesPainter extends CustomPainter {
     final path = Path();
     final w = size * 0.75;
     final h = size;
-    
+
     path.moveTo(0, -h / 2);
     path.quadraticBezierTo(w / 2, -h / 2, w / 2, -h / 6);
     path.quadraticBezierTo(w / 2, h / 4, 0, h / 2);
@@ -503,7 +549,7 @@ class BackgroundParticlesPainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, paint);
-    
+
     // Draw a subtle inner shield accent line
     final accentPaint = Paint()
       ..color = Colors.white.withValues(alpha: paint.color.a * 0.5)
@@ -525,11 +571,15 @@ class BackgroundParticlesPainter extends CustomPainter {
   void _drawCross(Canvas canvas, double size, Paint paint) {
     final thick = size * 0.22;
     final len = size * 0.7;
-    
+
     final path = Path();
-    path.addRect(Rect.fromCenter(center: Offset.zero, width: len, height: thick));
-    path.addRect(Rect.fromCenter(center: Offset.zero, width: thick, height: len));
-    
+    path.addRect(
+      Rect.fromCenter(center: Offset.zero, width: len, height: thick),
+    );
+    path.addRect(
+      Rect.fromCenter(center: Offset.zero, width: thick, height: len),
+    );
+
     canvas.drawPath(path, paint);
   }
 

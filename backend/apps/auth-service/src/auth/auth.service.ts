@@ -103,7 +103,6 @@ export class AuthService {
       role: userFromDb.role,
       fullName: userFromDb.fullName,
       branchId: userFromDb.branchId || null,
-      branchId: userFromDb.branchId,
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -155,7 +154,6 @@ export class AuthService {
       role: userFromDb.role,
       fullName: userFromDb.fullName,
       branchId: userFromDb.branchId || null,
-      branchId: userFromDb.branchId,
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -219,7 +217,7 @@ export class AuthService {
             <div style="background-color: #f8fafc; padding: 40px 20px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
               <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);">
                 <div style="background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); padding: 32px 24px; text-align: center;">
-                  <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">VinaPharmacy</h1>
+                  <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">ABC Pharmacy</h1>
                 </div>
                 <div style="padding: 40px 32px;">
                   <h2 style="color: #0f172a; font-size: 22px; font-weight: 700; margin-top: 0; margin-bottom: 16px; text-align: center;">Khôi phục mật khẩu</h2>
@@ -243,7 +241,7 @@ export class AuthService {
                   <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
                     Nếu bạn không yêu cầu đổi mật khẩu, hãy bỏ qua email này.<br>Tài khoản của bạn vẫn an toàn.<br><br>
                     Trân trọng,<br>
-                    <strong style="color: #0f172a;">Đội ngũ VinaPharmacy</strong>
+                    <strong style="color: #0f172a;">Đội ngũ ABC Pharmacy</strong>
                   </p>
                 </div>
               </div>
@@ -287,6 +285,8 @@ export class AuthService {
       throw new NotFoundException('Không tìm thấy tài khoản để đổi mật khẩu');
     }
     mongoUser.passwordHash = passwordHash;
+    // Tự động đánh dấu email đã xác thực nếu họ đổi mật khẩu thành công (chứng tỏ họ sở hữu email này)
+    mongoUser.isEmailVerified = true;
     await mongoUser.save();
 
     resetToken.isUsed = true;
@@ -332,7 +332,7 @@ export class AuthService {
             <div style="background-color: #f8fafc; padding: 40px 20px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
               <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);">
                 <div style="background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); padding: 32px 24px; text-align: center;">
-                  <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">VinaPharmacy</h1>
+                  <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">ABC Pharmacy</h1>
                 </div>
                 <div style="padding: 40px 32px;">
                   <h2 style="color: #0f172a; font-size: 22px; font-weight: 700; margin-top: 0; margin-bottom: 16px; text-align: center;">Xác thực 2 lớp (2FA)</h2>
@@ -356,7 +356,7 @@ export class AuthService {
                   <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
                     Nếu bạn không thực hiện yêu cầu này, vui lòng bảo mật lại tài khoản ngay lập tức.<br><br>
                     Trân trọng,<br>
-                    <strong style="color: #0f172a;">Đội ngũ VinaPharmacy</strong>
+                    <strong style="color: #0f172a;">Đội ngũ ABC Pharmacy</strong>
                   </p>
                 </div>
               </div>
@@ -562,13 +562,13 @@ export class AuthService {
             <div style="background-color: #f8fafc; padding: 40px 20px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
               <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);">
                 <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 32px 24px; text-align: center;">
-                  <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">VinaPharmacy</h1>
+                  <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">ABC Pharmacy</h1>
                 </div>
                 <div style="padding: 40px 32px;">
                   <h2 style="color: #0f172a; font-size: 22px; font-weight: 700; margin-top: 0; margin-bottom: 16px; text-align: center;">Kích hoạt tài khoản</h2>
                   <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 32px; text-align: center;">
                     Xin chào!<br>
-                    Cảm ơn bạn đã đăng ký tài khoản tại VinaPharmacy. Đây là mã xác thực OTP của bạn:
+                    Cảm ơn bạn đã đăng ký tài khoản tại ABC Pharmacy. Đây là mã xác thực OTP của bạn:
                   </p>
                   <div style="text-align: center; margin-bottom: 32px;">
                     <div style="display: inline-block; padding: 4px; border-radius: 16px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);">
@@ -586,7 +586,7 @@ export class AuthService {
                   <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
                     Nếu bạn không đăng ký tài khoản tại hệ thống của chúng tôi, vui lòng bỏ qua email này.<br><br>
                     Trân trọng,<br>
-                    <strong style="color: #0f172a;">Đội ngũ VinaPharmacy</strong>
+                    <strong style="color: #0f172a;">Đội ngũ ABC Pharmacy</strong>
                   </p>
                 </div>
               </div>

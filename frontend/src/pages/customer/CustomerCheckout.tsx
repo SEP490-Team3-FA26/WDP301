@@ -4,6 +4,7 @@ import { CreditCard, Banknote, QrCode, ClipboardList, Printer, ShoppingBag, File
 import { orderService } from "../../services/order.service";
 import { cartService } from "../../services/cart.service";
 import { voucherService } from "../../services/voucher.service";
+import { userService } from "../../services/user.service";
 
 export function CustomerCheckout() {
   const navigate = useNavigate();
@@ -38,12 +39,12 @@ export function CustomerCheckout() {
 
   const fetchLoyalty = async () => {
     try {
-      const res = await api.get("/api/users/loyalty");
-      if (res.data && !res.data.error) {
-        setLoyaltyInfo(res.data);
-        setAvailablePoints(res.data.points || 0);
-        if (res.data.fullName && !fullname) setFullname(res.data.fullName);
-        if (res.data.phone && !phone) setPhone(res.data.phone);
+      const data = await userService.getLoyaltyInfo();
+      if (data && !data.error) {
+        setLoyaltyInfo(data);
+        setAvailablePoints(data.points || 0);
+        if (data.fullName && !fullname) setFullname(data.fullName);
+        if (data.phone && !phone) setPhone(data.phone);
       }
     } catch (err) {
       console.error("Error fetching loyalty in checkout:", err);
@@ -426,8 +427,8 @@ export function CustomerCheckout() {
                 <h3 className="font-black text-slate-800 text-xs uppercase tracking-wider border-b border-slate-100 pb-3">Chi tiết đơn hàng</h3>
 
                 <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 pr-1 flex flex-col gap-3">
-                  {cartItems.map((item) => (
-                    <div key={item.id} className="flex justify-between items-start pt-3 first:pt-0">
+                  {cartItems.map((item, index) => (
+                    <div key={`${item.id}-${index}`} className="flex justify-between items-start pt-3 first:pt-0">
                       <div className="max-w-[70%]">
                         <span className="font-extrabold text-slate-900 text-xs line-clamp-1">{item.name}</span>
                         <span className="text-[10px] text-slate-400 font-bold block mt-0.5">{item.quantity} {item.unit} x {item.price.toLocaleString()}₫</span>
@@ -638,8 +639,8 @@ export function CustomerCheckout() {
                   <div>
                     <div className="font-bold border-b border-slate-200 pb-1 mb-2 uppercase">Chi tiết đơn thuốc (Định giá FIFO)</div>
                     <div className="space-y-2">
-                      {cartItems.map((it) => (
-                        <div key={it.id} className="flex justify-between items-center font-bold text-slate-900 text-xs">
+                      {cartItems.map((it: any, index: number) => (
+                        <div key={it.id || it.medicineId || index} className="flex justify-between items-center font-bold text-slate-900 text-xs">
                           <span>{it.name} ({it.quantity} {it.unit})</span>
                           <span>{(it.price * it.quantity).toLocaleString()}₫</span>
                         </div>

@@ -9,31 +9,31 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const userUpdates = [
   {
     id: '6a31a925bc3a87506af62f79',
-    email: 'user@vinapharmacy.com',
+    email: 'user@ABC pharmacy.com',
     role: 'branch',
     branchId: 'BR-001',
-    branchName: 'Nhà thuốc VinaPharmacy - CN1'
+    branchName: 'Nhà thuốc ABC Pharmacy - CN1'
   },
   {
     id: '6a31aa6abc3a87506af62f8f',
     email: 'de180577tranhongphuoc@gmail.com',
     role: 'branch',
     branchId: 'BR-002',
-    branchName: 'Nhà thuốc VinaPharmacy - CN2'
+    branchName: 'Nhà thuốc ABC Pharmacy - CN2'
   },
   {
     id: '6a33e68aa10423c1d9b778a1',
     email: 'phuocthde180577@fpt.edu.vn',
     role: 'branch',
     branchId: 'BR-003',
-    branchName: 'Nhà thuốc VinaPharmacy - CN3'
+    branchName: 'Nhà thuốc ABC Pharmacy - CN3'
   },
   {
     id: '6a37c5a6f181cd4dbd7759cb',
     email: 'phuche2004p@gmail.com',
     role: 'branch',
     branchId: 'BR-004',
-    branchName: 'Nhà thuốc VinaPharmacy - CN4'
+    branchName: 'Nhà thuốc ABC Pharmacy - CN4'
   }
 ];
 

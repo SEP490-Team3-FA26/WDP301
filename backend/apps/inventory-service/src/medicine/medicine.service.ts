@@ -857,6 +857,16 @@ export class MedicineService implements OnModuleInit {
         }
       }
     }
+
+    // Đồng bộ tồn kho cho bảng medicines
+    const uniqueMedicineIds = [...new Set(check.items.map((item: any) => item.medicineId))];
+    for (const medId of uniqueMedicineIds) {
+      const activeBatches = await this.batchModel.find({ medicineId: medId, status: 'ACTIVE', stock: { $gt: 0 } }).exec();
+      const totalStock = activeBatches.reduce((sum, b) => sum + b.stock, 0);
+      await this.medicineModel.findByIdAndUpdate(medId, {
+        $set: { stock: totalStock, status: totalStock > 0 ? 'In Stock' : 'Out of Stock' }
+      }).exec();
+    }
   }
 
   async getLowStockReport() {

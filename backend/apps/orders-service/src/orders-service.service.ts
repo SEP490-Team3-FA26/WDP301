@@ -7,7 +7,10 @@ import { ClientKafka } from '@nestjs/microservices';
 import { PayOS } from '@payos/node';
 import { lastValueFrom } from 'rxjs';
 import { Order } from './schemas/order.schema';
+import { CreateOrderDto } from './dto/create-order.dto';
 import { Voucher } from './schemas/voucher.schema';
+
+const DEFAULT_PHONE_NUMBER = '0900000000';
 
 @Injectable()
 export class OrdersServiceService implements OnModuleInit {
@@ -32,14 +35,18 @@ export class OrdersServiceService implements OnModuleInit {
 
   async onModuleInit() {
     this.inventoryClient.subscribeToResponseOf('inventory.sale.create');
+    this.inventoryClient.subscribeToResponseOf('inventory.sale.revert');
+    this.userClient.subscribeToResponseOf('user.loyalty.get');
     this.userClient.subscribeToResponseOf('user.loyalty.lookup');
     this.userClient.subscribeToResponseOf('user.loyalty.update_points');
+    this.authClient.subscribeToResponseOf('auth.get.user.by.id');
     await this.inventoryClient.connect();
     await this.userClient.connect();
     await this.authClient.connect();
   }
 
-  async createOrder(data: any) {
+
+  async createOrder(data: CreateOrderDto) {
     this.logger.log(`Creating order in DB. PaymentMethod: ${data.paymentMethod}`);
 
     // Generate a unique 64-bit int order code for PayOS
@@ -63,7 +70,38 @@ export class OrdersServiceService implements OnModuleInit {
     let earnedPoints = 0;
     let patientEmail = data.patientEmail || undefined;
 
-    if (data.patientPhone && data.patientPhone !== '0900000000') {
+    // Nếu đơn hàng từ UserLoyalty, lấy thông tin email
+    if (data.userId) {
+      try {
+        const userLoyalty = await lastValueFrom(
+          this.userClient.send('user.loyalty.get', { userId: data.userId })
+        );
+        if (userLoyalty) {
+          // Gắn email để gửi hóa đơn
+          if (userLoyalty.email && !patientEmail) {
+            patientEmail = userLoyalty.email;
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to fetch user loyalty for ID ${data.userId}: ${err.message}`);
+      }
+
+      // Fallback: Lấy email từ auth-service (bảng users) nếu chưa có patientEmail
+      if (!patientEmail) {
+        try {
+          const authUser = await lastValueFrom(
+            this.authClient.send('auth.get.user.by.id', data.userId)
+          );
+          if (authUser && authUser.email) {
+            patientEmail = authUser.email;
+          }
+        } catch (err) {
+          this.logger.warn(`Failed to fetch user email from auth-service for ID ${data.userId}: ${err.message}`);
+        }
+      }
+    }
+
+    if (data.patientPhone && data.patientPhone !== DEFAULT_PHONE_NUMBER) {
       try {
         const userLoyalty = await lastValueFrom(
           this.userClient.send('user.loyalty.lookup', { phone: data.patientPhone })
@@ -111,16 +149,6 @@ export class OrdersServiceService implements OnModuleInit {
       }
     }
 
-    // Instantly deduct points from user balance if redeeming
-    if (redeemedPoints > 0) {
-      await lastValueFrom(
-        this.userClient.send('user.loyalty.update_points', {
-          phone: data.patientPhone,
-          pointsDelta: -redeemedPoints,
-        })
-      );
-    }
-
     const newOrder = new this.orderModel({
       orderCode,
       patientName: data.patientName,
@@ -139,11 +167,47 @@ export class OrdersServiceService implements OnModuleInit {
       earnedPoints,
     });
 
-    if (data.paymentMethod === 'QR_PAY') {
-      try {
+    // ========================================================
+    // ENTERPRISE SAGA PATTERN IMPLEMENTATION
+    // ========================================================
+
+    // Step 1: Claim Voucher atomically
+    if (newOrder.voucherCode) {
+      const voucherDoc = await this.voucherModel.findOne({ code: newOrder.voucherCode }).exec();
+      const usageLimitFilter = (voucherDoc?.usageLimit !== null && voucherDoc?.usageLimit !== undefined)
+        ? { usedCount: { $lt: voucherDoc.usageLimit } }
+        : {};
+
+      const claimed = await this.voucherModel.findOneAndUpdate(
+        { code: newOrder.voucherCode, isActive: true, ...usageLimitFilter },
+        { $inc: { usedCount: 1 } },
+        { new: true }
+      ).exec();
+
+      if (!claimed) {
+        throw new RpcException({ message: 'Mã giảm giá đã hết lượt sử dụng hoặc không còn hiệu lực' });
+      }
+    }
+
+    let saleRes;
+    try {
+      // Step 2: Deduct Loyalty Points (Reserve)
+      if (redeemedPoints > 0) {
+        await lastValueFrom(
+          this.userClient.send('user.loyalty.update_points', {
+            phone: newOrder.patientPhone,
+            pointsDelta: -redeemedPoints,
+          })
+        );
+      }
+
+      // Step 3: Reserve Inventory
+      saleRes = await this.deductInventory(newOrder);
+
+      // Branching logic based on payment method
+      if (data.paymentMethod === 'QR_PAY') {
+        // Step 4A: Generate PayOS Link
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-        
-        // Clean description to avoid PayOS validation error (alphanumeric, no spaces, max 25 chars)
         const description = `WDP${orderCode}`.substring(0, 25);
 
         const paymentBody = {
@@ -151,7 +215,7 @@ export class OrdersServiceService implements OnModuleInit {
           amount: data.totalAmount,
           description,
           items: data.items.map((it: any) => ({
-            name: it.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').substring(0, 20), // remove vietnamese tones & limit length
+            name: it.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').substring(0, 20),
             quantity: it.quantity,
             price: it.price,
           })),
@@ -173,29 +237,9 @@ export class OrdersServiceService implements OnModuleInit {
           qrCode: paymentLinkRes.qrCode,
           order: newOrder,
         };
-      } catch (err) {
-        this.logger.error('Error creating PayOS payment link:', err);
-        throw new RpcException({ message: `Lỗi tạo link thanh toán PayOS: ${err.message}` });
-      }
-    } else {
-      // CASH or CARD: Complete order instantly
-      newOrder.paymentStatus = 'PAID';
-      await newOrder.save();
-
-      // Increment voucher usage on successful payment
-      if (newOrder.voucherCode) {
-        await this.voucherModel.updateOne(
-          { code: newOrder.voucherCode },
-          { $inc: { usedCount: 1 } }
-        ).exec();
-      }
-
-      // Deduct inventory and record sale
-      try {
-        const saleRes = await this.deductInventory(newOrder);
-        
-        // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
-        if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
+      } else {
+        // Step 4B: Cash or Card -> Earn points immediately and finish
+        if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== DEFAULT_PHONE_NUMBER) {
           await lastValueFrom(
             this.userClient.send('user.loyalty.update_points', {
               phone: newOrder.patientPhone,
@@ -205,7 +249,8 @@ export class OrdersServiceService implements OnModuleInit {
           );
         }
 
-        // Asynchronously trigger sending invoice email
+        newOrder.paymentStatus = 'PAID';
+        await newOrder.save();
         this.sendInvoiceEmailAsync(newOrder);
 
         return {
@@ -215,21 +260,44 @@ export class OrdersServiceService implements OnModuleInit {
           order: newOrder,
           saleResult: saleRes,
         };
-      } catch (err) {
-        this.logger.error('Error deducting inventory:', err);
-        
-        // Asynchronously trigger sending invoice email even if inventory deduction fails
-        this.sendInvoiceEmailAsync(newOrder);
-
-        // Save with warning
-        return {
-          success: true,
-          orderCode,
-          paymentMethod: data.paymentMethod,
-          order: newOrder,
-          warning: `Đơn hàng đã lưu nhưng trừ kho thất bại: ${err.message}`,
-        };
       }
+
+    } catch (err) {
+      this.logger.error('Saga Checkout Failed:', err);
+
+      // SAGA ROLLBACK PHASE
+      
+      // Rollback Inventory
+      if (saleRes) { // if inventory was successfully deducted
+        await lastValueFrom(this.inventoryClient.send('inventory.sale.revert', { orderCode })).catch(() => {});
+      } else if (err && err.message && err.message.includes('Inventory')) {
+        // if inventory deduction failed, we don't need to revert inventory
+      } else {
+        // if failed at PayOS after inventory, revert inventory
+         await lastValueFrom(this.inventoryClient.send('inventory.sale.revert', { orderCode })).catch(() => {});
+      }
+
+      // Rollback Points
+      if (redeemedPoints > 0) {
+        await lastValueFrom(
+          this.userClient.send('user.loyalty.update_points', {
+            phone: newOrder.patientPhone,
+            pointsDelta: redeemedPoints,
+          })
+        ).catch(() => {});
+      }
+
+      // Rollback Voucher
+      if (newOrder.voucherCode) {
+        await this.voucherModel.updateOne(
+          { code: newOrder.voucherCode },
+          { $inc: { usedCount: -1 } }
+        ).exec();
+      }
+
+      newOrder.paymentStatus = 'FAILED';
+      await newOrder.save();
+      throw new RpcException({ message: `Thanh toán thất bại (Saga Rollback): ${err.message || err}` });
     }
   }
 
@@ -240,8 +308,8 @@ export class OrdersServiceService implements OnModuleInit {
       throw new RpcException({ message: `Không tìm thấy đơn hàng với mã: ${orderCode}` });
     }
 
-    if (order.paymentStatus === 'PAID') {
-      return { success: true, status: 'PAID', order };
+    if (order.paymentStatus === 'PAID' || order.paymentStatus === 'CANCELLED') {
+      return { success: true, status: order.paymentStatus, order };
     }
 
     try {
@@ -253,44 +321,48 @@ export class OrdersServiceService implements OnModuleInit {
         order.paymentStatus = 'PAID';
         await order.save();
 
-        // Increment voucher usage on successful payment
-        if (order.voucherCode) {
-          await this.voucherModel.updateOne(
-            { code: order.voucherCode },
-            { $inc: { usedCount: 1 } }
-          ).exec();
+        // Cộng điểm thưởng (vì lúc tạo đơn QR_PAY chưa cộng điểm thưởng)
+        if (order.earnedPoints > 0 && order.patientPhone !== DEFAULT_PHONE_NUMBER) {
+          try {
+            await lastValueFrom(
+              this.userClient.send('user.loyalty.update_points', {
+                phone: order.patientPhone,
+                pointsDelta: order.earnedPoints,
+                accumulatedDelta: order.earnedPoints,
+              })
+            );
+          } catch (pointsErr) {
+            this.logger.error(`Lỗi cộng điểm thưởng sau khi thanh toán QR thành công: ${pointsErr.message}`);
+          }
         }
 
-        // Deduct inventory
-        const saleRes = await this.deductInventory(order);
-
-        // CREDIT POINTS ON SUCCESSFUL PAYOS PAYMENT
-        if (order.earnedPoints > 0 && order.patientPhone !== '0900000000') {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
-              phone: order.patientPhone,
-              pointsDelta: order.earnedPoints,
-              accumulatedDelta: order.earnedPoints,
-            })
-          );
-        }
-
-        // Asynchronously trigger sending invoice email
         this.sendInvoiceEmailAsync(order);
-
-        return { success: true, status: 'PAID', order, saleResult: saleRes };
+        return { success: true, status: 'PAID', order };
       } else if (paymentInfo.status === 'CANCELLED') {
         order.paymentStatus = 'CANCELLED';
         await order.save();
 
-        // REFUND REDEEMED POINTS ON CANCEL
-        if (order.redeemedPoints > 0 && order.patientPhone !== '0900000000') {
+        // SAGA REVERT FOR CANCELLED QR_PAY
+        
+        // 1. Revert Inventory
+        await lastValueFrom(this.inventoryClient.send('inventory.sale.revert', { orderCode: order.orderCode })).catch(e => this.logger.error('Failed to revert inventory on cancel', e));
+
+        // 2. Refund Points
+        if (order.redeemedPoints > 0 && order.patientPhone !== DEFAULT_PHONE_NUMBER) {
           await lastValueFrom(
             this.userClient.send('user.loyalty.update_points', {
               phone: order.patientPhone,
               pointsDelta: order.redeemedPoints,
             })
-          );
+          ).catch(e => this.logger.error('Failed to refund points on cancel', e));
+        }
+
+        // 3. Revert Voucher
+        if (order.voucherCode) {
+           await this.voucherModel.updateOne(
+             { code: order.voucherCode },
+             { $inc: { usedCount: -1 } }
+           ).exec();
         }
 
         return { success: true, status: 'CANCELLED', order };

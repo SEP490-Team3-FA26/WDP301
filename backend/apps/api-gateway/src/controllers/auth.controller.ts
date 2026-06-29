@@ -138,24 +138,13 @@ export class AuthController implements OnModuleInit {
   @ApiResponse({ status: 200, description: 'Đăng nhập thành công, trả về JWT token' })
   @ApiResponse({ status: 401, description: 'Sai email hoặc mật khẩu' })
   async login(@Body() dto: LoginDto) {
-    // Kiểm tra Redis xem user này đã có token còn hạn chưa (Cache-Aside)
-    const cacheKey = `auth:session:${dto.email}`;
-    const cachedSession = await this.cacheManager.get(cacheKey);
-    if (cachedSession) {
-      console.log(`⚡ [Cache Hit] Lấy session của ${dto.email} từ Redis`);
-      return cachedSession;
-    }
-
     console.log(`📤 [API Gateway] Gửi yêu cầu đăng nhập tới Kafka: ${dto.email}`);
 
-    // Cache Miss -> Gửi qua Kafka -> Auth Microservice để xác thực
+    // Gửi qua Kafka -> Auth Microservice để xác thực (BẮT BUỘC để check password)
     const result: any = await sendKafkaMessage(this.kafkaClient, 'auth.login', JSON.stringify(dto));
 
-    // Chỉ lưu kết quả vào Redis khi không yêu cầu xác thực 2 lớp (2FA)
-    if (result && !result.is2faRequired) {
-      await this.cacheManager.set(cacheKey, result, this.CACHE_TTL);
-      console.log(`💾 [Cache Set] Lưu session của ${dto.email} vào Redis (TTL: 1h)`);
-    }
+    // Xóa session cache cũ nếu có để đảm bảo an toàn
+    await this.cacheManager.del(`auth:session:${dto.email}`);
 
     return result;
   }
