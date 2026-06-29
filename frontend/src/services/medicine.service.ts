@@ -30,6 +30,11 @@ export const medicineService = {
     return response.data;
   },
 
+  async getAlternatives(id: string, branchId: string) {
+    const response = await api.get(`/api/medicines/${id}/alternatives`, { params: { branchId } });
+    return response.data;
+  },
+
   async updateMedicineStatus(id: string, status: string) {
     const response = await api.patch(`/api/medicines/${id}/status`, { status });
     return response.data;

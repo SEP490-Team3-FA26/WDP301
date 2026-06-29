@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { RpcException } from '@nestjs/microservices';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { RpcException, ClientKafka } from '@nestjs/microservices';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { SalesOrder } from './schemas/sales-order.schema';
@@ -20,6 +20,7 @@ export class SalesService {
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
     private readonly pricingService: PricingService,
     @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
+    @Inject('USER_SERVICE') private readonly userServiceClient: ClientKafka,
   ) {}
 
   async getPrescriptionByCode(code: string, branchId?: string) {
@@ -266,6 +267,23 @@ export class SalesService {
         throw new RpcException({
           message: `Không đủ lô hàng khả dụng còn hạn cho thuốc "${medicine.name}"`
         });
+      }
+
+      // Check minStock for UC-38
+      if (data.branchId) {
+        const newTotalStock = totalAvailable - item.quantity;
+        const minStock = await this.pricingService.getMinStock(data.branchId, item.medicineId);
+        if (minStock > 0 && newTotalStock < minStock) {
+          this.userServiceClient.emit('user.branch.alert.low_stock', {
+            branchId: data.branchId,
+            medicineId: item.medicineId,
+            medicineName: medicine.name,
+            currentStock: newTotalStock,
+            minStock: minStock,
+            timestamp: new Date().toISOString()
+          });
+          allWarnings.push(`Thuốc "${medicine.name}" đã rơi xuống dưới mức tồn kho tối thiểu (${newTotalStock} < ${minStock})`);
+        }
       }
 
       // Resolve giá theo chi nhánh và loại bán hàng (UC-48)

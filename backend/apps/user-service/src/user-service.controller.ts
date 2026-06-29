@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { MessagePattern, EventPattern, Payload } from '@nestjs/microservices';
 import { UserService } from './user-service.service';
 import { BranchService } from './branch.service';
 
@@ -108,6 +108,11 @@ export class UserServiceController {
   @MessagePattern('user.admin.employee.ban_unban')
   handleToggleBanEmployee(@Payload() data: { id: string }) {
     return this.userService.toggleBanEmployee(data.id);
+  }
+
+  @EventPattern('user.branch.alert.low_stock')
+  handleLowStockAlertEvent(@Payload() data: any) {
+    return this.branchService.handleLowStockAlert(data);
   }
 }
 

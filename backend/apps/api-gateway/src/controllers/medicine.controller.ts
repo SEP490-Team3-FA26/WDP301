@@ -22,6 +22,7 @@ export class MedicineController implements OnModuleInit {
       'inventory.medicine.expiration_report',
       'inventory.medicine.low_stock_report',
       'inventory.medicine.dropdown_list',
+      'inventory.medicine.get_alternatives',
     ]);
   }
 
@@ -59,6 +60,13 @@ export class MedicineController implements OnModuleInit {
   @ApiOperation({ summary: 'Lấy chi tiết 1 loại thuốc' })
   async getMedicineById(@Param('id') id: string) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.get_by_id', { id });
+  }
+
+  @Get(':id/alternatives')
+  @ApiOperation({ summary: 'Tìm các loại thuốc thay thế (UC-36)' })
+  @ApiQuery({ name: 'branchId', required: true, type: String })
+  async getAlternatives(@Param('id') id: string, @Query('branchId') branchId: string) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.get_alternatives', { medicineId: id, branchId });
   }
 
   @Patch(':id/status')

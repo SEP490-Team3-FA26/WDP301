@@ -145,5 +145,15 @@ export class MedicineController {
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách chọn thuốc');
     }
   }
+
+  @MessagePattern('inventory.medicine.get_alternatives')
+  async getAlternatives(@Payload() data: { medicineId: string; branchId: string }) {
+    try {
+      return await this.medicineService.findAlternatives(data.medicineId, data.branchId);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tìm thuốc thay thế');
+    }
+  }
 }
 

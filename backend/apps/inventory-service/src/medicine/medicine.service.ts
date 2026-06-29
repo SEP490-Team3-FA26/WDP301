@@ -275,17 +275,9 @@ export class MedicineService implements OnModuleInit {
         conditions.push({ 'thong_tin_chi_tiet.Xuất xứ thương hiệu': { $regex: brandOrigin, $options: 'i' } });
       }
 
-      let branchMedicineIds = null;
-      if (query.branchId) {
-        const activeBranchBatches = await this.batchModel.find({
-          branchId: query.branchId,
-          status: 'ACTIVE',
-          stock: { $gt: 0 }
-        }).distinct('medicineId').exec();
-        branchMedicineIds = activeBranchBatches.map(id => id.toString());
-        conditions.push({ _id: { $in: branchMedicineIds } });
-      }
-
+      // Xoá logic filter cứng `stock > 0` theo branchId ở đây để
+      // các thuốc hết hàng (stock = 0) vẫn được trả về trong kết quả tìm kiếm.
+      // Khi đó, UI sẽ hiển thị Tồn kho: 0 và cho phép user bấm "Gợi ý thay thế" (UC-36).
       if (search) {
         // AI SERVICE VECTOR SEARCH with Mongoose fallback
         let aiServiceUrl = `http://ai-service:8000/api/ai/medicines?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`;
@@ -964,6 +956,81 @@ export class MedicineService implements OnModuleInit {
       });
     } catch (error) {
       throw new RpcException(error.message || 'Lỗi lấy danh sách chọn thuốc');
+    }
+  }
+  async findAlternatives(medicineId: string, branchId: string) {
+    try {
+      this.logger.log(`Finding alternatives for medicine ${medicineId} at branch ${branchId}`);
+      const medicine = await this.medicineModel.findById(medicineId).lean().exec();
+      if (!medicine) {
+        throw new RpcException('Medicine not found');
+      }
+
+      let alternatives = [];
+      const orConditions: any[] = [];
+      
+      // 1. Điều kiện trùng hoạt chất (kèm dạng bào chế nếu có)
+      if (medicine.active_ingredient) {
+        const activeIngredientCondition: any = { active_ingredient: medicine.active_ingredient };
+        if (medicine.dosage_form) {
+          activeIngredientCondition.dosage_form = medicine.dosage_form;
+        }
+        orConditions.push(activeIngredientCondition);
+      }
+      
+      // 2. Điều kiện trùng danh mục
+      if (medicine.category) {
+        orConditions.push({ category: medicine.category });
+      }
+
+      // Query database 1 lần bằng $or
+      if (orConditions.length > 0) {
+        const query = {
+          _id: { $ne: medicine._id },
+          $or: orConditions
+        };
+        alternatives = await this.medicineModel.find(query).lean().exec();
+      }
+
+      if (alternatives.length === 0) {
+        return [];
+      }
+
+      // 3. Filter theo tồn kho tại chi nhánh hiện tại (stock > 0)
+      const altIds = alternatives.map(a => a._id.toString());
+      const batches = await this.batchModel.find({
+        medicineId: { $in: altIds },
+        branchId: branchId || 'CENTRAL_WH',
+        status: 'ACTIVE',
+        stock: { $gt: 0 }
+      }).lean().exec();
+
+      const stockByMedId = new Map<string, number>();
+      for (const b of batches) {
+        stockByMedId.set(b.medicineId, (stockByMedId.get(b.medicineId) || 0) + b.stock);
+      }
+
+      const availableAlternatives = alternatives
+        .filter(a => stockByMedId.has(a._id.toString()))
+        .map(a => ({
+          ...a,
+          id: a._id.toString(),
+          stock: stockByMedId.get(a._id.toString())
+        }))
+        .sort((a, b) => {
+          // 1. Ưu tiên thuốc trùng hoạt chất lên đầu
+          const aMatchesActive = medicine.active_ingredient && a.active_ingredient === medicine.active_ingredient;
+          const bMatchesActive = medicine.active_ingredient && b.active_ingredient === medicine.active_ingredient;
+          if (aMatchesActive && !bMatchesActive) return -1;
+          if (!aMatchesActive && bMatchesActive) return 1;
+          
+          // 2. Nếu cùng mức độ ưu tiên hoạt chất, ưu tiên thuốc có tồn kho nhiều nhất
+          return b.stock - a.stock;
+        });
+
+      return availableAlternatives;
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi tìm thuốc thay thế');
     }
   }
 }

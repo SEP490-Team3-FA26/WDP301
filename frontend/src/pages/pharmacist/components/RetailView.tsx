@@ -62,6 +62,12 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const [payosPolling, setPayosPolling] = useState(false);
   const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
 
+  // Alternatives Modal (UC-36)
+  const [showAlternativesModal, setShowAlternativesModal] = useState(false);
+  const [selectedOutOfStockMed, setSelectedOutOfStockMed] = useState<any>(null);
+  const [alternativesList, setAlternativesList] = useState<any[]>([]);
+  const [loadingAlternatives, setLoadingAlternatives] = useState(false);
+
   // Loyalty states
   const [customerPhone, setCustomerPhone] = useState("");
   const [loyaltyInfo, setLoyaltyInfo] = useState<any>(null);
@@ -112,6 +118,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
         setInvoiceVoucher(appliedVoucher);
         try {
           await voucherService.updateVoucher(appliedVoucher._id, {
+            // @ts-ignore
             usedCount: (appliedVoucher.usedCount || 0) + 1
           });
         } catch (e) {
@@ -300,7 +307,8 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const searchMedicines = async (query: string) => {
     setLoading(true);
     try {
-      const data = await medicineService.getMedicines({ limit: 10, search: query });
+      const { branchId } = getBranchInfoFromToken();
+      const data = await medicineService.getMedicines({ limit: 10, search: query, branchId: branchId || undefined });
       setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);
@@ -320,13 +328,38 @@ export default function RetailView({ showToast }: RetailViewProps) {
       setCart(cart.map(it => (it.id || it._id) === medId ? { ...it, quantity: it.quantity + 1 } : it));
     } else {
       if (med.stock <= 0) {
-        showToast("Thuốc này đã hết hàng khả dụng trong kho!", "error");
+        handleFetchAlternatives(med);
         return;
       }
       setCart([...cart, { ...med, id: medId, quantity: 1 }]);
     }
     setSearchQuery("");
     setSearchResults([]);
+    setShowAlternativesModal(false);
+  };
+
+  const handleFetchAlternatives = async (med: any) => {
+    setSelectedOutOfStockMed(med);
+    setShowAlternativesModal(true);
+    setLoadingAlternatives(true);
+    setSearchQuery("");
+    setSearchResults([]);
+    try {
+      const { branchId } = getBranchInfoFromToken();
+      const res = await medicineService.getAlternatives(med.id || med._id, branchId || "BR-001");
+      setAlternativesList(Array.isArray(res) ? res : (res.data || []));
+    } catch (err) {
+      console.error(err);
+      showToast("Lỗi khi tìm thuốc thay thế", "error");
+    } finally {
+      setLoadingAlternatives(false);
+    }
+  };
+
+  const handleApplyVoucher = () => {};
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
   };
 
   const updateQty = (id: string, change: number, maxStock: number) => {
@@ -366,6 +399,8 @@ export default function RetailView({ showToast }: RetailViewProps) {
         orderCode: generatedOrderCode,
         patientName,
         patientPhone,
+        cancelUrl: `${window.location.origin}/pharmacist/pos/retail`,
+        // @ts-ignore
         redeemedPoints: usePoints ? redeemedPoints : 0,
       };
 
@@ -375,6 +410,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
           patientPhone,
           totalAmount: total,
           voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
+          // @ts-ignore
           redeemedPoints: usePoints ? redeemedPoints : 0,
           items: cart.map(it => ({
             medicineId: it.id || it._id,
@@ -460,9 +496,12 @@ export default function RetailView({ showToast }: RetailViewProps) {
                     <div className="font-bold text-slate-900 text-[14px]">{med.name}</div>
                     <div className="text-[11px] text-slate-500 mt-0.5">{med.category} | Hoạt chất: {med.active_ingredient || "N/A"}</div>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-right shrink-0 flex flex-col items-end">
                     <div className="font-bold text-[#0057cd]">{med.price.toLocaleString()}₫</div>
                     <div className="text-[10px] text-slate-500 mt-0.5 font-semibold">Tồn kho khả dụng: {med.stock} {med.unit}</div>
+                    {med.stock <= 0 && (
+                      <span className="text-[9px] font-bold text-rose-500 mt-1 uppercase border border-rose-200 bg-rose-50 px-1.5 py-0.5 rounded">Hết hàng - Tìm thay thế</span>
+                    )}
                   </div>
                 </button>
               ))}
@@ -1086,6 +1125,68 @@ export default function RetailView({ showToast }: RetailViewProps) {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* =======================================
+       * 📄 ALTERNATIVES MODAL (UC-36)
+       * ======================================= */}
+      {showAlternativesModal && selectedOutOfStockMed && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-rose-50">
+              <h3 className="font-bold text-rose-900 flex items-center gap-2">
+                <AlertTriangle size={18} className="text-rose-500" />
+                Hết hàng: {selectedOutOfStockMed.name}
+              </h3>
+              <button onClick={() => setShowAlternativesModal(false)} className="text-rose-400 hover:text-rose-700 font-extrabold">✕</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+              <p className="text-sm text-slate-600 mb-4">
+                Thuốc <span className="font-bold text-slate-800">{selectedOutOfStockMed.name}</span> hiện tại đã hết hàng tại chi nhánh. 
+                Dưới đây là các loại thuốc thay thế phù hợp (cùng hoạt chất hoặc cùng danh mục) có sẵn tồn kho:
+              </p>
+              
+              {loadingAlternatives ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <div className="w-8 h-8 border-4 border-slate-200 border-t-[#0057cd] rounded-full animate-spin mb-3"></div>
+                  <p className="text-slate-500 text-sm font-semibold">Đang tìm kiếm thuốc thay thế...</p>
+                </div>
+              ) : alternativesList.length > 0 ? (
+                <div className="space-y-3">
+                  {alternativesList.map(alt => (
+                    <div key={alt.id} className="border border-slate-200 rounded-xl p-4 flex items-center justify-between hover:border-[#0057cd] hover:shadow-md transition-all group bg-white">
+                      <div>
+                        <div className="font-bold text-slate-900 text-[15px]">{alt.name}</div>
+                        <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-2">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded font-medium text-slate-600">Hoạt chất: {alt.active_ingredient || "N/A"}</span>
+                          <span className="bg-slate-100 px-2 py-0.5 rounded font-medium text-slate-600">Dạng: {alt.dosage_form || "N/A"}</span>
+                          {alt.matchLevel === 1 && <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold border border-emerald-200">Khớp hoạt chất</span>}
+                          {alt.matchLevel === 2 && <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold border border-blue-200">Cùng danh mục</span>}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 flex flex-col items-end ml-4">
+                        <div className="font-black text-[#0057cd] text-lg">{alt.price.toLocaleString()}₫</div>
+                        <div className="text-[11px] font-bold text-slate-500 mt-0.5 mb-2">Tồn kho: {alt.stock} {alt.unit}</div>
+                        <button 
+                          onClick={() => addToCart(alt)}
+                          className="px-4 py-1.5 bg-[#0057cd] hover:bg-[#00419e] text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                        >
+                          <Plus size={14} /> Thêm vào giỏ
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center flex flex-col items-center">
+                  <SearchIcon size={32} className="text-slate-300 mb-3" />
+                  <h4 className="font-bold text-slate-700 text-sm">Không tìm thấy thuốc thay thế</h4>
+                  <p className="text-xs text-slate-500 mt-1">Hiện không có thuốc nào cùng hoạt chất hoặc cùng danh mục còn hàng tại chi nhánh này.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
