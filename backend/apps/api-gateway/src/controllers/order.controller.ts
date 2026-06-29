@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Inject, OnModuleInit, Req } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 
@@ -17,7 +17,19 @@ export class OrderController implements OnModuleInit {
   }
 
   @Post()
-  async createOrder(@Body() data: any) {
+  async createOrder(@Body() data: any, @Req() req: any) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        if (payload && payload.sub) {
+          data.userId = payload.sub;
+        }
+      } catch (err) {
+        // Ignore decoding errors
+      }
+    }
     return await sendKafkaMessage(this.orderClient, 'orders.create', data);
   }
 
@@ -27,7 +39,19 @@ export class OrderController implements OnModuleInit {
   }
 
   @Post('payos-link')
-  async createPayOSLink(@Body() data: any) {
+  async createPayOSLink(@Body() data: any, @Req() req: any) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        if (payload && payload.sub) {
+          data.userId = payload.sub;
+        }
+      } catch (err) {
+        // Ignore decoding errors
+      }
+    }
     // Force method to QR_PAY and create payment link
     return await sendKafkaMessage(this.orderClient, 'orders.create', {
       ...data,

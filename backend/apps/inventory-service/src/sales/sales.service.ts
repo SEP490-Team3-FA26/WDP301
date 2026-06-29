@@ -294,6 +294,9 @@ export class SalesService implements OnModuleInit {
         unit: medicine.unit || 'Hộp',
         batches: allocatedBatches
       });
+
+      // Cập nhật tồn kho tổng của thuốc
+      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: -item.quantity } }).exec();
     }
 
     // Tạo hóa đơn bán hàng
@@ -336,6 +339,62 @@ export class SalesService implements OnModuleInit {
       warnings: allWarnings,
       data: salesOrder
     };
+  }
+
+  async revertSalesOrder(orderCode: any) {
+    this.logger.log(`Reverting sales order with orderCode: ${orderCode}`);
+    const order = await this.saleModel.findOne({ orderCode }).exec();
+    if (!order) {
+      this.logger.warn(`Order code ${orderCode} not found in inventory, nothing to revert`);
+      return { success: true, message: 'Nothing to revert' };
+    }
+
+    const txns = await this.txnModel.find({ referenceId: order._id.toString(), type: 'SALE_EXPORT' }).exec();
+    for (const txn of txns) {
+      const quantityToRevert = Math.abs(txn.quantityChange);
+
+      // Revert batch stock
+      const batch = await this.batchModel.findOne({ batchNo: txn.batchNo, medicineId: txn.medicineId }).exec();
+      if (batch) {
+        const stockBefore = batch.stock;
+        batch.stock += quantityToRevert;
+        batch.status = batch.expDate < new Date() ? 'EXPIRED' : 'ACTIVE';
+        await batch.save();
+
+        // Create revert log
+        await new this.txnModel({
+          type: 'SALE_REVERT',
+          medicineId: txn.medicineId,
+          medicineName: txn.medicineName,
+          batchNo: txn.batchNo,
+          quantityChange: quantityToRevert,
+          stockBefore: stockBefore,
+          stockAfter: stockBefore + quantityToRevert,
+          referenceType: 'SALE_REVERT',
+          referenceId: order._id.toString(),
+          performedBy: 'System (Saga Rollback)',
+          notes: `Reverted sale for orderCode ${orderCode}`
+        }).save();
+      }
+
+      // Revert medicine total stock
+      await this.medicineModel.updateOne(
+        { _id: txn.medicineId },
+        { $inc: { stock: quantityToRevert } }
+      ).exec();
+    }
+
+    // Revert prescription status if any
+    if (order.prescriptionId) {
+       await this.prescriptionModel.updateOne(
+         { _id: order.prescriptionId },
+         { status: 'APPROVED' }
+       ).exec();
+    }
+
+    // Delete the sales order record
+    await this.saleModel.deleteOne({ _id: order._id }).exec();
+    return { success: true, message: 'Sales order reverted successfully' };
   }
 
   async listSalesOrders(search?: string, type?: string) {

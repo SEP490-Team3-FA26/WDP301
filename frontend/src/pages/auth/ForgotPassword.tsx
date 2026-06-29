@@ -9,9 +9,12 @@ export function ForgotPassword() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
+  const isSubmitting = React.useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting.current) return;
+    isSubmitting.current = true;
     setLoading(true);
     setError("");
     setSuccess("");
@@ -21,12 +24,13 @@ export function ForgotPassword() {
 
       setSuccess("Mã xác nhận đã được gửi đến email của bạn! Đang chuyển hướng...");
       setTimeout(() => {
-        navigate(`/reset-password?email=${encodeURIComponent(email)}`);
+        navigate(`/auth/reset-password?email=${encodeURIComponent(email)}`);
       }, 2000);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
+      isSubmitting.current = false;
     }
   };
 

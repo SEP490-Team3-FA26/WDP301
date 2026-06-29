@@ -236,7 +236,7 @@ export class AuthMsController {
   async handleSendInvoice(@Payload() data: any) {
     try {
       const order = typeof data === 'string' ? JSON.parse(data) : data;
-      console.log(`📨 [Auth MS] Nhận sự kiện gửi hóa đơn điện tử cho: ${order.patientEmail} (Đơn hàng: #${order.orderCode})`);
+      // console.log(`📨 [Auth MS] Nhận sự kiện gửi hóa đơn điện tử cho: ${order.patientEmail} (Đơn hàng: #${order.orderCode})`);
 
       if (!this.emailService.isEnabled) {
         console.warn(`⚠️ [Auth MS] Email service chưa được cấu hình. Bỏ qua gửi hóa đơn.`);
@@ -247,11 +247,11 @@ export class AuthMsController {
 
       await this.emailService.sendEmail({
         to: order.patientEmail,
-        subject: `Hóa đơn điện tử VinaPharmacy - Đơn hàng #${order.orderCode}`,
+        subject: `Hóa đơn điện tử ABC Pharmacy - Đơn hàng #${order.orderCode}`,
         html,
       });
 
-      console.log(`✅ [Auth MS] Đã gửi hóa đơn điện tử đơn hàng #${order.orderCode} tới ${order.patientEmail}`);
+      // console.log(`✅ [Auth MS] Đã gửi hóa đơn điện tử đơn hàng #${order.orderCode} tới ${order.patientEmail}`);
     } catch (error) {
       console.error(`❌ [Auth MS] Lỗi gửi hóa đơn điện tử:`, error.message);
     }
@@ -373,13 +373,13 @@ export class AuthMsController {
             ${order.earnedPoints ? `
               <div style="background-color: #f0fdf4; border-radius: 8px; padding: 12px; margin-top: 16px; border: 1px solid #bbf7d0; text-align: center;">
                 <p style="margin: 0; color: #166534; font-size: 14px; font-weight: 600;">
-                  🎉 Bạn đã tích lũy thêm +${order.earnedPoints} điểm VinaPharmacy!
+                  🎉 Bạn đã tích lũy thêm +${order.earnedPoints} điểm ABC Pharmacy!
                 </p>
               </div>
             ` : ''}
           </div>
           <div style="background-color: #f8fafc; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;">
-            <p style="margin: 0; color: #475569; font-size: 14px; font-weight: 600;">Cảm ơn quý khách đã mua sắm tại VinaPharmacy!</p>
+            <p style="margin: 0; color: #475569; font-size: 14px; font-weight: 600;">Cảm ơn quý khách đã mua sắm tại ABC Pharmacy!</p>
             <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 12px;">Mọi thắc mắc xin vui lòng liên hệ hotline 1900-XXXX</p>
           </div>
         </div>

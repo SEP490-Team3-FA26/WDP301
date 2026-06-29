@@ -1,13 +1,14 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload, RpcException } from '@nestjs/microservices';
 import { OrdersServiceService } from './orders-service.service';
+import { CreateOrderDto } from './dto/create-order.dto';
 
 @Controller()
 export class OrdersServiceController {
   constructor(private readonly ordersServiceService: OrdersServiceService) {}
 
   @MessagePattern('orders.create')
-  async createOrder(@Payload() data: any) {
+  async createOrder(@Payload() data: CreateOrderDto) {
     try {
       return await this.ordersServiceService.createOrder(data);
     } catch (error) {
