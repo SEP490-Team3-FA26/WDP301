@@ -92,14 +92,18 @@ export class MedicineService implements OnModuleInit {
 
   async getMedicineById(id: string) {
     try {
+      this.logger.log(`[getMedicineById] Querying medicine by ID from MongoDB: "${id}"`);
       const medicine = await this.medicineModel.findById(id).exec();
       if (!medicine) {
-        throw new RpcException('Medicine not found');
+        this.logger.warn(`[getMedicineById] Medicine with ID "${id}" NOT found in MongoDB!`);
+        throw new RpcException(`Medicine with ID ${id} not found in database`);
       }
+      this.logger.log(`[getMedicineById] Found medicine: "${medicine.name}"`);
 
       // Lấy danh sách lô hàng khả dụng
       const batches = await this.batchModel.find({ medicineId: id, status: 'ACTIVE', stock: { $gt: 0 } }).exec();
       const totalStock = batches.reduce((sum, b) => sum + b.stock, 0);
+      this.logger.log(`[getMedicineById] Found ${batches.length} active batches. Total stock: ${totalStock}`);
 
       // Tìm hạn dùng gần nhất
       let earliestExpiryStr = '2026-12-31';
@@ -109,7 +113,7 @@ export class MedicineService implements OnModuleInit {
       }
 
       const medObj = medicine.toObject();
-      return {
+      const result = {
         ...medObj,
         id: medObj._id.toString(),
         stock: totalStock,
@@ -117,7 +121,10 @@ export class MedicineService implements OnModuleInit {
         status: totalStock > 0 ? 'In Stock' : 'Out of Stock',
         minStock: 50
       };
+      this.logger.log(`[getMedicineById] Returning enriched medicine object: ${JSON.stringify(result)}`);
+      return result;
     } catch (error) {
+      this.logger.error(`[getMedicineById] Error fetching medicine by ID "${id}": ${error.message}`, error.stack);
       throw new RpcException(error.message || 'Lỗi lấy chi tiết thuốc');
     }
   }
