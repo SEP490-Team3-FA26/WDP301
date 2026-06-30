@@ -169,11 +169,14 @@ export class UserService implements OnModuleInit {
     let medicine: any;
     
     try {
+      this.logger.log(`[addToCart] Sending Kafka request to inventory for medicineId: ${medicineId} (userId: ${userId})`);
       medicine = await lastValueFrom(
         this.inventoryClient.send('inventory.medicine.get_by_id', { id: medicineId })
       );
+      this.logger.log(`[addToCart] Received medicine from inventory: ${JSON.stringify(medicine)}`);
     } catch (err: any) {
-      return { error: true, message: 'Không tìm thấy thông tin thuốc trên hệ thống', statusCode: 404 };
+      this.logger.error(`[addToCart] Error calling inventory.medicine.get_by_id for ID ${medicineId}: ${err.message}`, err.stack);
+      return { error: true, message: `Không tìm thấy thông tin thuốc trên hệ thống (Lỗi: ${err.message})`, statusCode: 404 };
     }
 
     if (!medicine) {
