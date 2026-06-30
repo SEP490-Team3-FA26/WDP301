@@ -354,8 +354,16 @@ export class MedicineService implements OnModuleInit {
             if (aiData.length === 0 && !targetGroup && minPrice === undefined && maxPrice === undefined && !flavour && !country && !brand && !indication && !brandOrigin) {
               useFallback = true;
             } else {
+              // Filter AI results against actual database to prevent returning non-existent medicines
+              const rawAiMedIds = aiData.map((med: any) => (med._id || med.id || '').toString()).filter(id => id);
+              const existingMeds = await this.medicineModel.find({ _id: { $in: rawAiMedIds } }).select('_id stock price').lean().exec();
+              const existingMedIds = new Set(existingMeds.map(m => m._id.toString()));
+              const existingMedMap = new Map(existingMeds.map(m => [m._id.toString(), m]));
+
+              aiData = aiData.filter((med: any) => existingMedIds.has((med._id || med.id || '').toString()));
+              const aiMedIds = Array.from(existingMedIds);
+
               // Truy vấn lô hàng cho các kết quả từ AI Service
-              const aiMedIds = aiData.map((med: any) => (med._id || med.id || '').toString()).filter(id => id);
               const batchFilter: any = { medicineId: { $in: aiMedIds } };
               if (query.branchId) {
                 batchFilter.branchId = query.branchId;
@@ -370,9 +378,13 @@ export class MedicineService implements OnModuleInit {
 
               mappedAiData = aiData.map((med: any) => {
                 const medId = (med._id || med.id || '').toString();
+                const dbMed = existingMedMap.get(medId);
                 const medBatches = aiBatchesByMedId.get(medId) || [];
                 const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-                const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + b.stock, 0) : (med.stock || 0);
+                
+                // Use DB stock and price to ensure consistency
+                const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + b.stock, 0) : (dbMed?.stock || 0);
+                const actualPrice = dbMed?.price || med.price || 50000;
 
                 let earliestExpiryStr = '2026-12-31';
                 if (activeBatches.length > 0) {
@@ -385,7 +397,7 @@ export class MedicineService implements OnModuleInit {
                   name: med.name,
                   category: med.category || 'Chưa phân loại',
                   drug_classification: med.drug_classification || 'COMMON_SUPPLEMENT',
-                  price: med.price || 50000,
+                  price: actualPrice,
                   stock: totalStock,
                   minStock: 50,
                   status: totalStock > 0 ? 'In Stock' : 'Out of Stock',
