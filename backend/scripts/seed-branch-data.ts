@@ -13,14 +13,14 @@ async function run() {
   // 1. Update user branchId
   const usersCol = connection.db.collection('users');
   await usersCol.updateOne(
-    { email: 'manager@vinapharmacy.com' },
-    { $set: { branchId: 'BR-001', branchName: 'Nhà thuốc VinaPharmacy - CN1' } }
+    { email: 'manager@ABC pharmacy.com' },
+    { $set: { branchId: 'BR-001', branchName: 'Nhà thuốc ABC Pharmacy - CN1' } }
   );
   await usersCol.updateOne(
-    { email: 'pharmacist@vinapharmacy.com' },
-    { $set: { branchId: 'BR-001', branchName: 'Nhà thuốc VinaPharmacy - CN1' } }
+    { email: 'pharmacist@ABC pharmacy.com' },
+    { $set: { branchId: 'BR-001', branchName: 'Nhà thuốc ABC Pharmacy - CN1' } }
   );
-  console.log('✅ Updated manager@vinapharmacy.com and pharmacist@vinapharmacy.com to branch BR-001');
+  console.log('✅ Updated manager@ABC pharmacy.com and pharmacist@ABC pharmacy.com to branch BR-001');
 
   // 2. Clone some medicine batches to BR-001 to simulate existing stock
   const batchesCol = connection.db.collection('medicinebatches');

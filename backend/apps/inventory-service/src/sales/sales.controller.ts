@@ -36,6 +36,16 @@ export class SalesController {
     }
   }
 
+  @MessagePattern('inventory.sale.revert')
+  async revertSalesOrder(@Payload() data: { orderCode: string }) {
+    try {
+      return await this.salesService.revertSalesOrder(data.orderCode);
+    } catch (error: any) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi rollback đơn bán hàng');
+    }
+  }
+
   @MessagePattern('inventory.sale.list')
   async listSalesOrders(@Payload() data: { search?: string; type?: string }) {
     try {

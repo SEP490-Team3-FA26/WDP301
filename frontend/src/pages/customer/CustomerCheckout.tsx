@@ -4,6 +4,7 @@ import { CreditCard, Banknote, QrCode, ClipboardList, Printer, ShoppingBag, File
 import { orderService } from "../../services/order.service";
 import { cartService } from "../../services/cart.service";
 import { voucherService } from "../../services/voucher.service";
+import { userService } from "../../services/user.service";
 
 export function CustomerCheckout() {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ export function CustomerCheckout() {
   const [payosQrCode, setPayosQrCode] = useState("");
   const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
   const [payosPolling, setPayosPolling] = useState(false);
+  const [payosTimeLeft, setPayosTimeLeft] = useState<number>(15 * 60);
 
   // Loyalty Points States
   const [availablePoints, setAvailablePoints] = useState(0);
@@ -38,12 +40,12 @@ export function CustomerCheckout() {
 
   const fetchLoyalty = async () => {
     try {
-      const res = await api.get("/api/users/loyalty");
-      if (res.data && !res.data.error) {
-        setLoyaltyInfo(res.data);
-        setAvailablePoints(res.data.points || 0);
-        if (res.data.fullName && !fullname) setFullname(res.data.fullName);
-        if (res.data.phone && !phone) setPhone(res.data.phone);
+      const data = await userService.getLoyaltyInfo();
+      if (data && !data.error) {
+        setLoyaltyInfo(data);
+        setAvailablePoints(data.points || 0);
+        if (data.fullName && !fullname) setFullname(data.fullName);
+        if (data.phone && !phone) setPhone(data.phone);
       }
     } catch (err) {
       console.error("Error fetching loyalty in checkout:", err);
@@ -118,6 +120,27 @@ export function CustomerCheckout() {
         }
       }
   }, []);
+
+  useEffect(() => {
+    let interval: any;
+    if (showPayOSModal && payosTimeLeft > 0) {
+      interval = setInterval(() => {
+        setPayosTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setShowPayOSModal(false);
+            setPayosPolling(false);
+            showAlert("Mã QR đã hết hạn. Vui lòng tạo lại đơn hàng mới.", "Hết hạn thanh toán");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (!showPayOSModal) {
+      setPayosTimeLeft(15 * 60); // Reset timer when modal closes
+    }
+    return () => clearInterval(interval);
+  }, [showPayOSModal, payosTimeLeft]);
 
   useEffect(() => {
     let interval: any;
@@ -245,6 +268,7 @@ export function CustomerCheckout() {
         const payload = {
           patientName: fullname,
           patientPhone: phone,
+          patientEmail: loyaltyInfo?.email || undefined,
           shippingAddress: address,
           paymentMethod: paymentMethod,
           totalAmount: total,
@@ -425,8 +449,8 @@ export function CustomerCheckout() {
                 <h3 className="font-black text-slate-800 text-xs uppercase tracking-wider border-b border-slate-100 pb-3">Chi tiết đơn hàng</h3>
 
                 <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 pr-1 flex flex-col gap-3">
-                  {cartItems.map((item) => (
-                    <div key={item.id} className="flex justify-between items-start pt-3 first:pt-0">
+                  {cartItems.map((item, index) => (
+                    <div key={`${item.id}-${index}`} className="flex justify-between items-start pt-3 first:pt-0">
                       <div className="max-w-[70%]">
                         <span className="font-extrabold text-slate-900 text-xs line-clamp-1">{item.name}</span>
                         <span className="text-[10px] text-slate-400 font-bold block mt-0.5">{item.quantity} {item.unit} x {item.price.toLocaleString()}₫</span>
@@ -637,8 +661,8 @@ export function CustomerCheckout() {
                   <div>
                     <div className="font-bold border-b border-slate-200 pb-1 mb-2 uppercase">Chi tiết đơn thuốc (Định giá FIFO)</div>
                     <div className="space-y-2">
-                      {cartItems.map((it) => (
-                        <div key={it.id} className="flex justify-between items-center font-bold text-slate-900 text-xs">
+                      {cartItems.map((it: any, index: number) => (
+                        <div key={it.id || it.medicineId || index} className="flex justify-between items-center font-bold text-slate-900 text-xs">
                           <span>{it.name} ({it.quantity} {it.unit})</span>
                           <span>{(it.price * it.quantity).toLocaleString()}₫</span>
                         </div>
@@ -727,9 +751,14 @@ export function CustomerCheckout() {
                   />
                 </div>
 
-                <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5 justify-center">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
-                  Đang chờ bạn chuyển khoản (Tự động cập nhật...)
+                <div className="text-[10px] text-slate-400 font-semibold flex flex-col items-center gap-1.5 justify-center">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                    Đang chờ bạn chuyển khoản (Tự động cập nhật...)
+                  </div>
+                  <div className="mt-1 font-bold text-rose-500 text-xs bg-rose-50 px-3 py-1 rounded-full border border-rose-100">
+                    Mã QR hết hạn sau: {Math.floor(payosTimeLeft / 60).toString().padStart(2, '0')}:{(payosTimeLeft % 60).toString().padStart(2, '0')}
+                  </div>
                 </div>
               </div>
 

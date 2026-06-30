@@ -39,12 +39,12 @@ async function bootstrap() {
       // --- SEED DUMMY ACCOUNTS ---
       const userModel = app.get<Model<User>>(getModelToken(User.name));
       const dummyUsers = [
-        { email: 'admin@vinapharmacy.com', role: UserRole.ADMIN, fullName: 'Admin Hệ Thống' },
-        { email: 'director@vinapharmacy.com', role: UserRole.HEAD_BRANCH, fullName: 'Giám Đốc Chi Nhánh' },
-        { email: 'warehouse@vinapharmacy.com', role: UserRole.WAREHOUSE, fullName: 'Quản Lý Kho' },
-        { email: 'manager@vinapharmacy.com', role: UserRole.BRANCH, fullName: 'Quản Lý Cơ Sở' },
-        { email: 'pharmacist@vinapharmacy.com', role: UserRole.PHARMACIST, fullName: 'Dược Sĩ Bán Hàng' },
-        { email: 'user@vinapharmacy.com', role: UserRole.USER, fullName: 'Khách Hàng' },
+        { email: 'admin@ABC pharmacy.com', role: UserRole.ADMIN, fullName: 'Admin Hệ Thống' },
+        { email: 'director@ABC pharmacy.com', role: UserRole.HEAD_BRANCH, fullName: 'Giám Đốc Chi Nhánh' },
+        { email: 'warehouse@ABC pharmacy.com', role: UserRole.WAREHOUSE, fullName: 'Quản Lý Kho' },
+        { email: 'manager@ABC pharmacy.com', role: UserRole.BRANCH, fullName: 'Quản Lý Cơ Sở' },
+        { email: 'pharmacist@ABC pharmacy.com', role: UserRole.PHARMACIST, fullName: 'Dược Sĩ Bán Hàng' },
+        { email: 'user@ABC pharmacy.com', role: UserRole.USER, fullName: 'Khách Hàng' },
       ];
 
       const passwordHash = await bcrypt.hash('123456', 10);
