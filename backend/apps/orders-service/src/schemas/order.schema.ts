@@ -57,5 +57,8 @@ export class Order extends Document {
 
   @Prop({ type: Number, default: 0 })
   voucherDiscount?: number;
+
+  @Prop({ type: String })
+  userId?: string;
 }
 export const OrderSchema = SchemaFactory.createForClass(Order);

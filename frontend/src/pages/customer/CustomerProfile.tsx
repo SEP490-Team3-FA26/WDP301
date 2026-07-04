@@ -2,61 +2,47 @@ import React, { useState, useEffect } from 'react';
 import { User, Package, Clock, MapPin, Phone, Mail, Edit2 } from 'lucide-react';
 import api from '../../services/api';
 
-// MOCK DATA for layout demonstration.
-// In a real application, you would fetch this data from your user-service & orders-service
-const MOCK_USER = {
-  fullName: "Nguyễn Văn A",
-  phone: "0901234567",
-  email: "nguyenvana@gmail.com",
-  address: "123 Đường Nguyễn Trãi, Quận 1, TP.HCM",
-  loyaltyPoints: 1500
-};
-
-const MOCK_ORDERS = [
-  {
-    id: "ORD-98231",
-    date: "2026-06-20",
-    totalAmount: 350000,
-    status: "DELIVERED",
-    items: ["Panadol Extra (x2)", "Vitamin C 500mg (x1)"]
-  },
-  {
-    id: "ORD-98100",
-    date: "2026-06-15",
-    totalAmount: 120000,
-    status: "PROCESSING",
-    items: ["Nước súc miệng Listerine (x1)"]
-  }
-];
-
 export function CustomerProfile() {
   const [activeTab, setActiveTab] = useState<'profile' | 'history'>('profile');
-  const [user, setUser] = useState(MOCK_USER);
-  const [orders, setOrders] = useState(MOCK_ORDERS);
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState({
+    fullName: '',
+    phone: '',
+    email: '',
+    address: '',
+    loyaltyPoints: 0
+  });
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Example of how you would fetch real data
-  /*
   useEffect(() => {
     const fetchProfileData = async () => {
       setLoading(true);
       try {
-        // Fetch User Profile
-        // const userRes = await api.get('/api/users/me');
-        // setUser(userRes.data);
-
-        // Fetch User Order History
-        // const ordersRes = await api.get('/api/orders/my-orders');
-        // setOrders(ordersRes.data);
+        const userRes = await api.get('/api/auth/profile');
+        if (userRes && userRes.data) {
+          setUser({
+            fullName: userRes.data.fullName || userRes.data.name || 'Người dùng',
+            phone: userRes.data.phone || 'Chưa cập nhật',
+            email: userRes.data.email,
+            address: userRes.data.address || 'Chưa cập nhật',
+            loyaltyPoints: userRes.data.loyaltyPoints || 0
+          });
+        }
       } catch (error) {
         console.error("Failed to load profile data:", error);
+      }
+
+      try {
+        const ordersRes = await api.get('/api/orders/my-orders');
+        setOrders(ordersRes.data || []);
+      } catch (error) {
+        console.error("Failed to load orders data:", error);
       } finally {
         setLoading(false);
       }
     };
     fetchProfileData();
   }, []);
-  */
 
   const renderProfile = () => (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sm:p-8 animate-fade-in h-[600px] w-full flex flex-col overflow-y-auto">
@@ -130,21 +116,22 @@ export function CustomerProfile() {
         </div>
       ) : (
         <div className="space-y-5">
-          {orders.map((order, idx) => (
-            <div key={order.id} className="border border-slate-100 rounded-xl p-5 hover:shadow-lg hover:border-blue-100 transition-all bg-slate-50/50 group">
+          {orders.map((order: any) => (
+            <div key={order._id || order.orderCode} className="border border-slate-100 rounded-xl p-5 hover:shadow-lg hover:border-blue-100 transition-all bg-slate-50/50 group">
               <div className="flex flex-wrap justify-between items-center gap-4 border-b border-slate-200 pb-4 mb-4">
                 <div>
-                  <span className="font-black text-slate-800 text-lg group-hover:text-[#0d6efd] transition-colors">#{order.id}</span>
+                  <span className="font-black text-slate-800 text-lg group-hover:text-[#0d6efd] transition-colors">#{order.orderCode}</span>
                   <span className="text-slate-500 text-sm ml-3 flex items-center gap-1.5 inline-flex font-medium bg-white px-3 py-1 rounded-lg border border-slate-100 shadow-sm">
-                    <Clock className="w-3.5 h-3.5 text-blue-500" /> {order.date}
+                    <Clock className="w-3.5 h-3.5 text-blue-500" /> {new Date(order.createdAt).toLocaleDateString('vi-VN')}
                   </span>
                 </div>
                 <div>
                   <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm ${
-                    order.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 
+                    order.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 
+                    order.paymentStatus === 'CANCELLED' ? 'bg-red-100 text-red-700 border border-red-200' :
                     'bg-amber-100 text-amber-700 border border-amber-200'
                   }`}>
-                    {order.status === 'DELIVERED' ? 'Đã giao hàng' : 'Đang xử lý'}
+                    {order.paymentStatus === 'PAID' ? 'Đã thanh toán' : order.paymentStatus === 'CANCELLED' ? 'Đã hủy' : 'Chưa thanh toán'}
                   </span>
                 </div>
               </div>
@@ -153,9 +140,9 @@ export function CustomerProfile() {
                 <div className="flex-1">
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Sản phẩm:</p>
                   <ul className="text-sm text-slate-700 space-y-1 font-medium bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                    {order.items.map((item, i) => (
+                    {order.items?.map((item: any, i: number) => (
                       <li key={i} className="flex items-start gap-2">
-                        <span className="text-[#0d6efd] mt-1">•</span> {item}
+                        <span className="text-[#0d6efd] mt-1">•</span> {item.name} (x{item.quantity})
                       </li>
                     ))}
                   </ul>
