@@ -118,7 +118,6 @@ export class UserService implements OnModuleInit {
         continue;
       }
 
-      const priceChanged = med.price !== item.addedPrice;
       const currentStock = med.stock || 0;
       let finalQty = item.quantity;
 
@@ -128,13 +127,26 @@ export class UserService implements OnModuleInit {
         hasHealed = true;
       }
 
+      let currentPrice = med.price;
+      if (med.priceTiers && med.priceTiers.length > 0) {
+        const applicableTiers = [...med.priceTiers].sort((a: any, b: any) => b.minQuantity - a.minQuantity);
+        for (const tier of applicableTiers) {
+          if (finalQty >= tier.minQuantity) {
+            currentPrice = tier.price;
+            break;
+          }
+        }
+      }
+
+      const priceChanged = currentPrice !== item.addedPrice;
+
       enrichedItems.push({
         id: item.medicineId,
         name: med.name,
         active_ingredient: med.active_ingredient || '',
         category: med.category || 'Chưa phân loại',
         unit: med.unit || 'Viên',
-        price: med.price,
+        price: currentPrice,
         addedPrice: item.addedPrice,
         priceChanged,
         stock: currentStock,
@@ -200,14 +212,40 @@ export class UserService implements OnModuleInit {
         return { error: true, message: `Chỉ còn ${currentStock} sản phẩm khả dụng trong kho!`, statusCode: 400 };
       }
       cart.items[existingIndex].quantity = newQty;
+      
+      // Update addedPrice to reflect new tiered price if applicable
+      let currentPrice = medicine.price;
+      if (medicine.priceTiers && medicine.priceTiers.length > 0) {
+        const applicableTiers = [...medicine.priceTiers].sort((a: any, b: any) => b.minQuantity - a.minQuantity);
+        for (const tier of applicableTiers) {
+          if (newQty >= tier.minQuantity) {
+            currentPrice = tier.price;
+            break;
+          }
+        }
+      }
+      cart.items[existingIndex].addedPrice = currentPrice;
+      
     } else {
       if (quantity > currentStock) {
         return { error: true, message: `Chỉ còn ${currentStock} sản phẩm khả dụng trong kho!`, statusCode: 400 };
       }
+      
+      let initialPrice = medicine.price;
+      if (medicine.priceTiers && medicine.priceTiers.length > 0) {
+        const applicableTiers = [...medicine.priceTiers].sort((a: any, b: any) => b.minQuantity - a.minQuantity);
+        for (const tier of applicableTiers) {
+          if (quantity >= tier.minQuantity) {
+            initialPrice = tier.price;
+            break;
+          }
+        }
+      }
+      
       cart.items.push({
         medicineId,
         quantity,
-        addedPrice: medicine.price,
+        addedPrice: initialPrice,
       } as any);
     }
 
@@ -248,6 +286,22 @@ export class UserService implements OnModuleInit {
     }
 
     cart.items[existingIndex].quantity = quantity;
+    
+    // Update addedPrice to reflect new tiered price if applicable
+    if (medicine) {
+      let currentPrice = medicine.price;
+      if (medicine.priceTiers && medicine.priceTiers.length > 0) {
+        const applicableTiers = [...medicine.priceTiers].sort((a: any, b: any) => b.minQuantity - a.minQuantity);
+        for (const tier of applicableTiers) {
+          if (quantity >= tier.minQuantity) {
+            currentPrice = tier.price;
+            break;
+          }
+        }
+      }
+      cart.items[existingIndex].addedPrice = currentPrice;
+    }
+    
     await cart.save();
     return { success: true, message: 'Cập nhật số lượng thành công!' };
   }
