@@ -331,13 +331,6 @@ export class MedicineService implements OnModuleInit {
               });
             }
 
-            if (branchMedicineIds) {
-              aiData = aiData.filter((med: any) => {
-                const medId = (med._id || med.id || '').toString();
-                return branchMedicineIds.includes(medId);
-              });
-            }
-
             aiTotal = resJson.total !== undefined ? resJson.total : aiData.length;
             if (targetGroup || minPrice !== undefined || maxPrice !== undefined || flavour || country || brand || indication || brandOrigin) {
               aiTotal = aiData.length;
@@ -968,7 +961,7 @@ export class MedicineService implements OnModuleInit {
 
       let alternatives = [];
       const orConditions: any[] = [];
-      
+
       // 1. Điều kiện trùng hoạt chất (kèm dạng bào chế nếu có)
       if (medicine.active_ingredient) {
         const activeIngredientCondition: any = { active_ingredient: medicine.active_ingredient };
@@ -977,7 +970,7 @@ export class MedicineService implements OnModuleInit {
         }
         orConditions.push(activeIngredientCondition);
       }
-      
+
       // 2. Điều kiện trùng danh mục
       if (medicine.category) {
         orConditions.push({ category: medicine.category });
@@ -1023,7 +1016,7 @@ export class MedicineService implements OnModuleInit {
           const bMatchesActive = medicine.active_ingredient && b.active_ingredient === medicine.active_ingredient;
           if (aMatchesActive && !bMatchesActive) return -1;
           if (!aMatchesActive && bMatchesActive) return 1;
-          
+
           // 2. Nếu cùng mức độ ưu tiên hoạt chất, ưu tiên thuốc có tồn kho nhiều nhất
           return b.stock - a.stock;
         });
@@ -1031,6 +1024,26 @@ export class MedicineService implements OnModuleInit {
       return availableAlternatives;
     } catch (error) {
       throw new RpcException(error.message || 'Lỗi tìm thuốc thay thế');
+    }
+  }
+
+  async updateMedicinePrice(id: string, price: number) {
+    try {
+      const medicine = await this.medicineModel.findById(id).exec();
+      if (!medicine) {
+        throw new RpcException('Medicine not found');
+      }
+
+      medicine.price = price;
+      await medicine.save();
+
+      return {
+        success: true,
+        message: 'Cập nhật giá thuốc thành công',
+        price: medicine.price,
+      };
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi cập nhật giá thuốc');
     }
   }
 }

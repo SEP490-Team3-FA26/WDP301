@@ -1,7 +1,10 @@
-import { Controller, Get, Post, Query, UseInterceptors, Param, Body, Patch, Inject, OnModuleInit, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Query, UseInterceptors, Param, Body, Patch, Inject, OnModuleInit, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 
 @ApiTags('💊 Medicines')
@@ -9,7 +12,7 @@ import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 export class MedicineController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
@@ -23,6 +26,7 @@ export class MedicineController implements OnModuleInit {
       'inventory.medicine.low_stock_report',
       'inventory.medicine.dropdown_list',
       'inventory.medicine.get_alternatives',
+      'inventory.medicine.update_price',
     ]);
   }
 
@@ -88,6 +92,18 @@ export class MedicineController implements OnModuleInit {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.update_price_tiers', { id, priceTiers });
   }
 
+  @Patch(':id/price')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cập nhật giá bán chung của thuốc' })
+  async updateMedicinePrice(
+    @Param('id') id: string,
+    @Body('price') price: number
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.update_price', { id, price });
+  }
+
   @Get()
   @ApiOperation({ summary: 'Lấy danh sách thuốc (kết nối Mongoose & Vector DB)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -144,7 +160,7 @@ export class MedicineController implements OnModuleInit {
     if (!medicines || medicines.length < 2) {
       throw new HttpException('Cần ít nhất 2 loại thuốc để kiểm tra tương tác', HttpStatus.BAD_REQUEST);
     }
-    
+
     try {
       const response = await fetch('http://ai-service:8000/api/ai/interactions', {
         method: 'POST',

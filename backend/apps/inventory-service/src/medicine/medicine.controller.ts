@@ -4,7 +4,7 @@ import { MedicineService } from './medicine.service';
 
 @Controller()
 export class MedicineController {
-  constructor(private readonly medicineService: MedicineService) {}
+  constructor(private readonly medicineService: MedicineService) { }
 
   @MessagePattern('inventory.medicine.list')
   async listMedicines(@Payload() query: any) {
@@ -43,6 +43,16 @@ export class MedicineController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật giá sỉ bậc thang');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.update_price')
+  async updateMedicinePrice(@Payload() data: { id: string; price: number }) {
+    try {
+      return await this.medicineService.updateMedicinePrice(data.id, data.price);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật giá thuốc');
     }
   }
 
