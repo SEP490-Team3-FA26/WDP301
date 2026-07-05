@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule, Transport, ClientKafka } from '@nestjs/microservices';
 
 import { SupplierController } from './controllers/supplier.controller';
 import { PurchaseRequisitionController } from './controllers/purchase-requisition.controller';
@@ -35,23 +35,15 @@ import { WebsocketModule } from './websocket/websocket.module';
  * Root Module của API Gateway
  * Chỉ chứa các module để routing và caching — không kết nối trực tiếp Database
  */
-import { OnModuleInit, Inject } from '@nestjs/common';
-import { ClientKafka } from '@nestjs/microservices';
-
 @Module({
   imports: [
     // Đọc biến môi trường toàn cục
     ConfigModule.forRoot({ isGlobal: true }),
 
     // Redis Cache (Cache-Aside Strategy)
-    CacheModule.registerAsync({
+    CacheModule.register({
       isGlobal: true,
-      imports: [ConfigModule],
-      useFactory: async (config: ConfigService) => ({
-        store: 'memory', // Dùng memory store cho dev; thay bằng redis store cho production
-        ttl: 3600,       // Mặc định TTL 1 giờ
-      }),
-      inject: [ConfigService],
+      ttl: 3600,
     }),
 
     PassportModule.register({ defaultStrategy: 'jwt' }),
@@ -146,7 +138,7 @@ import { ClientKafka } from '@nestjs/microservices';
           producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
-    }),
+    ]),
     WebsocketModule,
   ],
   controllers: [

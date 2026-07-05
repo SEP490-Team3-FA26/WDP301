@@ -295,64 +295,64 @@ export class OrdersServiceService implements OnModuleInit {
           qrCode: paymentLinkRes.qrCode,
           order: newOrder,
         };
-      } catch (err) {
-        this.logger.error('Error creating PayOS payment link:', err);
-        throw new RpcException({ message: `Lỗi tạo link thanh toán PayOS: ${err.message}` });
       }
-    } else {
-      // CASH or CARD: Complete order instantly
+    } catch (err) {
+      this.logger.error('Error creating PayOS payment link:', err);
+      throw new RpcException({ message: `Lỗi tạo link thanh toán PayOS: ${err.message}` });
+    }
+
+    // CASH or CARD: Complete order instantly
+    newOrder.paymentStatus = 'PAID';
+    await newOrder.save();
+
+    // Increment voucher usage on successful payment
+    if (newOrder.voucherCode) {
+      await this.voucherModel.updateOne(
+        { code: newOrder.voucherCode },
+        { $inc: { usedCount: 1 } }
+      ).exec();
+    }
+
+    // Deduct inventory and record sale
+    try {
+      const saleRes = await this.deductInventory(newOrder);
+
+      // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
+      if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
+        await lastValueFrom(
+          this.userClient.send('user.loyalty.update_points', {
+            phone: newOrder.patientPhone,
+            pointsDelta: newOrder.earnedPoints,
+            accumulatedDelta: newOrder.earnedPoints,
+          })
+        );
+      }
+
       newOrder.paymentStatus = 'PAID';
       await newOrder.save();
+      this.sendInvoiceEmailAsync(newOrder);
 
-      // Increment voucher usage on successful payment
-      if (newOrder.voucherCode) {
-        await this.voucherModel.updateOne(
-          { code: newOrder.voucherCode },
-          { $inc: { usedCount: 1 } }
-        ).exec();
-      }
+      return {
+        success: true,
+        orderCode,
+        paymentMethod: data.paymentMethod,
+        order: newOrder,
+        saleResult: saleRes,
+      };
+    } catch (err) {
+      this.logger.error('Error deducting inventory:', err);
 
-      // Deduct inventory and record sale
-      try {
-        const saleRes = await this.deductInventory(newOrder);
+      // Asynchronously trigger sending invoice email even if inventory deduction fails
+      this.sendInvoiceEmailAsync(newOrder);
 
-        // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
-        if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
-              phone: newOrder.patientPhone,
-              pointsDelta: newOrder.earnedPoints,
-              accumulatedDelta: newOrder.earnedPoints,
-            })
-          );
-        }
-
-        newOrder.paymentStatus = 'PAID';
-        await newOrder.save();
-        this.sendInvoiceEmailAsync(newOrder);
-
-        return {
-          success: true,
-          orderCode,
-          paymentMethod: data.paymentMethod,
-          order: newOrder,
-          saleResult: saleRes,
-        };
-      } catch (err) {
-        this.logger.error('Error deducting inventory:', err);
-
-        // Asynchronously trigger sending invoice email even if inventory deduction fails
-        this.sendInvoiceEmailAsync(newOrder);
-
-        // Save with warning
-        return {
-          success: true,
-          orderCode,
-          paymentMethod: data.paymentMethod,
-          order: newOrder,
-          warning: `Đơn hàng đã lưu nhưng trừ kho thất bại: ${err.message}`,
-        };
-      }
+      // Save with warning
+      return {
+        success: true,
+        orderCode,
+        paymentMethod: data.paymentMethod,
+        order: newOrder,
+        warning: `Đơn hàng đã lưu nhưng trừ kho thất bại: ${err.message}`,
+      };
     }
   }
 
