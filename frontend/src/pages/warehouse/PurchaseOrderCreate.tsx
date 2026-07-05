@@ -195,13 +195,13 @@ export function PurchaseOrderCreate() {
               <div>
                 <label className="text-sm font-semibold text-slate-700 block mb-1.5">Sản phẩm thuốc</label>
                 <select
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
                   value={selectedMedicineId}
                   onChange={(e) => handleMedicineSelect(e.target.value)}
                 >
-                  <option value="">-- Chọn Thuốc Cần Nhập --</option>
+                  <option value="" className="text-slate-900 bg-white">-- Chọn Thuốc Cần Nhập --</option>
                   {medicines.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
+                    <option key={m.id} value={m.id} className="text-slate-900 bg-white">{m.name}</option>
                   ))}
                 </select>
               </div>
@@ -213,7 +213,7 @@ export function PurchaseOrderCreate() {
                   min="1"
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
                 />
               </div>
 
@@ -228,7 +228,7 @@ export function PurchaseOrderCreate() {
                   step="1000"
                   value={unitPrice}
                   onChange={(e) => setUnitPrice(Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
                 />
               </div>
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const API_GATEWAY_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_GATEWAY_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:4000';
 
 export function useSocket(namespace: string = '') {
   const [isConnected, setIsConnected] = useState(false);
