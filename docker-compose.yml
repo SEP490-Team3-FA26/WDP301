@@ -50,7 +50,9 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
-      - ~/.aws:/root/.aws:ro
+      # - ~/.aws:/root/.aws:ro
+    env_file:
+      - ./backend/.env
     ports:
       - "4000:4000"
     environment:

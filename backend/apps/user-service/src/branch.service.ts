@@ -20,7 +20,7 @@ export class BranchService implements OnModuleInit {
         const seedBranches = [
           {
             branchCode: 'BR-001',
-            name: 'Nhà thuốc VinaPharmacy - CN1',
+            name: 'Nhà thuốc ABC Pharmacy - CN1',
             address: 'Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
             image: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=500&auto=format&fit=crop&q=60',
             status: 'active',
@@ -40,7 +40,7 @@ export class BranchService implements OnModuleInit {
           },
           {
             branchCode: 'BR-002',
-            name: 'Nhà thuốc VinaPharmacy - CN2',
+            name: 'Nhà thuốc ABC Pharmacy - CN2',
             address: 'Phường Thảo Điền, Quận 2, TP. Hồ Chí Minh',
             image: 'https://images.unsplash.com/photo-1555636222-cae831e670b3?w=500&auto=format&fit=crop&q=60',
             status: 'active',
@@ -59,7 +59,7 @@ export class BranchService implements OnModuleInit {
           },
           {
             branchCode: 'BR-003',
-            name: 'Nhà thuốc VinaPharmacy - CN3',
+            name: 'Nhà thuốc ABC Pharmacy - CN3',
             address: 'Phường Hải Châu 1, Quận Hải Châu, Đà Nẵng',
             image: 'https://images.unsplash.com/photo-1576602976047-174e57a47881?w=500&auto=format&fit=crop&q=60',
             status: 'maintenance',
@@ -77,7 +77,7 @@ export class BranchService implements OnModuleInit {
           },
           {
             branchCode: 'BR-004',
-            name: 'Nhà thuốc VinaPharmacy - CN4',
+            name: 'Nhà thuốc ABC Pharmacy - CN4',
             address: 'Phường Tràng Tiền, Quận Hoàn Kiếm, Hà Nội',
             image: 'https://images.unsplash.com/photo-1563213126-a4273aedbc13?w=500&auto=format&fit=crop&q=60',
             status: 'active',

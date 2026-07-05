@@ -29,6 +29,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { S3StorageService } from './storage/s3-storage.service';
+import { WebsocketModule } from './websocket/websocket.module';
 
 /**
  * Root Module của API Gateway
@@ -145,7 +146,8 @@ import { ClientKafka } from '@nestjs/microservices';
           producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
-    ]),
+    }),
+    WebsocketModule,
   ],
   controllers: [
     SupplierController,

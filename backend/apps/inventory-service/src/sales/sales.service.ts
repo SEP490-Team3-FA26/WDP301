@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
 import { RpcException, ClientKafka } from '@nestjs/microservices';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -10,7 +10,7 @@ import { PricingService } from '../pricing/pricing.service';
 import { InventoryTransaction } from '../purchase/schemas/inventory-transaction.schema';
 
 @Injectable()
-export class SalesService {
+export class SalesService implements OnModuleInit {
   private readonly logger = new Logger(SalesService.name);
 
   constructor(
@@ -20,8 +20,12 @@ export class SalesService {
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
     private readonly pricingService: PricingService,
     @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
-    @Inject('USER_SERVICE') private readonly userServiceClient: ClientKafka,
-  ) {}
+    @Inject('KAFKA_CLIENT') private readonly kafkaClient: ClientKafka,
+  ) { }
+
+  async onModuleInit() {
+    await this.kafkaClient.connect();
+  }
 
   async getPrescriptionByCode(code: string, branchId?: string) {
     this.logger.log(`Fetching prescription by code: ${code}`);
@@ -269,22 +273,8 @@ export class SalesService {
         });
       }
 
-      // Check minStock for UC-38
-      if (data.branchId) {
-        const newTotalStock = totalAvailable - item.quantity;
-        const minStock = await this.pricingService.getMinStock(data.branchId, item.medicineId);
-        if (minStock > 0 && newTotalStock < minStock) {
-          this.userServiceClient.emit('user.branch.alert.low_stock', {
-            branchId: data.branchId,
-            medicineId: item.medicineId,
-            medicineName: medicine.name,
-            currentStock: newTotalStock,
-            minStock: minStock,
-            timestamp: new Date().toISOString()
-          });
-          allWarnings.push(`Thuốc "${medicine.name}" đã rơi xuống dưới mức tồn kho tối thiểu (${newTotalStock} < ${minStock})`);
-        }
-      }
+      // Cập nhật tồn kho tổng của thuốc để đồng bộ ngay lập tức
+      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: -item.quantity } }).exec();
 
       // Resolve giá theo chi nhánh và loại bán hàng (UC-48)
       const itemPrice = await this.pricingService.resolvePrice(
@@ -304,6 +294,9 @@ export class SalesService {
         unit: medicine.unit || 'Hộp',
         batches: allocatedBatches
       });
+
+      // Cập nhật tồn kho tổng của thuốc
+      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: -item.quantity } }).exec();
     }
 
     // Tạo hóa đơn bán hàng
@@ -333,12 +326,75 @@ export class SalesService {
       await prescription.save();
     }
 
+    // Broadcast Real-time event cho WebSockets
+    this.kafkaClient.emit('broadcast.inventory_updated', {
+      event: 'SALE_COMPLETED',
+      timestamp: new Date().toISOString(),
+      orderId: salesOrder._id.toString()
+    });
+
     return {
       success: true,
       message: 'Thanh toán & trừ kho thành công!',
       warnings: allWarnings,
       data: salesOrder
     };
+  }
+
+  async revertSalesOrder(orderCode: any) {
+    this.logger.log(`Reverting sales order with orderCode: ${orderCode}`);
+    const order = await this.saleModel.findOne({ orderCode }).exec();
+    if (!order) {
+      this.logger.warn(`Order code ${orderCode} not found in inventory, nothing to revert`);
+      return { success: true, message: 'Nothing to revert' };
+    }
+
+    const txns = await this.txnModel.find({ referenceId: order._id.toString(), type: 'SALE_EXPORT' }).exec();
+    for (const txn of txns) {
+      const quantityToRevert = Math.abs(txn.quantityChange);
+
+      // Revert batch stock
+      const batch = await this.batchModel.findOne({ batchNo: txn.batchNo, medicineId: txn.medicineId }).exec();
+      if (batch) {
+        const stockBefore = batch.stock;
+        batch.stock += quantityToRevert;
+        batch.status = batch.expDate < new Date() ? 'EXPIRED' : 'ACTIVE';
+        await batch.save();
+
+        // Create revert log
+        await new this.txnModel({
+          type: 'SALE_REVERT',
+          medicineId: txn.medicineId,
+          medicineName: txn.medicineName,
+          batchNo: txn.batchNo,
+          quantityChange: quantityToRevert,
+          stockBefore: stockBefore,
+          stockAfter: stockBefore + quantityToRevert,
+          referenceType: 'SALE_REVERT',
+          referenceId: order._id.toString(),
+          performedBy: 'System (Saga Rollback)',
+          notes: `Reverted sale for orderCode ${orderCode}`
+        }).save();
+      }
+
+      // Revert medicine total stock
+      await this.medicineModel.updateOne(
+        { _id: txn.medicineId },
+        { $inc: { stock: quantityToRevert } }
+      ).exec();
+    }
+
+    // Revert prescription status if any
+    if (order.prescriptionId) {
+      await this.prescriptionModel.updateOne(
+        { _id: order.prescriptionId },
+        { status: 'APPROVED' }
+      ).exec();
+    }
+
+    // Delete the sales order record
+    await this.saleModel.deleteOne({ _id: order._id }).exec();
+    return { success: true, message: 'Sales order reverted successfully' };
   }
 
   async listSalesOrders(search?: string, type?: string) {
@@ -377,7 +433,7 @@ export class SalesService {
     }
 
     const returnLogItems = [];
-    
+
     for (const returnItem of items) {
       const { medicineId, quantity, reason } = returnItem;
       const orderItem = salesOrder.items.find(
@@ -404,7 +460,7 @@ export class SalesService {
             medicineId: orderItem.medicineId,
             batchNo: batchAlloc.batchNo
           }).exec();
-          
+
           if (dbBatch) {
             dbBatch.stock += Math.min(batchAlloc.quantity, remainingToReturn);
             if (dbBatch.status === 'EXPIRED' && dbBatch.expDate >= new Date()) {
@@ -446,10 +502,17 @@ export class SalesService {
 
     salesOrder.returns = salesOrder.returns || [];
     salesOrder.returns.push(returnEntry);
-    
+
     salesOrder.markModified('items');
     salesOrder.markModified('returns');
     await salesOrder.save();
+
+    // Broadcast Real-time event cho WebSockets
+    this.kafkaClient.emit('broadcast.inventory_updated', {
+      event: 'RETURN_COMPLETED',
+      timestamp: new Date().toISOString(),
+      orderId: salesOrder._id.toString()
+    });
 
     return {
       success: true,
@@ -468,7 +531,7 @@ export class SalesService {
 
     const today = new Date();
     const returnLogItems = [];
-    
+
     for (const returnItem of returnedItems) {
       const { medicineId, quantity, reason } = returnItem;
       const orderItem = salesOrder.items.find(
@@ -495,7 +558,7 @@ export class SalesService {
             medicineId: orderItem.medicineId,
             batchNo: batchAlloc.batchNo
           }).exec();
-          
+
           if (dbBatch) {
             dbBatch.stock += Math.min(batchAlloc.quantity, remainingToReturn);
             if (dbBatch.status === 'EXPIRED' && dbBatch.expDate >= new Date()) {
@@ -617,6 +680,13 @@ export class SalesService {
     salesOrder.markModified('items');
     salesOrder.markModified('exchanges');
     await salesOrder.save();
+
+    // Broadcast Real-time event cho WebSockets
+    this.kafkaClient.emit('broadcast.inventory_updated', {
+      event: 'EXCHANGE_COMPLETED',
+      timestamp: new Date().toISOString(),
+      orderId: salesOrder._id.toString()
+    });
 
     return {
       success: true,

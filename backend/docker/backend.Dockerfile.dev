@@ -1,0 +1,27 @@
+# ============================================================
+# Dev Dockerfile – dành cho môi trường DEVELOPMENT của team
+#
+# Khác biệt so với backend.Dockerfile (production):
+#   - KHÔNG compile TS → JS (giữ source code TypeScript gốc)
+#   - Chạy ts-node / nest-cli với SWC watch mode (hot-reload)
+#   - Mount source code từ host vào container để dev tiện hơn
+#
+# Cách dùng:
+#   docker compose -f docker-compose.dev.yml up --build
+# ============================================================
+FROM node:20-alpine
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+COPY backend/package.json backend/package-lock.json* ./
+RUN npm install --legacy-peer-deps
+
+# Copy toàn bộ source code (bao gồm TypeScript)
+COPY backend/ .
+
+EXPOSE 4000
+
+# Chạy dev mode: ts-node + SWC + hot-reload (tiện dev nhưng ngốn RAM hơn prod)
+CMD ["npm", "run", "dev:all"]
