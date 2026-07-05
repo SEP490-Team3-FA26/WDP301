@@ -6,6 +6,7 @@ import { lastValueFrom } from 'rxjs';
 import { User } from '../../auth-service/src/auth/user.schema';
 import { Cart } from './schemas/cart.schema';
 import * as bcrypt from 'bcryptjs';
+import { subscribeToKafkaTopics } from '../../api-gateway/src/common/kafka.helper';
 
 @Injectable()
 export class UserService implements OnModuleInit {
@@ -21,26 +22,13 @@ export class UserService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    this.inventoryClient.subscribeToResponseOf('inventory.medicine.get_by_id');
-    this.inventoryClient.subscribeToResponseOf('inventory.medicine.get_by_ids');
-    
-    const retries = 20;
-    const delay = 3000;
-    for (let i = 0; i < retries; i++) {
-      try {
-        await this.inventoryClient.connect();
-        this.logger.log('Successfully connected ClientKafka for INVENTORY_SERVICE');
-        return;
-      } catch (err: any) {
-        if (i === retries - 1) {
-          this.logger.error('Failed to connect to INVENTORY_SERVICE via Kafka after retries', err);
-          throw err;
-        }
-        this.logger.warn(`Kafka INVENTORY_SERVICE connection attempt ${i + 1} failed. Retrying in ${delay}ms...`);
-        try { await this.inventoryClient.close(); } catch(e) {}
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
+    await subscribeToKafkaTopics(
+      this.inventoryClient,
+      ['inventory.medicine.get_by_id', 'inventory.medicine.get_by_ids'],
+      20,
+      3000,
+    );
+    this.logger.log('Successfully connected ClientKafka for INVENTORY_SERVICE');
   }
 
 

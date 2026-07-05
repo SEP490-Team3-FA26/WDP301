@@ -8,6 +8,7 @@ import { lastValueFrom } from 'rxjs';
 import { PayOS } from '@payos/node';
 import { Order } from './schemas/order.schema';
 import { Voucher } from './schemas/voucher.schema';
+import { subscribeToKafkaTopics } from '../../api-gateway/src/common/kafka.helper';
 
 @Injectable()
 export class OrdersServiceService implements OnModuleInit {
@@ -30,11 +31,18 @@ export class OrdersServiceService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    this.inventoryClient.subscribeToResponseOf('inventory.sale.create');
-    this.userClient.subscribeToResponseOf('user.loyalty.lookup');
-    this.userClient.subscribeToResponseOf('user.loyalty.update_points');
-    await this.inventoryClient.connect();
-    await this.userClient.connect();
+    await subscribeToKafkaTopics(
+      this.inventoryClient,
+      ['inventory.sale.create'],
+      20,
+      3000,
+    );
+    await subscribeToKafkaTopics(
+      this.userClient,
+      ['user.loyalty.lookup', 'user.loyalty.update_points'],
+      20,
+      3000,
+    );
   }
 
   async createOrder(data: any) {
