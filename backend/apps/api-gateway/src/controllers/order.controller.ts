@@ -23,8 +23,9 @@ export class OrderController implements OnModuleInit {
       const token = authHeader.split(' ')[1];
       try {
         const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-        if (payload && payload.sub) {
-          data.userId = payload.sub;
+        if (payload) {
+          if (payload.sub) data.userId = payload.sub;
+          if (payload.branchId && !data.branchId) data.branchId = payload.branchId;
         }
       } catch (err) {
         // Ignore decoding errors
@@ -45,8 +46,9 @@ export class OrderController implements OnModuleInit {
       const token = authHeader.split(' ')[1];
       try {
         const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-        if (payload && payload.sub) {
-          data.userId = payload.sub;
+        if (payload) {
+          if (payload.sub) data.userId = payload.sub;
+          if (payload.branchId && !data.branchId) data.branchId = payload.branchId;
         }
       } catch (err) {
         // Ignore decoding errors
