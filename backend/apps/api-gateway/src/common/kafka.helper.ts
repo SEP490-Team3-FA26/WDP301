@@ -44,11 +44,11 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
  */
 export async function sendKafkaMessage(client: ClientKafka, topic: string, data: any) {
   try {
-    console.log(`[API-Gateway][sendKafkaMessage] Sending to topic "${topic}" with data: ${JSON.stringify(data)}`);
+    console.log(`[API-Gateway][sendKafkaMessage] Sending to topic "${topic}"`);
     const result: any = await lastValueFrom(
       client.send(topic, data).pipe(timeout(15000))
     );
-    console.log(`[API-Gateway][sendKafkaMessage] Received response from topic "${topic}": ${JSON.stringify(result)}`);
+    console.log(`[API-Gateway][sendKafkaMessage] Received response from topic "${topic}"`);
     // Trường hợp microservice trả về object lỗi thông thường (không phải throw)
     if (result?.error) {
       console.warn(`[API-Gateway][sendKafkaMessage] Microservice returned error object: ${JSON.stringify(result)}`);

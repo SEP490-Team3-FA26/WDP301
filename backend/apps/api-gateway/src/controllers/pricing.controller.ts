@@ -8,6 +8,7 @@ import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 export class PricingGatewayController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
+    @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
   ) {}
 
   async onModuleInit() {
@@ -19,6 +20,9 @@ export class PricingGatewayController implements OnModuleInit {
       'inventory.pricing.resolve',
       'inventory.pricing.copy',
       'inventory.pricing.summary',
+    ]);
+    await subscribeToKafkaTopics(this.userClient, [
+      'user.branch.list',
     ]);
   }
 
@@ -52,6 +56,37 @@ export class PricingGatewayController implements OnModuleInit {
   @ApiOperation({ summary: 'Sao chép bảng giá từ chi nhánh này sang chi nhánh khác' })
   async copyPriceList(@Body() data: { fromBranchId: string; toBranchId: string; updatedBy?: string }) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.pricing.copy', data);
+  }
+
+  @Post('sync-all')
+  @ApiOperation({ summary: 'Đồng bộ bảng giá từ 1 chi nhánh sang TẤT CẢ các chi nhánh khác' })
+  async syncPriceListToAll(@Body() data: { fromBranchId: string; updatedBy?: string }) {
+    // 1. Lấy danh sách tất cả chi nhánh
+    const branches = await sendKafkaMessage(this.userClient, 'user.branch.list', {});
+    
+    // 2. Lọc ra các chi nhánh khác với chi nhánh gốc
+    const targetBranches = branches.filter((b: any) => b._id !== data.fromBranchId && b.id !== data.fromBranchId);
+    
+    if (targetBranches.length === 0) {
+      return { status: 'Success', message: 'Không có chi nhánh đích nào để đồng bộ.' };
+    }
+
+    // 3. Gửi lệnh copy song song cho tất cả chi nhánh đích
+    const promises = targetBranches.map((branch: any) => 
+      sendKafkaMessage(this.inventoryClient, 'inventory.pricing.copy', {
+        fromBranchId: data.fromBranchId,
+        toBranchId: branch._id || branch.id,
+        updatedBy: data.updatedBy,
+      })
+    );
+
+    await Promise.allSettled(promises);
+
+    return { 
+      status: 'Success', 
+      message: `Đã đồng bộ giá thành công tới ${targetBranches.length} chi nhánh.`,
+      syncedCount: targetBranches.length
+    };
   }
 
   @Get(':branchId')
