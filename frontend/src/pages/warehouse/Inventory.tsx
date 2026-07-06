@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck, Tag, TrendingDown } from "lucide-react";
+import { MedicineDetailModal } from "../../components/MedicineDetailModal";
 import { medicineService } from "../../services/medicine.service";
 
 export function Inventory() {
@@ -1046,128 +1047,12 @@ export function Inventory() {
       )}
 
       {/* Detail Modal */}
-      {detailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
-              <h2 className="text-lg font-bold text-slate-900">Chi Tiết Thông Tin Dược Phẩm</h2>
-              <button
-                onClick={() => setDetailModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto flex-1">
-              {fetchingDetails ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3">
-                  <Loader2 className="animate-spin text-[#0057cd]" size={32} />
-                  <p className="text-slate-500 font-medium">Đang tải dữ liệu y khoa...</p>
-                </div>
-              ) : selectedMedicine ? (
-                <div className="space-y-8">
-                  <div className="flex flex-col sm:flex-row gap-6 items-start">
-                    {selectedMedicine.image && (
-                      <div className="w-32 h-32 rounded-xl border border-slate-200 overflow-hidden flex-shrink-0 p-2 bg-white shadow-sm">
-                        <img src={selectedMedicine.image} alt={selectedMedicine.name} className="w-full h-full object-contain" />
-                      </div>
-                    )}
-                    <div>
-                      <h3 className="text-2xl font-bold text-slate-900 mb-2">{selectedMedicine.name}</h3>
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        <span className="px-2.5 py-1 bg-blue-50 text-[#0057cd] text-xs font-bold rounded-md border border-blue-100">
-                          {selectedMedicine.category || 'Chưa phân loại'}
-                        </span>
-                        <span className="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-md border border-slate-200">
-                          {selectedMedicine.drug_classification === 'PRESCRIPTION_ANTIBIOTIC' ? 'Kê đơn / Kháng sinh' : 'Không kê đơn'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-1">
-                          <span className="text-slate-500">Mã SKU:</span>
-                          <span className="font-semibold text-slate-900">{selectedMedicine._id?.toString()?.substring(0, 8).toUpperCase()}</span>
-                        </div>
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-1">
-                          <span className="text-slate-500">Hạn sử dụng:</span>
-                          <span className="font-semibold text-slate-900">{selectedMedicine.expiry_date || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-1">
-                          <span className="text-slate-500">Tồn kho:</span>
-                          <span className="font-semibold text-slate-900">{selectedMedicine.stock} {selectedMedicine.unit}</span>
-                        </div>
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-1">
-                          <span className="text-slate-500">Quy cách:</span>
-                          <span className="font-semibold text-slate-900 max-w-[150px] truncate" title={selectedMedicine.thong_tin_chi_tiet?.['Quy cách']}>
-                            {selectedMedicine.thong_tin_chi_tiet?.['Quy cách'] || 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-6 sm:grid-cols-2">
-                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col max-h-[250px]">
-                      <h4 className="font-bold text-slate-900 flex items-center gap-2 mb-3 shrink-0">
-                        <div className="w-2 h-2 rounded-full bg-[#0057cd]"></div> Thành phần chính
-                      </h4>
-                      <div className="overflow-y-auto pr-2 custom-scrollbar">
-                        <p className="text-sm text-slate-700 leading-relaxed">
-                          {selectedMedicine.thong_tin_chi_tiet?.['Thành phần'] || 'Không có thông tin'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-emerald-50/50 rounded-xl p-5 border border-emerald-100 shadow-sm flex flex-col max-h-[250px]">
-                      <h4 className="font-bold text-emerald-900 flex items-center gap-2 mb-3 shrink-0">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Công dụng
-                      </h4>
-                      <div className="overflow-y-auto pr-2 custom-scrollbar">
-                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                          {selectedMedicine.cong_dung || 'Không có thông tin'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-amber-50/50 rounded-xl p-5 border border-amber-100 shadow-sm flex flex-col max-h-[250px]">
-                    <h4 className="font-bold text-amber-900 flex items-center gap-2 mb-3 shrink-0">
-                      <div className="w-2 h-2 rounded-full bg-amber-500"></div> Liều dùng & Cách dùng
-                    </h4>
-                    <div className="overflow-y-auto pr-2 custom-scrollbar">
-                      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                        {selectedMedicine.cach_dung || 'Theo chỉ định của bác sĩ'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-rose-50/50 rounded-xl p-5 border border-rose-100 shadow-sm flex flex-col max-h-[300px]">
-                    <h4 className="font-bold text-rose-900 flex items-center gap-2 mb-3 shrink-0">
-                      <div className="w-2 h-2 rounded-full bg-rose-500"></div> Lưu ý & Chống chỉ định
-                    </h4>
-                    <div className="overflow-y-auto pr-2 custom-scrollbar">
-                      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                        {selectedMedicine.luu_y || 'Không có thông tin'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center text-slate-500 py-10">Không tìm thấy thông tin.</div>
-              )}
-            </div>
-
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button
-                onClick={() => setDetailModalOpen(false)}
-                className="px-5 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MedicineDetailModal
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        medicine={selectedMedicine}
+        fetchingDetails={fetchingDetails}
+      />
 
       {/* Tiered Pricing Modal */}
       {tieredPricingModalOpen && tieredPricingMedicine && (

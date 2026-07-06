@@ -6,7 +6,7 @@ import { Search, ShoppingCart, Star, Heart, Info, Check, ChevronLeft, ChevronRig
 import { MedicineCard } from "../../components/MedicineCard";
 import { ShopFilterSidebar } from "./components/ShopFilterSidebar";
 import { Pagination } from "./components/Pagination";
-import { MedicineDetailModal } from "./components/MedicineDetailModal";
+import { MedicineDetailModal } from "../../components/MedicineDetailModal";
 
 export function CustomerShop() {
   const [searchParams] = useSearchParams();
