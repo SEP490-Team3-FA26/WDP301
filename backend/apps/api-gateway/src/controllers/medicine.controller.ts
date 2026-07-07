@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Query, UseInterceptors, Param, Body, Patch, Inject, OnModuleInit, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Query, UseInterceptors, Param, Body, Patch, Inject, OnModuleInit, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @ApiTags('💊 Medicines')
 @Controller('api/medicines')
@@ -63,6 +65,14 @@ export class MedicineController implements OnModuleInit {
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Cập nhật trạng thái / tồn kho của thuốc' })
+  @UseGuards(JwtAuthGuard)
+  @AuditLogAction({
+    actionCode: 'MEDICINE_STATUS_UPDATE',
+    actionName: 'Cập nhật trạng thái thuốc',
+    module: 'Inventory',
+    eventType: 'UPDATE',
+    entityType: 'Medicine',
+  })
   async updateMedicineStatus(
     @Param('id') id: string,
     @Body('status') status: string,
@@ -73,6 +83,14 @@ export class MedicineController implements OnModuleInit {
 
   @Patch(':id/price-tiers')
   @ApiOperation({ summary: 'Cập nhật bảng giá sỉ bậc thang của thuốc' })
+  @UseGuards(JwtAuthGuard)
+  @AuditLogAction({
+    actionCode: 'MEDICINE_PRICE_TIERS_UPDATE',
+    actionName: 'Cập nhật giá sỉ thuốc',
+    module: 'Inventory',
+    eventType: 'UPDATE',
+    entityType: 'Medicine',
+  })
   async updateMedicinePriceTiers(
     @Param('id') id: string,
     @Body('priceTiers') priceTiers: { minQuantity: number; price: number }[]

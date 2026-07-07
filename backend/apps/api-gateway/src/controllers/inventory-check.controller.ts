@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Param, Body, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @ApiTags('📋 Inventory Checks')
 @Controller('api/inventory-checks')
+@UseGuards(JwtAuthGuard)
 export class InventoryCheckController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -21,6 +24,13 @@ export class InventoryCheckController implements OnModuleInit {
 
   @Post()
   @ApiOperation({ summary: 'Tạo biên bản kiểm kê kho mới (Draft hoặc Completed)' })
+  @AuditLogAction({
+    actionCode: 'INVENTORY_CHECK_CREATE',
+    actionName: 'Tạo biên bản kiểm kê kho',
+    module: 'Inventory',
+    eventType: 'CREATE',
+    entityType: 'InventoryCheck',
+  })
   async createCheck(@Body() data: any) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.check.create', data);
   }
@@ -39,6 +49,13 @@ export class InventoryCheckController implements OnModuleInit {
 
   @Post(':id/complete')
   @ApiOperation({ summary: 'Hoàn tất biên bản kiểm kê kho và điều chỉnh số lượng tồn kho' })
+  @AuditLogAction({
+    actionCode: 'INVENTORY_CHECK_COMPLETE',
+    actionName: 'Hoàn tất biên bản kiểm kê kho',
+    module: 'Inventory',
+    eventType: 'APPROVE',
+    entityType: 'InventoryCheck',
+  })
   async completeCheck(@Param('id') id: string) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.check.complete', { id });
   }

@@ -32,6 +32,10 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { S3StorageService } from './storage/s3-storage.service';
 import { ReportService } from './services/report.service';
 import { WebsocketModule } from './websocket/websocket.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
+import { RedactionService } from './services/redaction.service';
+import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
 
 /**
  * Root Module của API Gateway
@@ -179,6 +183,12 @@ import { ClientKafka } from '@nestjs/microservices';
     GoogleStrategy,
     S3StorageService,
     ReportService,
+    RedactionService,
+    AuditFallbackProcessor,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
   ],
 })
 export class AppGatewayModule {
