@@ -134,9 +134,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setNotifications([]);
   };
 
-  // Auto cleanup old notifications (> 7 days)
+  // Auto cleanup old notifications (> 30 days)
   useEffect(() => {
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const sevenDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     setNotifications(prev => 
       prev.filter(n => new Date(n.timestamp).getTime() > sevenDaysAgo)
     );
