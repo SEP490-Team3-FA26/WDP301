@@ -30,7 +30,6 @@ export function Login() {
 
   const roles = [
     { id: "admin", label: "Admin Tổng", subLabel: "Hệ thống", email: "admin@vinapharmacy.com", icon: <ShieldCheck size={20} />, activeColor: "bg-rose-50 border-rose-200 text-rose-700", iconColor: "text-rose-500" },
-    { id: "head_branch", label: "Tổng chi nhánh", subLabel: "Giám đốc", email: "director@vinapharmacy.com", icon: <Building2 size={20} />, activeColor: "bg-indigo-50 border-indigo-200 text-indigo-700", iconColor: "text-indigo-500" },
     { id: "warehouse", label: "Quản lý kho", subLabel: "Kho vận", email: "warehouse@vinapharmacy.com", icon: <PackageSearch size={20} />, activeColor: "bg-amber-50 border-amber-200 text-amber-700", iconColor: "text-amber-500" },
     { id: "branch", label: "QL Chi nhánh", subLabel: "Cơ sở", email: "manager@vinapharmacy.com", icon: <Store size={20} />, activeColor: "bg-emerald-50 border-emerald-200 text-emerald-700", iconColor: "text-emerald-500" },
     { id: "pharmacist", label: "Thuốc / Bán", subLabel: "Dược sĩ", email: "pharmacist@vinapharmacy.com", icon: <Pill size={20} />, activeColor: "bg-blue-50 border-blue-200 text-blue-700", iconColor: "text-[#0057cd]" },

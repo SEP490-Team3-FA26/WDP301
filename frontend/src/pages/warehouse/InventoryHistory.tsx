@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   Search, Filter, ArrowDownToLine, ArrowUpFromLine, Trash2,
   Calendar, FileText, Plus, ChevronRight, X, Package,
@@ -18,7 +18,11 @@ interface InventoryHistoryProps {
 
 export function InventoryHistory({ type }: InventoryHistoryProps) {
   const navigate = useNavigate();
-  const [activeSubTab, setActiveSubTab] = useState<"grn" | "po">("grn");
+  const location = useLocation();
+  const isAdmin = location.pathname.includes('/admin');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeSubTab = (searchParams.get("tab") as "grn" | "po") || "grn";
+  const setActiveSubTab = (tab: "grn" | "po") => setSearchParams({ tab });
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
 
@@ -314,7 +318,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {(r.status === "SHIPPING" || r.status === "PARTIAL_RECEIVED") ? (
+                        {(r.status === "SHIPPING" || r.status === "PARTIAL_RECEIVED") && !isAdmin ? (
                           <div className="flex items-center gap-2">
                             <button
                               onClick={(e) => {

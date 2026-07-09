@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search, ShoppingCart, Star, Heart, Info, Check, ChevronLeft, ChevronRight, XCircle, Activity, ShieldAlert, Filter, X, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
 import { MedicineCard } from "../../components/MedicineCard";
-import { ShopFilterSidebar } from "./components/ShopFilterSidebar";
-import { Pagination } from "./components/Pagination";
-import { MedicineDetailModal } from "./components/MedicineDetailModal";
+import { ShopFilterSidebar } from "../../components/ShopFilterSidebar";
+import { Pagination } from "../../components/Pagination";
+import { MedicineDetailModal } from "../../components/MedicineDetailModal";
 
 export function CustomerShop() {
   const [searchParams] = useSearchParams();

@@ -64,21 +64,22 @@ export function HQApproval() {
 
   useEffect(() => { fetchData(); setSelectedPos([]); setSelectedPrs([]); }, [tab]);
 
-  const handleAction = async (action: "APPROVE" | "REJECT", paymentType?: "PAID" | "CREDIT") => {
-    if (selectedPos.length === 0) return;
+  const handleAction = async (action: "APPROVE" | "REJECT", paymentType?: "PAID" | "CREDIT", poId?: string) => {
+    const targetPos = poId ? [poId] : selectedPos;
+    if (targetPos.length === 0) return;
     setActionLoading(true); setMsg(null);
     try {
       let successCount = 0;
       let errorCount = 0;
       let lastErrorMessage = "";
 
-      for (const poId of selectedPos) {
+      for (const currentPoId of targetPos) {
         try {
           const res = await fetch("/api/purchase-orders/approve-pay", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              poId,
+              poId: currentPoId,
               action,
               rejectionReason: action === "REJECT" ? rejectReason : undefined,
               paymentType: action === "APPROVE" ? paymentType : undefined,
@@ -165,7 +166,8 @@ export function HQApproval() {
 
   const filteredPos = poList.filter(po =>
     (po._id || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    getSupplierName(po.supplierId).toLowerCase().includes(searchQuery.toLowerCase())
+    getSupplierName(po.supplierId).toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (po.linkedPrCodes && po.linkedPrCodes.some((code: string) => code.toLowerCase().includes(searchQuery.toLowerCase())))
   );
 
   const filteredPrs = urgentPrs.filter(pr =>
@@ -332,7 +334,7 @@ export function HQApproval() {
                   <th className="px-4 py-3 text-center">SP</th>
                   <th className="px-4 py-3 text-right">Tổng Tiền</th>
                   <th className="px-4 py-3 text-center">Trạng thái</th>
-                  <th className="px-4 py-3"></th>
+                  <th className="px-4 py-3 text-right">Hành động</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -347,7 +349,26 @@ export function HQApproval() {
                     <td className="px-4 py-3 text-center font-bold">{po.items?.length || 0}</td>
                     <td className="px-4 py-3 text-right font-black text-violet-700">{po.totalAmount?.toLocaleString("vi-VN")}đ</td>
                     <td className="px-4 py-3 text-center">{statusBadge(po.status)}</td>
-                    <td className="px-4 py-3"><Eye size={16} className="text-slate-400 hover:text-violet-600" /></td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-2 items-center">
+                        {tab === "PENDING_APPROVAL" && (
+                          <>
+                            <button onClick={(e) => { e.stopPropagation(); handleAction("APPROVE", "PAID", po._id); }} disabled={actionLoading} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded disabled:opacity-50" title="Thanh toán ngay">
+                              <DollarSign size={16} />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleAction("APPROVE", "CREDIT", po._id); }} disabled={actionLoading} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50" title="Duyệt mua nợ">
+                              <CreditCard size={16} />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedPos([po._id]); setShowRejectModal(true); }} disabled={actionLoading} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded disabled:opacity-50" title="Từ chối">
+                              <XCircle size={16} />
+                            </button>
+                          </>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); setDetailPo(po); }} className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded" title="Xem chi tiết">
+                          <Eye size={16} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -362,16 +383,19 @@ export function HQApproval() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setDetailPo(null)} />
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-auto">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-violet-50">
+              className="relative bg-white rounded-2xl shadow-2xl w-10/12 max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-violet-50 shrink-0">
                 <div><h3 className="font-black text-slate-900 font-mono">PO-{detailPo._id.slice(-6).toUpperCase()}</h3><p className="text-xs mt-0.5">{statusBadge(detailPo.status)}</p></div>
                 <button onClick={() => setDetailPo(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"><X size={18} /></button>
               </div>
-              <div className="p-5 space-y-4">
+              <div className="p-5 space-y-4 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-3 text-sm bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <div className="col-span-2"><span className="text-slate-500 font-bold text-xs block">Nhà Cung Cấp</span><span className="font-semibold text-slate-800">{getSupplierName(detailPo.supplierId)}</span></div>
                   <div><span className="text-slate-500 font-bold text-xs block">Ngày tạo</span><span className="font-semibold text-slate-800">{new Date(detailPo.createdAt).toLocaleString("vi-VN")}</span></div>
                   <div><span className="text-slate-500 font-bold text-xs block">Tổng tiền</span><span className="font-black text-violet-700 text-base">{detailPo.totalAmount?.toLocaleString("vi-VN")}đ</span></div>
+                  {detailPo.linkedPrCodes && detailPo.linkedPrCodes.length > 0 && (
+                    <div className="col-span-2"><span className="text-slate-500 font-bold text-xs block">Mã PR tham chiếu</span><span className="font-semibold text-slate-800">{detailPo.linkedPrCodes.join(', ')}</span></div>
+                  )}
                 </div>
                 <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><Package size={14} className="text-violet-600" />Sản phẩm ({detailPo.items?.length || 0})</h4>
                 <div className="space-y-2 max-h-[200px] overflow-y-auto">
@@ -389,6 +413,13 @@ export function HQApproval() {
                   ))}
                 </div>
               </div>
+              {detailPo.status === "PENDING_APPROVAL" && (
+                <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+                  <button onClick={() => { setDetailPo(null); setSelectedPos([detailPo._id]); setShowRejectModal(true); }} disabled={actionLoading} className="px-4 py-2 text-rose-600 font-bold hover:bg-rose-50 rounded-xl text-sm border border-transparent hover:border-rose-200">Từ chối (Hủy)</button>
+                  <button onClick={() => { handleAction("APPROVE", "CREDIT", detailPo._id); setDetailPo(null); }} disabled={actionLoading} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5"><CreditCard size={16} /> Duyệt mua nợ</button>
+                  <button onClick={() => { handleAction("APPROVE", "PAID", detailPo._id); setDetailPo(null); }} disabled={actionLoading} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5"><DollarSign size={16} /> Thanh toán ngay</button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
