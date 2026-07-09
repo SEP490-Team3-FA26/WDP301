@@ -31,16 +31,19 @@ export class PurchaseRequisitionController implements OnModuleInit {
     
     // Emit notification to admin room
     if (result && this.websocketGateway.server) {
+      // Handle nested response structure (result.data or result directly)
+      const prData = result.data || result;
+      
       const notificationPayload = {
         type: 'NEW_PR',
-        prId: result._id || result.id,
-        prCode: result.prCode || 'PR-UNKNOWN',
-        branchName: result.branchName || data.branchName || 'Chi nhánh không rõ',
-        branchId: result.branchId || data.branchId,
-        itemsCount: result.items?.length || data.items?.length || 0,
-        createdAt: result.createdAt || new Date().toISOString(),
-        createdBy: data.createdBy || result.createdBy || 'Chi nhánh',
-        message: `${result.branchName || data.branchName || 'Chi nhánh'} vừa tạo yêu cầu nhập hàng ${result.prCode || 'PR-???'}`,
+        prId: prData._id || prData.id,
+        prCode: prData.prCode || 'PR-UNKNOWN',
+        branchName: prData.branchName || data.branchName || 'Chi nhánh không rõ',
+        branchId: prData.branchId || data.branchId,
+        itemsCount: prData.items?.length || data.items?.length || 0,
+        createdAt: prData.createdAt || new Date().toISOString(),
+        createdBy: data.createdBy || prData.createdBy || 'Chi nhánh',
+        message: `${prData.branchName || data.branchName || 'Chi nhánh'} vừa tạo yêu cầu nhập hàng ${prData.prCode || 'PR-???'}`,
         timestamp: new Date().toISOString(),
       };
       

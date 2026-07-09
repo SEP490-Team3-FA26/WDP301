@@ -28,8 +28,25 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    // Load notifications from localStorage on initial mount
+    const saved = localStorage.getItem('notifications');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved notifications:', e);
+        return [];
+      }
+    }
+    return [];
+  });
   const { socket, isConnected } = useSocket();
+
+  // Save to localStorage whenever notifications change
+  useEffect(() => {
+    localStorage.setItem('notifications', JSON.stringify(notifications));
+  }, [notifications]);
 
   // Listen to socket events
   useEffect(() => {
@@ -116,6 +133,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const clearAll = () => {
     setNotifications([]);
   };
+
+  // Auto cleanup old notifications (> 7 days)
+  useEffect(() => {
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    setNotifications(prev => 
+      prev.filter(n => new Date(n.timestamp).getTime() > sevenDaysAgo)
+    );
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
