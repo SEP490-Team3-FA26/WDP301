@@ -37,6 +37,7 @@ dependencies:
   http: ^1.2.0
   image_picker: ^1.1.2
   http_parser: ^4.0.2
+  webview_flutter: ^4.8.0
 
 
 dev_dependencies:

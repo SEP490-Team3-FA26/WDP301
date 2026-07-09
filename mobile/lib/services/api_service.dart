@@ -395,5 +395,39 @@ class ApiService {
       }
     }
   }
+
+  // Get User Profile using JWT token
+  static Future<Map<String, dynamic>?> getProfile(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/auth/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {
+      try {
+        final response = await http.get(
+          Uri.parse('$fallbackUrl/api/auth/profile'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        ).timeout(const Duration(seconds: 5));
+
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint("Failed to fetch user profile: $e");
+      }
+    }
+    return null;
+  }
 }
 
