@@ -40,11 +40,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       addNotification({
         type: 'NEW_PR',
         prId: data.prId,
-        prCode: data.prCode,
-        branchName: data.branchName,
+        prCode: data.prCode || 'PR-???',
+        branchName: data.branchName || 'Chi nhánh',
         branchId: data.branchId,
-        itemsCount: data.itemsCount,
-        message: data.message,
+        itemsCount: data.itemsCount || 0,
+        message: data.message || `Có yêu cầu nhập hàng mới từ ${data.branchName || 'chi nhánh'}`,
         createdBy: data.createdBy,
       });
     };

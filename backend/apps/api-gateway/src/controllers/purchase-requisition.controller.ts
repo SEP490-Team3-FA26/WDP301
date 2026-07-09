@@ -27,20 +27,25 @@ export class PurchaseRequisitionController implements OnModuleInit {
   async createPurchaseRequisition(@Body() data: any) {
     const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.create', data);
     
+    console.log('📋 PR Created - Full Result:', JSON.stringify(result, null, 2));
+    
     // Emit notification to admin room
     if (result && this.websocketGateway.server) {
-      this.websocketGateway.server.to('admin').emit('new_pr_notification', {
+      const notificationPayload = {
         type: 'NEW_PR',
-        prId: result._id,
-        prCode: result.prCode,
-        branchName: result.branchName,
-        branchId: result.branchId,
-        itemsCount: result.items?.length || 0,
-        createdAt: result.createdAt,
-        createdBy: data.createdBy || 'Chi nhánh',
-        message: `${result.branchName} vừa tạo yêu cầu nhập hàng ${result.prCode}`,
+        prId: result._id || result.id,
+        prCode: result.prCode || 'PR-UNKNOWN',
+        branchName: result.branchName || data.branchName || 'Chi nhánh không rõ',
+        branchId: result.branchId || data.branchId,
+        itemsCount: result.items?.length || data.items?.length || 0,
+        createdAt: result.createdAt || new Date().toISOString(),
+        createdBy: data.createdBy || result.createdBy || 'Chi nhánh',
+        message: `${result.branchName || data.branchName || 'Chi nhánh'} vừa tạo yêu cầu nhập hàng ${result.prCode || 'PR-???'}`,
         timestamp: new Date().toISOString(),
-      });
+      };
+      
+      console.log('🔔 Emitting notification:', notificationPayload);
+      this.websocketGateway.server.to('admin').emit('new_pr_notification', notificationPayload);
     }
     
     return result;
