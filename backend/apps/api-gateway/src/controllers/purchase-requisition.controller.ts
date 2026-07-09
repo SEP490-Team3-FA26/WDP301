@@ -1,9 +1,12 @@
-import { Controller, Post, Get, Patch, Query, Param, Body, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Query, Param, Body, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { SocketGateway } from '../socket/socket.gateway';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @Controller('api/purchase-requisitions')
+@UseGuards(JwtAuthGuard)
 export class PurchaseRequisitionController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -24,6 +27,13 @@ export class PurchaseRequisitionController implements OnModuleInit {
    * BƯỚC 1: Chi nhánh tạo yêu cầu mua hàng (PR)
    */
   @Post()
+  @AuditLogAction({
+    actionCode: 'PR_CREATE',
+    actionName: 'Tạo yêu cầu mua hàng',
+    module: 'Purchase',
+    eventType: 'CREATE',
+    entityType: 'PurchaseRequisition',
+  })
   async createPurchaseRequisition(@Body() data: any) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.create', data);
   }
@@ -47,6 +57,13 @@ export class PurchaseRequisitionController implements OnModuleInit {
 
 
   @Post('process-urgent')
+  @AuditLogAction({
+    actionCode: 'PR_PROCESS_URGENT',
+    actionName: 'Xử lý yêu cầu mua hàng khẩn cấp',
+    module: 'Purchase',
+    eventType: 'APPROVE',
+    entityType: 'PurchaseRequisition',
+  })
   async processUrgentPurchaseRequisitions(@Body() data: any) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.process_urgent', data);
   }

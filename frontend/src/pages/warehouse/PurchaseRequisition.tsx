@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
 import { branchService } from "../../services/branch.service";
 import { CreatePOModal } from "../../components/CreatePOModal";
+import api from "../../services/api";
 
 // --- In-memory cache for instant back-navigation (resets on page refresh/new login) ---
 const prCache: Record<string, { data: any[]; ts: number }> = {};
@@ -62,19 +63,11 @@ export function PurchaseRequisition() {
   const fetchData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
-      const res = await fetch(`/api/purchase-requisitions?status=${tab}`, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        setPrList(data);
-        setCachedPrList(tab, data);
-      }
+      const res = await api.get(`/api/purchase-requisitions?status=${tab}`);
+      setPrList(res.data);
+      setCachedPrList(tab, res.data);
     } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        console.error('PR fetch timed out after 20s');
-      }
+      console.error('PR fetch error:', err);
     } finally { setLoading(false); }
   };
 
@@ -284,24 +277,17 @@ export function PurchaseRequisition() {
                       setActionLoading(true);
                       setMsg(null);
                       try {
-                        const res = await fetch("/api/stock-transfers", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            prId: detailPr._id,
-                            shippedBy: "Nguyễn Văn A",
-                            fromBranchId: selectedSourceBranch
-                          }),
+                        const res = await api.post("/api/stock-transfers", {
+                          prId: detailPr._id,
+                          shippedBy: "Nguyễn Văn A",
+                          fromBranchId: selectedSourceBranch
                         });
-                        const resData = await res.json();
-                        if (!res.ok) {
-                          throw new Error(resData.message || "Không thể chuyển kho");
-                        }
-                        setMsg({ type: "success", text: resData.message || "Đã tạo phiếu chuyển kho thành công!" });
+                        setMsg({ type: "success", text: res.data.message || "Đã tạo phiếu chuyển kho thành công!" });
                         setDetailPr(null);
                         fetchData();
                       } catch (err: any) {
-                        setMsg({ type: "error", text: err.message || "Đã xảy ra lỗi" });
+                        const errorResponse = err?.response?.data;
+                        setMsg({ type: "error", text: errorResponse?.message || err.message || "Đã xảy ra lỗi" });
                       } finally {
                         setActionLoading(false);
                       }
