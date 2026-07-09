@@ -1,7 +1,7 @@
 import { ReactNode, useState, useEffect } from "react";
-import { 
-  Users, 
-  ArrowUpRight, 
+import {
+  Users,
+  ArrowUpRight,
   ArrowDownRight,
   DollarSign,
   Activity,
@@ -140,10 +140,10 @@ export function DashboardHome() {
             { title: "Phát hiện bất thường bảo mật", value: "0", icon: <ShieldCheck size={20} />, trend: "Hệ thống ổn định", trendUp: true },
           ],
           actions: [
-            { id: "UC-58", name: "Quản lý Role & Phân quyền", icon: <ShieldCheck size={24} />, color: "bg-slate-100 text-slate-700 border-slate-300" },
-            { id: "UC-26", name: "So sánh hiệu suất chuỗi", icon: <Building2 size={24} />, color: "bg-blue-50 text-blue-600 border-blue-200" },
-            { id: "UC-28", name: "Đồng bộ DM Toàn chuỗi", icon: <RotateCcw size={24} />, color: "bg-indigo-50 text-indigo-600 border-indigo-200" },
-            { id: "UC-34", name: "Dự báo Nhu cầu (AI)", icon: <Sparkles size={24} />, color: "bg-emerald-50 text-emerald-600 border-emerald-200" },
+            { id: "UC-58", name: "Quản lý Role & Phân quyền", icon: <ShieldCheck size={24} />, color: "bg-slate-100 text-slate-700 border-slate-300", link: "#" },
+            { id: "UC-26", name: "So sánh hiệu suất chuỗi", icon: <Building2 size={24} />, color: "bg-blue-50 text-blue-600 border-blue-200", link: "#" },
+            { id: "UC-28", name: "Đồng bộ DM Toàn chuỗi", icon: <RotateCcw size={24} />, color: "bg-indigo-50 text-indigo-600 border-indigo-200", link: "/admin/price-management" },
+            { id: "UC-34", name: "Dự báo Nhu cầu (AI)", icon: <Sparkles size={24} />, color: "bg-emerald-50 text-emerald-600 border-emerald-200", link: "#" },
             { id: "UC-48", name: "Cấu hình Global Price", icon: <DollarSign size={24} />, color: "bg-amber-50 text-amber-600 border-amber-200" },
             { id: "UC-59", name: "Audit Logs Toàn hệ thống", icon: <History size={24} />, color: "bg-slate-100 text-slate-700 border-slate-300" },
           ]
@@ -160,28 +160,28 @@ export function DashboardHome() {
     { id: 4, type: "expiring", item: "Panadol Extra", branch: "CN2 (Q.2)", expiryDate: "15/12/2026", time: "Hệ thống AI" },
   ];
 
-  const displayLowStock = lowStockList.length > 0 
+  const displayLowStock = lowStockList.length > 0
     ? lowStockList.slice(0, 10).map((item, index) => ({
-        id: item.id || String(index),
-        item: item.name,
-        branch: "Kho trung tâm",
-        current: item.stock,
-        min: item.minStock,
-        status: item.stock === 0 ? "Hết hàng" : "Sắp hết",
-        badgeClass: item.stock === 0 ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-amber-50 text-amber-700 border-amber-200"
-      }))
+      id: item.id || String(index),
+      item: item.name,
+      branch: "Kho trung tâm",
+      current: item.stock,
+      min: item.minStock,
+      status: item.stock === 0 ? "Hết hàng" : "Sắp hết",
+      badgeClass: item.stock === 0 ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-amber-50 text-amber-700 border-amber-200"
+    }))
     : issues.filter(i => i.type === 'low_stock').map(i => ({ ...i, badgeClass: "bg-amber-50 text-amber-700 border-amber-200", status: "Sắp hết" }));
 
-  const displayExpiring = expiringList.length > 0 
+  const displayExpiring = expiringList.length > 0
     ? expiringList.slice(0, 10).map((item, index) => ({
-        id: item.id || String(index),
-        item: item.medicineName,
-        branch: `Lô: ${item.batchNo} (${item.unit})`,
-        expiryDate: item.expDate,
-        time: item.status === 'EXPIRED' ? 'Đã hết hạn' : 'Hệ thống AI',
-        badgeText: item.status === 'EXPIRED' ? 'Hết hạn' : 'Gần hết hạn',
-        badgeClass: item.status === 'EXPIRED' ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-amber-50 text-amber-700 border-amber-200"
-      }))
+      id: item.id || String(index),
+      item: item.medicineName,
+      branch: `Lô: ${item.batchNo} (${item.unit})`,
+      expiryDate: item.expDate,
+      time: item.status === 'EXPIRED' ? 'Đã hết hạn' : 'Hệ thống AI',
+      badgeText: item.status === 'EXPIRED' ? 'Hết hạn' : 'Gần hết hạn',
+      badgeClass: item.status === 'EXPIRED' ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-amber-50 text-amber-700 border-amber-200"
+    }))
     : issues.filter(i => i.type === 'expiring').map(i => ({ ...i, badgeText: 'Gần hết hạn', badgeClass: "bg-rose-50 text-rose-700 border-rose-200" }));
 
   return (
@@ -196,9 +196,9 @@ export function DashboardHome() {
         <h2 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-4">Các chức năng khả dụng (Role-based)</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {data.actions.map((action, i) => (
-            <Link 
-              key={i} 
-              to="#" 
+            <Link
+              key={i}
+              to={action.link || "#"}
               className={`flex flex-col p-5 rounded-2xl border transition-all hover:-translate-y-1 hover:shadow-lg bg-white border-slate-200 group`}
             >
               <div className={`p-3 rounded-xl mb-4 w-fit ${action.color} transition-colors`}>
@@ -214,11 +214,11 @@ export function DashboardHome() {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {data.stats.map((stat, i) => (
-          <StatCard 
+          <StatCard
             key={i}
             title={stat.title}
-            value={stat.value} 
-            icon={stat.icon} 
+            value={stat.value}
+            icon={stat.icon}
             trend={stat.trend}
             trendUp={stat.trendUp}
           />
@@ -226,17 +226,17 @@ export function DashboardHome() {
 
         {role === "admin" || role === "head_branch" ? (
           <>
-            <StatCard 
-              title="Tổng số Chi nhánh" 
-              value="8" 
-              icon={<Building2 size={20} />} 
+            <StatCard
+              title="Tổng số Chi nhánh"
+              value="8"
+              icon={<Building2 size={20} />}
               trend="Đang hoạt động: 8"
               trendUp={true}
             />
-            <StatCard 
-              title="AI Cảnh báo cần xử lý" 
-              value="12" 
-              icon={<AlertTriangle size={20} />} 
+            <StatCard
+              title="AI Cảnh báo cần xử lý"
+              value="12"
+              icon={<AlertTriangle size={20} />}
               trend="+3 cảnh báo mới hôm nay"
               trendUp={false}
             />
@@ -249,71 +249,71 @@ export function DashboardHome() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[400px]">
             <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <RotateCcw size={18} className="text-amber-500" /> 
+                <RotateCcw size={18} className="text-amber-500" />
                 Cảnh Báo Tồn Kho (UC-38)
               </h3>
               <span className="px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-lg border border-amber-200">
-                 {lowStockList.length > 0 ? lowStockList.length : issues.filter(i => i.type === 'low_stock').length} mục
+                {lowStockList.length > 0 ? lowStockList.length : issues.filter(i => i.type === 'low_stock').length} mục
               </span>
             </div>
             <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
-               {displayLowStock.map(alert => (
-                   <div key={alert.id} className="p-4 hover:bg-slate-50 transition-colors flex items-start gap-4">
-                      <div className="p-2 bg-amber-100 text-amber-600 rounded-xl shrink-0 mt-0.5">
-                         <RotateCcw size={20} />
+              {displayLowStock.map(alert => (
+                <div key={alert.id} className="p-4 hover:bg-slate-50 transition-colors flex items-start gap-4">
+                  <div className="p-2 bg-amber-100 text-amber-600 rounded-xl shrink-0 mt-0.5">
+                    <RotateCcw size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm">{alert.item}</h4>
+                        <div className="text-xs text-slate-500 font-medium mt-0.5"><Building2 size={10} className="inline mr-1" />{alert.branch}</div>
                       </div>
-                      <div className="flex-1">
-                         <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-bold text-slate-800 text-sm">{alert.item}</h4>
-                              <div className="text-xs text-slate-500 font-medium mt-0.5"><Building2 size={10} className="inline mr-1"/>{alert.branch}</div>
-                            </div>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${alert.badgeClass}`}>
-                               {alert.status}
-                            </span>
-                         </div>
-                         <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">
-                            <span className="font-medium bg-white border border-slate-200 px-2.5 py-1 rounded-md">Hiện tại: <span className="text-amber-600 font-bold">{alert.current}</span> / Min: {alert.min}</span>
-                         </div>
-                      </div>
-                   </div>
-               ))}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${alert.badgeClass}`}>
+                        {alert.status}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">
+                      <span className="font-medium bg-white border border-slate-200 px-2.5 py-1 rounded-md">Hiện tại: <span className="text-amber-600 font-bold">{alert.current}</span> / Min: {alert.min}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[400px]">
             <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <Clock size={18} className="text-rose-500" /> 
+                <Clock size={18} className="text-rose-500" />
                 AI Cảnh Báo Hết Hạn (UC-32)
               </h3>
               <span className="px-2.5 py-1 bg-rose-100 text-rose-700 text-xs font-bold rounded-lg border border-rose-200">
-                 {expiringList.length > 0 ? expiringList.length : issues.filter(i => i.type === 'expiring').length} mục
+                {expiringList.length > 0 ? expiringList.length : issues.filter(i => i.type === 'expiring').length} mục
               </span>
             </div>
             <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
-               {displayExpiring.map(alert => (
-                   <div key={alert.id} className="p-4 hover:bg-slate-50 transition-colors flex items-start gap-4">
-                      <div className="p-2 bg-rose-100 text-rose-600 rounded-xl shrink-0 mt-0.5">
-                         <AlertTriangle size={20} />
+              {displayExpiring.map(alert => (
+                <div key={alert.id} className="p-4 hover:bg-slate-50 transition-colors flex items-start gap-4">
+                  <div className="p-2 bg-rose-100 text-rose-600 rounded-xl shrink-0 mt-0.5">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm">{alert.item}</h4>
+                        <div className="text-xs text-slate-500 font-medium mt-0.5"><Building2 size={10} className="inline mr-1" />{alert.branch}</div>
                       </div>
-                      <div className="flex-1">
-                         <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-bold text-slate-800 text-sm">{alert.item}</h4>
-                              <div className="text-xs text-slate-500 font-medium mt-0.5"><Building2 size={10} className="inline mr-1"/>{alert.branch}</div>
-                            </div>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${alert.badgeClass}`}>
-                               {alert.badgeText}
-                            </span>
-                         </div>
-                         <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">
-                            <span className="font-medium bg-white border border-slate-200 px-2.5 py-1 rounded-md">Ngày hết hạn: <span className="text-rose-600 font-bold">{alert.expiryDate}</span></span>
-                            <span className="text-slate-400 italic flex items-center gap-1"><Sparkles size={12}/> {alert.time}</span>
-                         </div>
-                      </div>
-                   </div>
-               ))}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${alert.badgeClass}`}>
+                        {alert.badgeText}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">
+                      <span className="font-medium bg-white border border-slate-200 px-2.5 py-1 rounded-md">Ngày hết hạn: <span className="text-rose-600 font-bold">{alert.expiryDate}</span></span>
+                      <span className="text-slate-400 italic flex items-center gap-1"><Sparkles size={12} /> {alert.time}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -322,17 +322,17 @@ export function DashboardHome() {
   );
 }
 
-function StatCard({ 
-  title, 
-  value, 
-  icon, 
-  trend, 
-  trendUp 
-}: { 
+function StatCard({
+  title,
+  value,
+  icon,
+  trend,
+  trendUp
+}: {
   key?: any;
-  title: string; 
-  value: string; 
-  icon: ReactNode; 
+  title: string;
+  value: string;
+  icon: ReactNode;
   trend: string;
   trendUp: boolean;
 }) {

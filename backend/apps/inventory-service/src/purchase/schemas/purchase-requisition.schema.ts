@@ -43,7 +43,7 @@ export class PurchaseRequisition extends Document {
   @Prop({
     type: String,
     default: 'SUBMITTED',
-    enum: ['DRAFT', 'SUBMITTED', 'CONSOLIDATED', 'URGENT_PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'],
+    enum: ['DRAFT', 'SUBMITTED', 'WAREHOUSE_SUBMITTED', 'CONSOLIDATED', 'URGENT_PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'],
   })
   status: string;
 
@@ -64,6 +64,12 @@ export class PurchaseRequisition extends Document {
 
   @Prop({ type: String })
   linkedPoId: string; // Sau khi duyệt, link đến PO được tạo
+
+  @Prop({ type: String })
+  warehouseSubmittedBy: string; // User ID của Thủ kho gửi yêu cầu một Hạng
+
+  @Prop({ type: Date })
+  warehouseSubmittedAt: Date;
 }
 
 export const PurchaseRequisitionSchema = SchemaFactory.createForClass(PurchaseRequisition);

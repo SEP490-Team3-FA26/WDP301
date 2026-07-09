@@ -221,6 +221,7 @@ export class OrdersServiceService implements OnModuleInit {
       redeemedPoints,
       pointsDiscount,
       earnedPoints,
+      branchId: data.branchId || 'BR-001',
     });
 
     // ========================================================
@@ -245,7 +246,7 @@ export class OrdersServiceService implements OnModuleInit {
       }
     }
 
-    let saleRes;
+      let saleRes;
     try {
       // Step 2: Deduct Loyalty Points (Reserve)
       if (redeemedPoints > 0) {
@@ -256,12 +257,14 @@ export class OrdersServiceService implements OnModuleInit {
           })
         );
       }
+    } catch (err) {
+      this.logger.error('Error reserving loyalty points:', err);
+      throw new RpcException({ message: `Lỗi trừ điểm tích lũy: ${err.message}` });
+    }
 
-      // Step 3: Reserve Inventory
-      saleRes = await this.deductInventory(newOrder);
-
-      // Branching logic based on payment method
-      if (data.paymentMethod === 'QR_PAY') {
+    // Branching logic based on payment method
+    if (data.paymentMethod === 'QR_PAY') {
+      try {
         // Step 4A: Generate PayOS Link
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
 
@@ -295,10 +298,10 @@ export class OrdersServiceService implements OnModuleInit {
           qrCode: paymentLinkRes.qrCode,
           order: newOrder,
         };
+      } catch (err: any) {
+        this.logger.error('Error creating PayOS payment link:', err);
+        throw new RpcException({ message: `Lỗi tạo link thanh toán PayOS: ${err.message}` });
       }
-    } catch (err) {
-      this.logger.error('Error creating PayOS payment link:', err);
-      throw new RpcException({ message: `Lỗi tạo link thanh toán PayOS: ${err.message}` });
     }
 
     // CASH or CARD: Complete order instantly
@@ -339,7 +342,7 @@ export class OrdersServiceService implements OnModuleInit {
         order: newOrder,
         saleResult: saleRes,
       };
-    } catch (err) {
+    } catch (err: any) {
       this.logger.error('Error deducting inventory:', err);
 
       // Asynchronously trigger sending invoice email even if inventory deduction fails
@@ -481,6 +484,7 @@ export class OrdersServiceService implements OnModuleInit {
       patientName: order.patientName,
       patientPhone: order.patientPhone,
       soldBy: order.type === 'ONLINE' ? 'Khách đặt online' : 'Dược sĩ tại quầy',
+      branchId: order.branchId || null,
     };
 
     return new Promise((resolve, reject) => {

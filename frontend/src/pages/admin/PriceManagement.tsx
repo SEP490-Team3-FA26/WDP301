@@ -85,6 +85,7 @@ export function PriceManagement() {
   // Copy modal state
   const [copyToBranch, setCopyToBranch] = useState<string>("");
   const [copyLoading, setCopyLoading] = useState(false);
+  const [syncAll, setSyncAll] = useState(false);
 
   // Add modal state
   const [addMedicineId, setAddMedicineId] = useState<string>("");
@@ -192,12 +193,33 @@ export function PriceManagement() {
 
   // Copy price list
   const handleCopy = async () => {
-    if (!selectedBranch || !copyToBranch || selectedBranch === copyToBranch) return;
+    if (!selectedBranch) return;
+    if (!syncAll && (!copyToBranch || selectedBranch === copyToBranch)) return;
+    
     setCopyLoading(true);
     try {
-      await pricingService.copyPrices(selectedBranch, copyToBranch);
+      if (syncAll) {
+        await fetch(`${API_BASE}/api/pricing/sync-all`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({ fromBranchId: selectedBranch }),
+        });
+        alert("Đồng bộ giá tới tất cả chi nhánh thành công!");
+      } else {
+        await fetch(`${API_BASE}/api/pricing/copy`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({ fromBranchId: selectedBranch, toBranchId: copyToBranch }),
+        });
+        alert("Sao chép bảng giá thành công!");
+      }
       setShowCopyModal(false);
-      alert("Sao chép bảng giá thành công!");
     } catch (err) {
       console.error("Lỗi sao chép bảng giá", err);
     } finally {
@@ -803,25 +825,39 @@ export function PriceManagement() {
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
                   <strong>Lưu ý:</strong> Các bảng giá đã tồn tại ở chi nhánh đích sẽ bị ghi đè.
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
-                    Chi nhánh đích
-                  </label>
-                  <select
-                    value={copyToBranch}
-                    onChange={(e) => setCopyToBranch(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0057cd]/20 focus:border-[#0057cd]"
-                  >
-                    <option value="">— Chọn chi nhánh —</option>
-                    {branches
-                      .filter((b) => b._id !== selectedBranch)
-                      .map((b) => (
-                        <option key={b._id} value={b._id}>
-                          {b.branchCode} — {b.name}
-                        </option>
-                      ))}
-                  </select>
+                
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="syncAll"
+                    checked={syncAll}
+                    onChange={(e) => setSyncAll(e.target.checked)}
+                    className="w-4 h-4 text-[#0057cd] border-slate-300 rounded focus:ring-[#0057cd]"
+                  />
+                  <label htmlFor="syncAll" className="text-sm text-slate-700 font-medium">Đồng bộ cho TẤT CẢ chi nhánh</label>
                 </div>
+
+                {!syncAll && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
+                      Chi nhánh đích
+                    </label>
+                    <select
+                      value={copyToBranch}
+                      onChange={(e) => setCopyToBranch(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0057cd]/20 focus:border-[#0057cd]"
+                    >
+                      <option value="">— Chọn chi nhánh —</option>
+                      {branches
+                        .filter((b) => b._id !== selectedBranch)
+                        .map((b) => (
+                          <option key={b._id} value={b._id}>
+                            {b.branchCode} — {b.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="p-6 border-t border-slate-200 flex justify-end gap-3">
                 <button
@@ -831,7 +867,7 @@ export function PriceManagement() {
                   Hủy
                 </button>
                 <button
-                  disabled={!copyToBranch || copyLoading}
+                  disabled={(!syncAll && !copyToBranch) || copyLoading}
                   onClick={handleCopy}
                   className="px-6 py-2.5 text-sm font-medium text-white bg-[#0057cd] hover:bg-[#004bb1] rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >

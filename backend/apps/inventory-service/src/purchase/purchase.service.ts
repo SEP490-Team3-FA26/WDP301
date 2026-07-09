@@ -129,6 +129,17 @@ export class PurchaseService {
     return pr;
   }
 
+  /**
+   * Cập nhật trạng thái PR (ví dụ: OUT_OF_STOCK)
+   */
+  async updatePurchaseRequisitionStatus(id: string, status: string) {
+    const pr = await this.prModel.findById(id).exec();
+    if (!pr) throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${id}` });
+    pr.status = status;
+    await pr.save();
+    return pr;
+  }
+
   // ===========================================================================================
   // BƯỚC 2: APPROVAL & CONSOLIDATION (Gom đơn bởi Quản lý kho → Duyệt bởi HQ)
   // ===========================================================================================
@@ -196,6 +207,12 @@ export class PurchaseService {
       supplierGroups.set(item.supplierId, group);
     }
 
+    let prCodes: string[] = [];
+    if (data.prIds && data.prIds.length > 0) {
+      const prs = await this.prModel.find({ _id: { $in: data.prIds } }).exec();
+      prCodes = prs.map(pr => pr.prCode);
+    }
+
     const createdPoIds: string[] = [];
     for (const [supplierId, items] of supplierGroups.entries()) {
       let supplier;
@@ -238,6 +255,8 @@ export class PurchaseService {
         expectedIncoming,
         status: 'PENDING_APPROVAL',
         createdBy: data.createdBy || '',
+        linkedPrIds: data.prIds || [],
+        linkedPrCodes: prCodes,
       });
 
       await po.save();
@@ -357,6 +376,36 @@ export class PurchaseService {
   // ===========================================================================================
   // BƯỚC 4: GRN - GOODS RECEIPT NOTE (Phiếu nhập kho — chốt chặn quan trọng nhất)
   // ===========================================================================================
+
+  async receivePurchaseOrder(data: { id: string; receivedBy: string }) {
+    this.logger.log(`Auto receiving PO: ${data.id}`);
+    const po = await this.poModel.findById(data.id).exec();
+    if (!po) {
+      throw new RpcException({ message: `Không tìm thấy PO: ${data.id}` });
+    }
+
+    // Auto-generate items for full receipt
+    const expDate = new Date();
+    expDate.setFullYear(expDate.getFullYear() + 1); // Mock 1 year expDate
+    
+    const items = po.items.map((item, index) => ({
+      medicineId: item.medicineId,
+      batchNo: `BATCH-${new Date().getTime().toString().slice(-6)}-${index}`,
+      expDate: expDate.toISOString(),
+      quantity: item.quantity - (item.receivedQuantity || 0),
+      unitPrice: item.unitPrice
+    })).filter(item => item.quantity > 0);
+
+    if (items.length === 0) {
+      throw new RpcException({ message: 'Đơn hàng này đã nhận đủ số lượng' });
+    }
+
+    return await this.createGoodsReceiptNote({
+      poId: data.id,
+      receivedBy: data.receivedBy || 'Thủ Kho',
+      items
+    });
+  }
 
   /**
    * Tạo Goods Receipt Note khi hàng về.

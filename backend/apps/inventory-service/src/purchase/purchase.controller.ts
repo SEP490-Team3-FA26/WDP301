@@ -39,6 +39,16 @@ export class PurchaseController {
     }
   }
 
+  @MessagePattern('inventory.pr.update_status')
+  async updatePurchaseRequisitionStatus(@Payload() data: { id: string, status: string }) {
+    try {
+      return await this.purchaseService.updatePurchaseRequisitionStatus(data.id, data.status);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật trạng thái PR');
+    }
+  }
+
   // ===========================================================================================
   // BƯỚC 2: APPROVAL & CONSOLIDATION
   // ===========================================================================================
@@ -106,6 +116,16 @@ export class PurchaseController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi từ chối nhận hàng PO');
+    }
+  }
+
+  @MessagePattern('inventory.po.receive')
+  async receivePurchaseOrder(@Payload() data: any) {
+    try {
+      return await this.purchaseService.receivePurchaseOrder(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi nhận hàng PO');
     }
   }
 
