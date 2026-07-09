@@ -98,7 +98,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
 
   const handleCreate = () => {
     if (type === "import") {
-      const basePath = pathname.endsWith("/") ? pathname : `${pathname}/`;
+      const basePath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;
       navigate(`${basePath}new`);
     }
   };
