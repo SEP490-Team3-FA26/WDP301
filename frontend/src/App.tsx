@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { NotificationProvider } from "./contexts/NotificationContext";
 
 // Layouts
 import { AuthLayout } from "./layouts/AuthLayout";
@@ -71,7 +72,8 @@ function RedirectWithSearch({ to }: { to: string }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <NotificationProvider>
+        <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/interactions" element={<DrugInteractions />} />
@@ -181,6 +183,7 @@ export default function App() {
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </NotificationProvider>
     </BrowserRouter>
   );
 }

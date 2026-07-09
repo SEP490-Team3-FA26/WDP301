@@ -1,13 +1,13 @@
 import { Controller, Post, Get, Patch, Query, Param, Body, Inject, OnModuleInit } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
-import { SocketGateway } from '../socket/socket.gateway';
+import { AppWebsocketGateway } from '../websocket/websocket.gateway';
 
 @Controller('api/purchase-requisitions')
 export class PurchaseRequisitionController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
-    private readonly socketGateway: SocketGateway,
+    private readonly websocketGateway: AppWebsocketGateway,
   ) {}
 
   async onModuleInit() {
@@ -25,7 +25,25 @@ export class PurchaseRequisitionController implements OnModuleInit {
    */
   @Post()
   async createPurchaseRequisition(@Body() data: any) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.create', data);
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.create', data);
+    
+    // Emit notification to admin room
+    if (result && this.websocketGateway.server) {
+      this.websocketGateway.server.to('admin').emit('new_pr_notification', {
+        type: 'NEW_PR',
+        prId: result._id,
+        prCode: result.prCode,
+        branchName: result.branchName,
+        branchId: result.branchId,
+        itemsCount: result.items?.length || 0,
+        createdAt: result.createdAt,
+        createdBy: data.createdBy || 'Chi nhánh',
+        message: `${result.branchName} vừa tạo yêu cầu nhập hàng ${result.prCode}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    
+    return result;
   }
 
   /**
@@ -56,8 +74,8 @@ export class PurchaseRequisitionController implements OnModuleInit {
     const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.update_status', { id, status: data.status });
     
     // Broadcast real-time event to all connected frontend clients
-    if (this.socketGateway.server) {
-      this.socketGateway.server.emit('pr_updated', { id, status: data.status });
+    if (this.websocketGateway.server) {
+      this.websocketGateway.server.emit('pr_updated', { id, status: data.status });
     }
     
     return result;

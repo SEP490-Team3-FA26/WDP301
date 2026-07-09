@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Mail, Lock, Building2, PackageSearch, Store, Pill, ShieldCheck, CheckCircle2, Users } from "lucide-react";
 import { authService } from "../../services/auth.service";
+import { requestNotificationPermission } from "../../utils/notificationPermission";
 
 export function Login() {
   const navigate = useNavigate();
@@ -72,6 +73,11 @@ export function Login() {
       // Lưu JWT Token và Role
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("userRole", data.user.role);
+
+      // Request notification permission (don't block login)
+      requestNotificationPermission().catch(err => {
+        console.warn('Failed to request notification permission:', err);
+      });
 
       // Redirect theo Role
       navigate(redirectByRole(data.user.role));
