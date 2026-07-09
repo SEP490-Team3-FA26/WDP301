@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import {
   Plus, X, CheckCircle2, AlertTriangle, Loader2, ClipboardList,
-  Calendar, Package, Trash2, Send, FileText, ChevronRight, Eye
+  Calendar, Package, Trash2, Send, FileText, ChevronRight, Eye, Search, ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
 import { medicineService } from "../../services/medicine.service";
+import { CreatePRModal } from "../../components/CreatePRModal";
+import { useSocket } from "../../hooks/useSocket";
 
 /**
  * BƯỚC 1 — Quản lý Chi nhánh tạo PR (Yêu cầu mua hàng) gửi lên Trụ sở.
@@ -42,6 +44,24 @@ export function BranchRequisition() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  //===============================================
+  // SOCKET.IO
+  //===============================================
+  // Real-time listener for PR updates
+  const { onEvent, offEvent } = useSocket();
+  useEffect(() => {
+    const handlePrUpdated = () => {
+      fetchData();
+    };
+    onEvent('pr_updated', handlePrUpdated);
+    return () => {
+      offEvent('pr_updated', handlePrUpdated);
+    };
+  }, []);
+
+
+  //===============================================
 
   const statusBadge = (s: string) => {
     const styles: Record<string, string> = {
@@ -175,377 +195,6 @@ export function BranchRequisition() {
           </div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-// ==================== CREATE PR MODAL ====================
-function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; onClose: () => void; onSuccess: (msg: string) => void }) {
-  const [branchName, setBranchName] = useState("Chi nhánh Quận 1");
-  const [reason, setReason] = useState("");
-  const [isUrgent, setIsUrgent] = useState(false);
-  const [items, setItems] = useState<{ medicineId: string; quantity: number }[]>([]);
-  const [selMed, setSelMed] = useState("");
-  const [selQty, setSelQty] = useState(20);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const addItem = () => {
-    if (!selMed) return;
-    if (selQty <= 0) {
-      setErr("Số lượng phải lớn hơn 0");
-      return;
-    }
-    const idx = items.findIndex(i => i.medicineId === selMed);
-    if (idx >= 0) {
-      const u = [...items];
-      u[idx].quantity += selQty;
-      setItems(u);
-    } else {
-      setItems([...items, { medicineId: selMed, quantity: selQty }]);
-    }
-    setSelMed("");
-    setSelQty(20);
-    setErr(null);
-  };
-
-  const removeItem = (idx: number) => {
-    setItems(items.filter((_, i) => i !== idx));
-  };
-
-  const getMedDetails = (id: string) => medicines.find(m => m.id === id || m._id === id);
-  const getMedName = (id: string) => getMedDetails(id)?.name || id.slice(-8);
-
-  const handleSubmit = async () => {
-    if (items.length === 0) {
-      setErr("Vui lòng thêm ít nhất 1 sản phẩm vào danh sách");
-      return;
-    }
-    if (!reason.trim()) {
-      setErr("Vui lòng nhập lý do yêu cầu");
-      return;
-    }
-    setIsSubmitting(true);
-    setErr(null);
-    try {
-      const res = await fetch("/api/purchase-requisitions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          branchName,
-          reason,
-          isUrgent,
-          items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity })),
-        }),
-      });
-      const resData = await res.json();
-      onSuccess(resData.message || "Gửi yêu cầu thành công!");
-    } catch (e: any) {
-      setErr(e.response?.data?.message || "Lỗi tạo yêu cầu");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100"
-      >
-        {/* Header */}
-        <div className="px-6 py-4.5 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-indigo-50/30 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shadow-sm">
-              <Send size={20} />
-            </div>
-            <div>
-              <h2 className="font-extrabold text-slate-900 text-lg">Tạo Yêu Cầu Nhập Thuốc Mới</h2>
-              <p className="text-xs font-semibold text-blue-700">Bước 1 — Gửi Purchase Requisition (PR) lên Trụ sở</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 overflow-y-auto flex-1 bg-white">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            {/* Cột trái: Thông tin & Thêm thuốc */}
-            <div className="md:col-span-5 space-y-5">
-              {/* Form Thông tin chung */}
-              <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200/60 space-y-3.5 shadow-sm">
-                <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
-                  <ClipboardList size={14} className="text-blue-600" />
-                  1. Thông tin chung
-                </h3>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">CHI NHÁNH YÊU CẦU</label>
-                  <select
-                    value={branchName}
-                    onChange={e => setBranchName(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shadow-sm"
-                  >
-                    <option>Chi nhánh Quận 1</option>
-                    <option>Chi nhánh Quận 7</option>
-                    <option>Chi nhánh Thủ Đức</option>
-                    <option>Chi nhánh Bình Thạnh</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">LÝ DO YÊU CẦU *</label>
-                  <textarea
-                    rows={2}
-                    value={reason}
-                    onChange={e => setReason(e.target.value)}
-                    placeholder="VD: Mùa dịch cúm, cần bổ sung gấp kho dự phòng chi nhánh..."
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm resize-none"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg">
-                  <input
-                    type="checkbox"
-                    id="isUrgent"
-                    checked={isUrgent}
-                    onChange={(e) => setIsUrgent(e.target.checked)}
-                    className="w-4 h-4 text-rose-600 rounded focus:ring-rose-500"
-                  />
-                  <label htmlFor="isUrgent" className="text-sm font-bold text-rose-700 cursor-pointer">
-                    Đánh dấu là Yêu Cầu Hỏa Tốc
-                  </label>
-                </div>
-              </div>
-
-              {/* Form Thêm thuốc */}
-              <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200/60 space-y-4 shadow-sm">
-                <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
-                  <Package size={14} className="text-blue-600" />
-                  2. Chọn thuốc cần thêm
-                </h3>
-
-                {/* Dropdown chọn thuốc */}
-                <div className="w-full min-w-0">
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">CHỌN THUỐC</label>
-                  <div className="w-full min-w-0">
-                    <select
-                      value={selMed}
-                      onChange={e => {
-                        setSelMed(e.target.value);
-                        setErr(null);
-                      }}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shadow-sm truncate"
-                    >
-                      <option value="">-- Click để chọn thuốc --</option>
-                      {medicines.map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} {m.stock <= 50 ? "⚠️ (Sắp hết)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Thông tin nhanh về thuốc đang chọn */}
-                  {selMed && (
-                    <div className="mt-2 text-xs font-semibold text-slate-500 bg-blue-50/50 p-2.5 rounded-lg border border-blue-100 flex justify-between items-center">
-                      <span>Tồn kho hiện tại:</span>
-                      <span
-                        className={`font-bold ${(getMedDetails(selMed)?.stock ?? 0) <= 50 ? "text-amber-600" : "text-slate-700"
-                          }`}
-                      >
-                        {getMedDetails(selMed)?.stock ?? 0} {getMedDetails(selMed)?.unit || "Hộp"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Số lượng */}
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">SỐ LƯỢNG YÊU CẦU</label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelQty(prev => Math.max(1, prev - 1))}
-                      className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition-all font-bold shadow-sm"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      value={selQty}
-                      onChange={e => setSelQty(Math.max(1, Number(e.target.value)))}
-                      className="flex-1 min-w-0 w-0 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-center text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setSelQty(prev => prev + 1)}
-                      className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition-all font-bold shadow-sm"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  {/* Phím tắt chọn nhanh số lượng */}
-                  <div className="flex gap-1.5 mt-2">
-                    {[50, 100, 200, 500].map(q => (
-                      <button
-                        key={q}
-                        type="button"
-                        onClick={() => setSelQty(q)}
-                        className={`flex-1 py-1 text-[11px] font-bold rounded border transition-all ${selQty === q
-                          ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                          }`}
-                      >
-                        {q}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={addItem}
-                  disabled={!selMed}
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 shadow-md disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed disabled:shadow-none"
-                >
-                  <Plus size={16} /> Thêm vào danh sách
-                </button>
-              </div>
-            </div>
-
-            {/* Cột phải: Danh sách thuốc đã thêm */}
-            <div className="md:col-span-7 flex flex-col h-full min-h-[350px]">
-              <div className="border border-slate-200 rounded-xl overflow-hidden flex flex-col h-full bg-slate-50/30 flex-1">
-                {/* Tiêu đề danh sách */}
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
-                  <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                    <ClipboardList size={14} className="text-blue-600" />
-                    Danh sách thuốc yêu cầu
-                  </span>
-                  <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-extrabold rounded-full shadow-sm">
-                    {items.length} thuốc
-                  </span>
-                </div>
-
-                {/* Danh sách items */}
-                <div className="p-4 flex-1 overflow-y-auto max-h-[380px] min-h-[260px] space-y-2">
-                  <AnimatePresence initial={false}>
-                    {items.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12 gap-3">
-                        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center border border-dashed border-slate-300">
-                          <Package size={26} className="text-slate-400" />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm font-bold text-slate-600">Chưa chọn thuốc nào</p>
-                          <p className="text-xs text-slate-400 mt-1 max-w-[250px] leading-relaxed">
-                            Chọn thuốc và nhập số lượng ở cột bên trái, sau đó bấm nút "Thêm vào danh sách".
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      items.map((it, i) => {
-                        const med = getMedDetails(it.medicineId);
-                        return (
-                          <motion.div
-                            key={it.medicineId}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 hover:border-blue-200 transition-all shadow-sm"
-                          >
-                            <div className="flex items-center gap-3 flex-1 min-w-0 pr-3">
-                              {med?.image ? (
-                                <div className="w-10 h-10 rounded-lg border border-slate-100 overflow-hidden flex-shrink-0 p-1 bg-white">
-                                  <img src={med.image} alt={med.name} className="w-full h-full object-contain" />
-                                </div>
-                              ) : (
-                                <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center flex-shrink-0 text-slate-400">
-                                  <Package size={18} />
-                                </div>
-                              )}
-                              <div className="min-w-0 flex-1">
-                                <span className="text-sm font-bold text-slate-800 block truncate" title={med?.name}>
-                                  {getMedName(it.medicineId)}
-                                </span>
-                                <span className="text-[10px] font-semibold text-slate-500 block mt-0.5">
-                                  Kho: <span className="text-slate-700 font-bold">{med?.stock ?? 0}</span> | Đơn vị: {med?.unit || "Hộp"}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase">SL:</span>
-                                <span className="text-xs font-black text-blue-700 bg-blue-50 px-2 rounded-lg border border-blue-100">
-                                  {it.quantity}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => removeItem(i)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </div>
-                          </motion.div>
-                        );
-                      })
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Summary ở cuối danh sách */}
-                {items.length > 0 && (
-                  <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center text-xs font-bold text-slate-700 shrink-0">
-                    <span>TỔNG SỐ LƯỢNG YÊU CẦU:</span>
-                    <span className="text-sm text-blue-700 font-black">
-                      {items.reduce((sum, item) => sum + item.quantity, 0)} sản phẩm
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {err && (
-            <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold flex items-center gap-2">
-              <AlertTriangle size={15} />
-              {err}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4.5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4.5 py-2 text-slate-600 font-bold hover:bg-slate-100 active:bg-slate-200 rounded-xl text-sm transition-all"
-          >
-            Hủy
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSubmitting || items.length === 0}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center gap-2 text-sm disabled:bg-slate-300 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg disabled:shadow-none"
-          >
-            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            {isSubmitting ? "Đang gửi..." : "Gửi yêu cầu nhập thuốc"}
-          </button>
-        </div>
-      </motion.div>
     </div>
   );
 }
