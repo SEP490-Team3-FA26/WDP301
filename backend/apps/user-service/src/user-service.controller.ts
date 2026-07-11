@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { MessagePattern, EventPattern, Payload } from '@nestjs/microservices';
 import { UserService } from './user-service.service';
 import { BranchService } from './branch.service';
 
@@ -81,6 +81,38 @@ export class UserServiceController {
   @MessagePattern('user.loyalty.update_points')
   handleUpdatePoints(@Payload() data: { phone?: string; userId?: string; pointsDelta: number; accumulatedDelta?: number }) {
     return this.userService.updatePoints(data);
+  }
+
+  // --- ADMIN EMPLOYEE MANAGEMENT ---
+
+  @MessagePattern('user.admin.employee.create')
+  handleCreateEmployee(@Payload() data: any) {
+    return this.userService.createEmployee(data);
+  }
+
+  @MessagePattern('user.admin.employee.list')
+  handleListEmployees(@Payload() data: any) {
+    return this.userService.listEmployees(data);
+  }
+
+  @MessagePattern('user.admin.employee.get')
+  handleGetEmployee(@Payload() data: { id: string }) {
+    return this.userService.getEmployeeById(data.id);
+  }
+
+  @MessagePattern('user.admin.employee.update')
+  handleUpdateEmployee(@Payload() data: any) {
+    return this.userService.updateEmployee(data.id, data);
+  }
+
+  @MessagePattern('user.admin.employee.ban_unban')
+  handleToggleBanEmployee(@Payload() data: { id: string }) {
+    return this.userService.toggleBanEmployee(data.id);
+  }
+
+  @EventPattern('user.branch.alert.low_stock')
+  handleLowStockAlertEvent(@Payload() data: any) {
+    return this.branchService.handleLowStockAlert(data);
   }
 }
 

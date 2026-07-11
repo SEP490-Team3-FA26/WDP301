@@ -22,7 +22,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   const isAdmin = location.pathname.includes('/admin');
   const [searchParams, setSearchParams] = useSearchParams();
   const activeSubTab = (searchParams.get("tab") as "grn" | "po") || "grn";
-  const setActiveSubTab = (tab: "grn" | "po") => setSearchParams({ tab });
+  const setActiveSubTabHandler = (tab: "grn" | "po") => setSearchParams({ tab });
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
 
@@ -98,7 +98,8 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
 
   const handleCreate = () => {
     if (type === "import") {
-      navigate("new");
+      const basePath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;
+      navigate(`${basePath}new`);
     }
   };
 
@@ -169,7 +170,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
       {type === "import" && (
         <div className="flex border-b border-slate-200 mb-6 gap-2">
           <button
-            onClick={() => setActiveSubTab("grn")}
+            onClick={() => setActiveSubTabHandler("grn")}
             className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${activeSubTab === "grn"
                 ? "border-[#0057cd] text-[#0057cd]"
                 : "border-transparent text-slate-500 hover:text-slate-700"
@@ -179,7 +180,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
             Phiếu Nhập Kho (GRN)
           </button>
           <button
-            onClick={() => setActiveSubTab("po")}
+            onClick={() => setActiveSubTabHandler("po")}
             className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${activeSubTab === "po"
                 ? "border-[#0057cd] text-[#0057cd]"
                 : "border-transparent text-slate-500 hover:text-slate-700"

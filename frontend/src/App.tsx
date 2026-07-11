@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { NotificationProvider } from "./contexts/NotificationContext";
 
 // Layouts
 import { AuthLayout } from "./layouts/AuthLayout";
@@ -46,6 +47,7 @@ import { WarehouseInventoryHub } from "./pages/warehouse/WarehouseInventoryHub";
 import { Finance } from "./pages/admin/Finance";
 import { Reports } from "./pages/admin/Reports";
 import { Branches } from "./pages/admin/Branches";
+import { Employees } from "./pages/admin/Employees";
 import { VoucherManagement } from "./pages/admin/VoucherManagement";
 import { HQApproval } from "./pages/admin/HQApproval";
 import { PriceManagement } from "./pages/admin/PriceManagement";
@@ -70,7 +72,8 @@ function RedirectWithSearch({ to }: { to: string }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <NotificationProvider>
+        <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/interactions" element={<DrugInteractions />} />
@@ -107,6 +110,7 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="branches" element={<Branches />} />
+            <Route path="employees" element={<Employees />} />
             <Route path="vouchers" element={<VoucherManagement />} />
             <Route path="approvals" element={<HQApproval />} />
             <Route path="finance" element={<Finance />} />
@@ -179,6 +183,7 @@ export default function App() {
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </NotificationProvider>
     </BrowserRouter>
   );
 }

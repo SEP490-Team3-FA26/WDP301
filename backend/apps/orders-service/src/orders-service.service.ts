@@ -4,11 +4,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { ClientKafka } from '@nestjs/microservices';
-import { PayOS } from '@payos/node';
 import { lastValueFrom } from 'rxjs';
+import { PayOS } from '@payos/node';
 import { Order } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Voucher } from './schemas/voucher.schema';
+import { subscribeToKafkaTopics } from '../../api-gateway/src/common/kafka.helper';
 
 const DEFAULT_PHONE_NUMBER = '0900000000';
 
@@ -266,7 +267,7 @@ export class OrdersServiceService implements OnModuleInit {
       try {
         // Step 4A: Generate PayOS Link
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-        
+
         // Clean description to avoid PayOS validation error (alphanumeric, no spaces, max 25 chars)
         const description = `WDP${orderCode}`.substring(0, 25);
 
@@ -301,60 +302,60 @@ export class OrdersServiceService implements OnModuleInit {
         this.logger.error('Error creating PayOS payment link:', err);
         throw new RpcException({ message: `Lỗi tạo link thanh toán PayOS: ${err.message}` });
       }
-    } else {
-      // CASH or CARD: Complete order instantly
+    }
+
+    // CASH or CARD: Complete order instantly
+    newOrder.paymentStatus = 'PAID';
+    await newOrder.save();
+
+    // Increment voucher usage on successful payment
+    if (newOrder.voucherCode) {
+      await this.voucherModel.updateOne(
+        { code: newOrder.voucherCode },
+        { $inc: { usedCount: 1 } }
+      ).exec();
+    }
+
+    // Deduct inventory and record sale
+    try {
+      const saleRes = await this.deductInventory(newOrder);
+
+      // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
+      if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
+        await lastValueFrom(
+          this.userClient.send('user.loyalty.update_points', {
+            phone: newOrder.patientPhone,
+            pointsDelta: newOrder.earnedPoints,
+            accumulatedDelta: newOrder.earnedPoints,
+          })
+        );
+      }
+
       newOrder.paymentStatus = 'PAID';
       await newOrder.save();
+      this.sendInvoiceEmailAsync(newOrder);
 
-      // Increment voucher usage on successful payment
-      if (newOrder.voucherCode) {
-        await this.voucherModel.updateOne(
-          { code: newOrder.voucherCode },
-          { $inc: { usedCount: 1 } }
-        ).exec();
-      }
+      return {
+        success: true,
+        orderCode,
+        paymentMethod: data.paymentMethod,
+        order: newOrder,
+        saleResult: saleRes,
+      };
+    } catch (err: any) {
+      this.logger.error('Error deducting inventory:', err);
 
-      // Deduct inventory and record sale
-      try {
-        const saleRes = await this.deductInventory(newOrder);
-        
-        // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
-        if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
-              phone: newOrder.patientPhone,
-              pointsDelta: newOrder.earnedPoints,
-              accumulatedDelta: newOrder.earnedPoints,
-            })
-          );
-        }
+      // Asynchronously trigger sending invoice email even if inventory deduction fails
+      this.sendInvoiceEmailAsync(newOrder);
 
-        newOrder.paymentStatus = 'PAID';
-        await newOrder.save();
-        this.sendInvoiceEmailAsync(newOrder);
-
-        return {
-          success: true,
-          orderCode,
-          paymentMethod: data.paymentMethod,
-          order: newOrder,
-          saleResult: saleRes,
-        };
-      } catch (err: any) {
-        this.logger.error('Error deducting inventory:', err);
-        
-        // Asynchronously trigger sending invoice email even if inventory deduction fails
-        this.sendInvoiceEmailAsync(newOrder);
-
-        // Save with warning
-        return {
-          success: true,
-          orderCode,
-          paymentMethod: data.paymentMethod,
-          order: newOrder,
-          warning: `Đơn hàng đã lưu nhưng trừ kho thất bại: ${err.message}`,
-        };
-      }
+      // Save with warning
+      return {
+        success: true,
+        orderCode,
+        paymentMethod: data.paymentMethod,
+        order: newOrder,
+        warning: `Đơn hàng đã lưu nhưng trừ kho thất bại: ${err.message}`,
+      };
     }
   }
 
@@ -408,7 +409,7 @@ export class OrdersServiceService implements OnModuleInit {
         await order.save();
 
         // SAGA REVERT FOR CANCELLED QR_PAY
-        
+
         // 1. Revert Inventory
         await lastValueFrom(this.inventoryClient.send('inventory.sale.revert', { orderCode: order.orderCode })).catch(e => this.logger.error('Failed to revert inventory on cancel', e));
 
@@ -424,10 +425,10 @@ export class OrdersServiceService implements OnModuleInit {
 
         // 3. Revert Voucher
         if (order.voucherCode) {
-           await this.voucherModel.updateOne(
-             { code: order.voucherCode },
-             { $inc: { usedCount: -1 } }
-           ).exec();
+          await this.voucherModel.updateOne(
+            { code: order.voucherCode },
+            { $inc: { usedCount: -1 } }
+          ).exec();
         }
 
         return { success: true, status: 'CANCELLED', order };

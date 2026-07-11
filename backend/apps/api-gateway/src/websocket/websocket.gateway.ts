@@ -8,6 +8,7 @@ import {
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { EventPattern, Payload } from '@nestjs/microservices';
+import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({
   cors: {
@@ -18,16 +19,65 @@ export class AppWebsocketGateway implements OnGatewayInit, OnGatewayConnection, 
   @WebSocketServer() server: Server;
   private logger: Logger = new Logger('AppWebsocketGateway');
 
+  constructor(private readonly jwtService: JwtService) {}
+
   afterInit(server: Server) {
-    this.logger.log('WebSocket Gateway Initialized');
+    this.logger.log('🚀 WebSocket Gateway Initialized');
   }
 
   handleConnection(client: Socket, ...args: any[]) {
-    this.logger.log(`Client connected: ${client.id}`);
+    try {
+      // Extract token from handshake auth or query
+      const token = client.handshake.auth?.token || client.handshake.query?.token;
+      
+      if (token) {
+        // Verify JWT token
+        const decoded = this.jwtService.verify(token as string);
+        const { role, branchId, email, fullName, _id } = decoded;
+        
+        // Store user data in socket
+        client.data.user = { userId: _id, role, branchId, email, fullName };
+        
+        // Join rooms based on role
+        if (role === 'admin' || role === 'head_branch') {
+          client.join('admin');
+          this.logger.log(`👤 Admin connected: ${email} (${client.id})`);
+        }
+        
+        if (role === 'warehouse') {
+          client.join('warehouse');
+          this.logger.log(`📦 Warehouse connected: ${email} (${client.id})`);
+        }
+        
+        if (role === 'branch' && branchId) {
+          client.join(`branch-${branchId}`);
+          this.logger.log(`🏪 Branch connected: ${email} from ${branchId} (${client.id})`);
+        }
+        
+        if (role === 'pharmacist' && branchId) {
+          client.join(`branch-${branchId}`);
+          this.logger.log(`💊 Pharmacist connected: ${email} from ${branchId} (${client.id})`);
+        }
+        
+        // Join personal room for targeted messages
+        client.join(`user-${_id}`);
+        
+      } else {
+        this.logger.warn(`⚠️  Client connected without token: ${client.id}`);
+      }
+    } catch (error) {
+      this.logger.error(`❌ Connection error: ${error.message}`);
+      client.disconnect();
+    }
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected: ${client.id}`);
+    const user = client.data.user;
+    if (user) {
+      this.logger.log(`👋 Client disconnected: ${user.email} (${client.id})`);
+    } else {
+      this.logger.log(`👋 Client disconnected: ${client.id}`);
+    }
   }
 
 }
