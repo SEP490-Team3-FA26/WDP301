@@ -94,22 +94,22 @@ services:
     networks:
       - wdp301-network
 
-  ai-service:
-    build:
-      context: ./backend/apps/ai-service
-    container_name: wdp301-ai-service
-    restart: on-failure
-    env_file:
-      - ./backend/.env
-    ports:
-      - "8000:8000"
-      - "6006:6006"
-    environment:
-      - QDRANT_HOST=qdrant
-    depends_on:
-      - qdrant
-    networks:
-      - wdp301-network
+  # ai-service:
+  #   build:
+  #     context: ./backend/apps/ai-service
+  #   container_name: wdp301-ai-service
+  #   restart: on-failure
+  #   env_file:
+  #     - ./backend/.env
+  #   ports:
+  #     - "8000:8000"
+  #     - "6006:6006"
+  #   environment:
+  #     - QDRANT_HOST=qdrant
+  #   depends_on:
+  #     - qdrant
+  #   networks:
+  #     - wdp301-network
 
   qdrant:
     image: qdrant/qdrant:latest
