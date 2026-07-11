@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, AlertTriangle, Search, Plus, Trash2, CheckCircle2, PackagePlus, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
+import api from "../../services/api";
 
 export function PurchaseOrderCreate() {
   const navigate = useNavigate();
@@ -23,9 +24,8 @@ export function PurchaseOrderCreate() {
   // --- Helper: fetch a single medicine by ID ---
   const fetchMedicineById = async (id: string) => {
     try {
-      const res = await fetch(`/api/medicines/${id}`);
-      if (!res.ok) return null;
-      return await res.json();
+      const res = await api.get(`/api/medicines/${id}`);
+      return res.data;
     } catch { return null; }
   };
 
@@ -93,12 +93,15 @@ export function PurchaseOrderCreate() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/medicines/dropdown').then(res => res.json()),
-      fetch('/api/suppliers').then(res => res.json())
+      api.get('/api/medicines/dropdown').then(res => res.data),
+      api.get('/api/suppliers').then(res => res.data)
     ]).then(([medData, supData]) => {
       setMedicines(medData.data || medData);
-      setSuppliers(supData);
-    }).catch(err => console.error(err));
+      setSuppliers(Array.isArray(supData) ? supData : []);
+    }).catch(err => {
+      console.error(err);
+      setSuppliers([]);
+    });
   }, []);
 
   const getSupplierName = (id: string) => {
@@ -337,25 +340,15 @@ export function PurchaseOrderCreate() {
                   setIsSubmitting(true);
                   setErrorMsg(null);
                   try {
-                    const res = await fetch('/api/purchase-orders/auto-route', {
-
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
-                        prIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
-                      })
+                    const res = await api.post('/api/purchase-orders/auto-route', {
+                      items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
+                      prIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
                     });
-                    const resData = await res.json();
-                    if (res.ok) {
-                      setSubmitSuccess(true);
-                      setTimeout(() => navigate(-1), 1800);
-                    } else {
-                      // Hiển thị thông báo lỗi từ backend (GDP hết hạn, thuốc hết hạn, v.v)
-                      setErrorMsg(resData?.message || resData?.error || 'Lỗi không xác định từ máy chủ');
-                    }
-                  } catch (e) {
-                    setErrorMsg('Lỗi kết nối. Vui lòng kiểm tra máy chủ đang chạy.');
+                    setSubmitSuccess(true);
+                    setTimeout(() => navigate(-1), 1800);
+                  } catch (e: any) {
+                    const errorResponse = e?.response?.data;
+                    setErrorMsg(errorResponse?.message || errorResponse?.error || 'Lỗi không xác định từ máy chủ');
                   } finally {
                     setIsSubmitting(false);
                   }

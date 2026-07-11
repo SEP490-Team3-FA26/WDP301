@@ -23,12 +23,19 @@ import { MediaController } from './storage/media.controller';
 import { InventoryCheckController } from './controllers/inventory-check.controller';
 import { SupplierCreditController } from './controllers/supplier-credit.controller';
 import { StockTransferController } from './controllers/stock-transfer.controller';
+import { ReportController } from './controllers/report.controller';
+import { QuotaController } from './controllers/quota.controller';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { S3StorageService } from './storage/s3-storage.service';
+import { ReportService } from './services/report.service';
 import { WebsocketModule } from './websocket/websocket.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
+import { RedactionService } from './services/redaction.service';
+import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
 
 /**
  * Root Module của API Gateway
@@ -145,7 +152,7 @@ import { ClientKafka } from '@nestjs/microservices';
           producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
-    }),
+    ]),
     WebsocketModule,
   ],
   controllers: [
@@ -167,12 +174,21 @@ import { ClientKafka } from '@nestjs/microservices';
     InventoryCheckController,
     SupplierCreditController,
     StockTransferController,
+    ReportController,
+    QuotaController,
   ],
   providers: [
     JwtAuthGuard,
     JwtStrategy,
     GoogleStrategy,
     S3StorageService,
+    ReportService,
+    RedactionService,
+    AuditFallbackProcessor,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
   ],
 })
 export class AppGatewayModule {
@@ -215,6 +231,9 @@ export class AppGatewayModule {
       'inventory.transfer.receive',
       'inventory.transfer.list',
       'inventory.transfer.get_by_id',
+      'inventory.sale.report',
+      'quota.get.by.id',
+      'quota.get.all',
     ];
     for (const t of inventoryTopics) {
       this.inventoryClient.subscribeToResponseOf(t);

@@ -140,10 +140,10 @@ export function DashboardHome() {
             { title: "Phát hiện bất thường bảo mật", value: "0", icon: <ShieldCheck size={20} />, trend: "Hệ thống ổn định", trendUp: true },
           ],
           actions: [
-            { id: "UC-58", name: "Quản lý Role & Phân quyền", icon: <ShieldCheck size={24} />, color: "bg-slate-100 text-slate-700 border-slate-300" },
-            { id: "UC-26", name: "So sánh hiệu suất chuỗi", icon: <Building2 size={24} />, color: "bg-blue-50 text-blue-600 border-blue-200" },
-            { id: "UC-28", name: "Đồng bộ DM Toàn chuỗi", icon: <RotateCcw size={24} />, color: "bg-indigo-50 text-indigo-600 border-indigo-200" },
-            { id: "UC-34", name: "Dự báo Nhu cầu (AI)", icon: <Sparkles size={24} />, color: "bg-emerald-50 text-emerald-600 border-emerald-200" },
+            { id: "UC-58", name: "Quản lý Role & Phân quyền", icon: <ShieldCheck size={24} />, color: "bg-slate-100 text-slate-700 border-slate-300", link: "#" },
+            { id: "UC-26", name: "So sánh hiệu suất chuỗi", icon: <Building2 size={24} />, color: "bg-blue-50 text-blue-600 border-blue-200", link: "#" },
+            { id: "UC-28", name: "Đồng bộ DM Toàn chuỗi", icon: <RotateCcw size={24} />, color: "bg-indigo-50 text-indigo-600 border-indigo-200", link: "/admin/price-management" },
+            { id: "UC-34", name: "Dự báo Nhu cầu (AI)", icon: <Sparkles size={24} />, color: "bg-emerald-50 text-emerald-600 border-emerald-200", link: "#" },
             { id: "UC-48", name: "Cấu hình Global Price", icon: <DollarSign size={24} />, color: "bg-amber-50 text-amber-600 border-amber-200" },
             { id: "UC-59", name: "Audit Logs Toàn hệ thống", icon: <History size={24} />, color: "bg-slate-100 text-slate-700 border-slate-300" },
           ]
@@ -198,7 +198,7 @@ export function DashboardHome() {
           {data.actions.map((action, i) => (
             <Link 
               key={i} 
-              to="#" 
+              to={action.link || "#"}
               className={`flex flex-col p-5 rounded-2xl border transition-all hover:-translate-y-1 hover:shadow-lg bg-white border-slate-200 group`}
             >
               <div className={`p-3 rounded-xl mb-4 w-fit ${action.color} transition-colors`}>

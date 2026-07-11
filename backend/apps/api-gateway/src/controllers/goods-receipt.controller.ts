@@ -1,8 +1,11 @@
-import { Controller, Post, Get, Param, Body, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Patch, Get, Param, Body, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @Controller('api/goods-receipts')
+@UseGuards(JwtAuthGuard)
 export class GoodsReceiptController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -13,12 +16,35 @@ export class GoodsReceiptController implements OnModuleInit {
       'inventory.grn.create',
       'inventory.grn.list',
       'inventory.grn.get_by_id',
+      'inventory.grn.submit_inspection',
+      'inventory.grn.approve',
+      'inventory.grn.reject',
+      'inventory.grn.update',
     ]);
   }
 
   @Post()
+  @AuditLogAction({
+    actionCode: 'GRN_CREATE',
+    actionName: 'Tạo phiếu nhập kho',
+    module: 'Inventory',
+    eventType: 'CREATE',
+    entityType: 'GoodsReceiptNote',
+  })
   async createGoodsReceiptNote(@Body() data: any) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.create', data);
+  }
+
+  @Patch(':id')
+  @AuditLogAction({
+    actionCode: 'GRN_UPDATE',
+    actionName: 'Cập nhật phiếu nhập kho',
+    module: 'Inventory',
+    eventType: 'UPDATE',
+    entityType: 'GoodsReceiptNote',
+  })
+  async updateGoodsReceiptNote(@Param('id') id: string, @Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.update', { id, ...data });
   }
 
   @Get()
@@ -29,5 +55,54 @@ export class GoodsReceiptController implements OnModuleInit {
   @Get(':id')
   async getGoodsReceiptNoteById(@Param('id') id: string) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.get_by_id', { id });
+  }
+
+  @Post(':id/submit-inspection')
+  @AuditLogAction({
+    actionCode: 'GRN_SUBMIT_INSPECTION',
+    actionName: 'Nộp biên bản kiểm tra nhập kho',
+    module: 'Inventory',
+    eventType: 'APPROVE',
+    entityType: 'GoodsReceiptNote',
+  })
+  async submitGoodsReceiptInspection(@Param('id') id: string) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.submit_inspection', { id });
+  }
+
+  @Post(':id/approve')
+  @AuditLogAction({
+    actionCode: 'GRN_APPROVE',
+    actionName: 'Phê duyệt phiếu nhập kho',
+    module: 'Inventory',
+    eventType: 'APPROVE',
+    entityType: 'GoodsReceiptNote',
+  })
+  async approveGoodsReceiptNote(@Param('id') id: string, @Body() data: { discrepancyReason?: string }) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.approve', { id, discrepancyReason: data.discrepancyReason });
+  }
+
+  @Post(':id/reject')
+  @AuditLogAction({
+    actionCode: 'GRN_REJECT',
+    actionName: 'Từ chối phiếu nhập kho',
+    module: 'Inventory',
+    eventType: 'REJECT',
+    entityType: 'GoodsReceiptNote',
+  })
+  async rejectGoodsReceiptNote(@Param('id') id: string, @Body() data: { action: string; reason: string }) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.reject', { id, action: data.action, reason: data.reason });
+  }
+
+  @Get(':id/items/:itemId/inspection')
+  async getInspectionRecord(@Param('id') id: string, @Param('itemId') itemId: string) {
+    try {
+      const response = await fetch(`http://ai-service:8000/api/ai/receipts/${id}/items/${itemId}/inspection`);
+      if (response.ok) {
+        return await response.json();
+      }
+      return { success: false, message: 'Inspection record not found or error occurred.' };
+    } catch (e) {
+      return { success: false, message: 'Failed to fetch inspection record.' };
+    }
   }
 }

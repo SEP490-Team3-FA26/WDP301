@@ -1,4 +1,4 @@
-# Hướng Dẫn Phát Triển CRUD Quy Chuẩn (CRUD Implementation Playbook)
+**# Hướng Dẫn Phát Triển CRUD Quy Chuẩn (CRUD Implementation Playbook)
 
 ## Kiến Trúc Microservices: API Gateway + Kafka + Redis + MongoDB
 
@@ -6,20 +6,19 @@ Tài liệu này là **"công thức nấu ăn" (Recipe Book)** dành cho đội
 
 không đuơợc su dung api truc tiep trong code
 
-
 Mọi Entity mới (ví dụ: `Product`, `Order`, `Inventory`...) khi được phát triển cần tuân thủ tuyệt đối cấu trúc và luồng xử lý chuẩn hóa dưới đây.
 
 ---
 
 ## 1. Luồng Giao Tiếp Chuẩn Cho Các Tác Vụ (CRUD Standard Protocols)
 
-| Tác vụ (Operation)                  | Giao thức truyền thông                                    | Cơ chế Cache (Redis)                                                                         |
-| :------------------------------------ | :----------------------------------------------------------- | :--------------------------------------------------------------------------------------------- |
-| **Create (Tạo mới)**          | Event-Driven (Gateway `emit` -> Kafka -> Microservice)     | Chủ động cập nhật cache hoặc đợi đọc lần đầu.                                     |
-| **Read One (Đọc chi tiết)**  | Request-Response (Gateway `send` -> Kafka -> Microservice) | **Cache-Aside:** Kiểm tra Redis trước. Nếu Miss, gọi DB rồi lưu Redis.            |
-| **Read All (Đọc danh sách)** | Request-Response (Gateway `send` -> Kafka -> Microservice) | Thường truy vấn DB trực tiếp hoặc Cache ngắn hạn (TTL ngắn) cho danh sách.           |
-| **Update (Cập nhật)**         | Event-Driven (Gateway `emit` -> Kafka -> Microservice)     | **Cache Eviction:** Xóa hoặc ghi đè cache cũ trên Redis để đồng bộ dữ liệu. |
-| **Delete (Xóa)**               | Event-Driven (Gateway `emit` -> Kafka -> Microservice)     | **Cache Eviction:** Xóa hẳn key cache tương ứng khỏi Redis.                        |
+| Tác vụ (Operation)                  | Giao thức truyền thông                                   | Cơ chế Cache (Redis)                                                                         |
+| :------------------------------------ | :---------------------------------------------------------- | :--------------------------------------------------------------------------------------------- |
+| **Create (Tạo mới)**          | Event-Driven (Gateway`emit` -> Kafka -> Microservice)     | Chủ động cập nhật cache hoặc đợi đọc lần đầu.                                     |
+| **Read One (Đọc chi tiết)**  | Request-Response (Gateway`send` -> Kafka -> Microservice) | **Cache-Aside:** Kiểm tra Redis trước. Nếu Miss, gọi DB rồi lưu Redis.            |
+| **Read All (Đọc danh sách)** | Request-Response (Gateway`send` -> Kafka -> Microservice) | Thường truy vấn DB trực tiếp hoặc Cache ngắn hạn (TTL ngắn) cho danh sách.           |
+| **Update (Cập nhật)**         | Event-Driven (Gateway`emit` -> Kafka -> Microservice)     | **Cache Eviction:** Xóa hoặc ghi đè cache cũ trên Redis để đồng bộ dữ liệu. |
+| **Delete (Xóa)**               | Event-Driven (Gateway`emit` -> Kafka -> Microservice)     | **Cache Eviction:** Xóa hẳn key cache tương ứng khỏi Redis.                        |
 
 ---
 
@@ -173,7 +172,7 @@ export class ProductMsController {
   async handleProductCreate(@Payload() data: string) {
     // Vì Kafka truyền chuỗi, cần chuyển đổi ngược từ JSON String sang Object
     const dto = JSON.parse(data);
-    
+  
     // Gọi tầng Service để ghi trực tiếp xuống Database MongoDB
     await this.productService.create(dto);
     console.log('✅ [Microservice] Đã tạo thành công sản phẩm mới trong Database!');
@@ -184,7 +183,7 @@ export class ProductMsController {
   async handleProductUpdate(@Payload() payload: string) {
     // Phân rã dữ liệu bao gồm ID sản phẩm và cụm thông tin mới cần cập nhật
     const { id, data } = JSON.parse(payload);
-    
+  
     // Cập nhật dữ liệu trong MongoDB
     await this.productService.update(id, data);
     console.log(`✅ [Microservice] Đã cập nhật thành công sản phẩm ${id} trong Database!`);
@@ -244,7 +243,7 @@ export class ProductMsService {
   // Logic nghiệp vụ: Tìm kiếm chi tiết sản phẩm theo ID trong Database
   async findById(id: string): Promise<Product> {
     const product = await this.productModel.findById(id).exec();
-    
+  
     // Nếu không tìm thấy, ném ngoại lệ NotFoundException
     if (!product) {
       throw new NotFoundException(`Product với ID ${id} không tồn tại!`);
@@ -263,7 +262,7 @@ export class ProductMsService {
     const updatedProduct = await this.productModel
       .findByIdAndUpdate(id, { $set: data }, { new: true })
       .exec();
-    
+  
     if (!updatedProduct) {
       throw new NotFoundException(`Không tìm thấy sản phẩm ${id} để cập nhật!`);
     }
@@ -273,7 +272,7 @@ export class ProductMsService {
   // Logic nghiệp vụ: Xóa sản phẩm khỏi hệ thống
   async delete(id: string): Promise<void> {
     const result = await this.productModel.findByIdAndDelete(id).exec();
-    
+  
     if (!result) {
       throw new NotFoundException(`Không tìm thấy sản phẩm ${id} để xóa!`);
     }
@@ -299,3 +298,4 @@ export class ProductMsService {
 >
 > * Đối với sự kiện (Event-Driven): `{entity}.event.{action}` (Ví dụ: `order.event.created`).
 > * Đối với truy vấn (Request-Response): `{entity}.get.{query}` (Ví dụ: `order.get.by.id`).
+**

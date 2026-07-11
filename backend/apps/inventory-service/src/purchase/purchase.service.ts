@@ -357,7 +357,7 @@ export class PurchaseService {
    * Hỗ trợ: Partial Delivery (giao thiếu hàng), Near-expiry warning.
    */
   async createGoodsReceiptNote(data: any) {
-    this.logger.log(`Creating Goods Receipt Note for PO: ${data.poId}`);
+    this.logger.log(`Creating Goods Receipt Note (Receiving Document) for PO: ${data.poId}`);
 
     const po = await this.poModel.findById(data.poId).exec();
     if (!po) {
@@ -373,44 +373,135 @@ export class PurchaseService {
     }
 
     if (po.status !== 'SHIPPING' && po.status !== 'PARTIAL_RECEIVED') {
-      throw new RpcException({ message: `Đơn hàng đang ở trạng thái "${po.status}", chưa được phép nhập kho (yêu cầu SHIPPING hoặc PARTIAL_RECEIVED)` });
+      throw new RpcException({ message: `Đơn hàng đang ở trạng thái "${po.status}", chưa được phép tiếp nhận (yêu cầu SHIPPING hoặc PARTIAL_RECEIVED)` });
     }
 
-    // Kiểm tra và xử lý từng item
     let totalAmount = 0;
-    const warnings: string[] = [];
-    const transactionLogs: any[] = [];
+    const items = data.items.map((item: any) => {
+      totalAmount += item.quantity * item.unitPrice;
+      return {
+        medicineId: item.medicineId,
+        batchNo: item.batchNo,
+        expDate: new Date(item.expDate),
+        quantity: item.quantity,
+        actualQty: null,
+        status: 'PENDING',
+        unitPrice: item.unitPrice
+      };
+    });
 
-    for (const item of data.items) {
-      // Tìm item trong PO để đối chiếu
+    const grn = new this.grnModel({
+      poId: data.poId,
+      items,
+      totalAmount,
+      receivedBy: data.receivedBy || 'Thủ Kho',
+      status: 'INSPECTING',
+    });
+
+    await grn.save();
+
+    po.status = 'RECEIVING';
+    await po.save();
+
+    return {
+      success: true,
+      message: `Mở phiên tiếp nhận hàng thành công. Trạng thái phiếu: INSPECTING`,
+      data: grn,
+    };
+  }
+
+  async submitGoodsReceiptInspection(receiptId: string) {
+    this.logger.log(`Submitting inspection report for Receiving Document: ${receiptId}`);
+
+    const grn = await this.grnModel.findById(receiptId).exec();
+    if (!grn) {
+      throw new RpcException({ message: `Không tìm thấy tài liệu tiếp nhận: ${receiptId}` });
+    }
+
+    if (grn.status !== 'INSPECTING') {
+      throw new RpcException({ message: `Tài liệu tiếp nhận đang ở trạng thái "${grn.status}", không thể gửi báo cáo (yêu cầu INSPECTING)` });
+    }
+
+    // Verify all items are verified
+    const allVerified = grn.items.every(item => item.status === 'VERIFIED');
+    if (!allVerified) {
+      throw new RpcException({ message: 'Vui lòng hoàn tất kiểm nhận tất cả các mặt hàng trước khi gửi báo cáo' });
+    }
+
+    grn.status = 'PENDING_APPROVAL';
+    await grn.save();
+
+    return {
+      success: true,
+      message: 'Gửi báo cáo kiểm nhận thành công. Đang chờ Quản lý phê duyệt.',
+      data: grn,
+    };
+  }
+
+  async approveGoodsReceiptNote(receiptId: string, discrepancyReason?: string) {
+    this.logger.log(`Approving Goods Receipt Note: ${receiptId}`);
+
+    const grn = await this.grnModel.findById(receiptId).exec();
+    if (!grn) {
+      throw new RpcException({ message: `Không tìm thấy tài liệu tiếp nhận: ${receiptId}` });
+    }
+
+    if (grn.status === 'COMPLETED') {
+      throw new RpcException({ message: 'Tài liệu tiếp nhận này đã được phê duyệt hoàn tất từ trước', statusCode: 409 });
+    }
+
+    if (grn.status !== 'PENDING_APPROVAL') {
+      throw new RpcException({ message: `Tài liệu tiếp nhận đang ở trạng thái "${grn.status}", không thể phê duyệt (yêu cầu PENDING_APPROVAL)` });
+    }
+
+    // Defensive check: verify all items are verified
+    const allVerified = grn.items.every(item => item.status === 'VERIFIED');
+    if (!allVerified) {
+      throw new RpcException({ message: 'Tài liệu tiếp nhận chưa được kiểm nhận đầy đủ các dòng hàng' });
+    }
+
+    // Verify discrepancy reason if actualQty != expected quantity
+    let hasDiscrepancy = false;
+    for (const item of grn.items) {
+      if (item.actualQty !== item.quantity) {
+        hasDiscrepancy = true;
+        break;
+      }
+    }
+    if (hasDiscrepancy && (!discrepancyReason || !discrepancyReason.trim())) {
+      throw new RpcException({ message: 'Phát hiện chênh lệch số lượng kiểm nhận. Vui lòng nhập lý do chênh lệch trước khi phê duyệt.' });
+    }
+
+    // 1. Loop and apply physical inventory stock update (using actualQty!)
+    const po = await this.poModel.findById(grn.poId).exec();
+    if (!po) {
+      throw new RpcException({ message: `Không tìm thấy đơn hàng PO liên kết: ${grn.poId}` });
+    }
+
+    const transactionLogs: any[] = [];
+    const warnings: string[] = [];
+
+    for (const item of grn.items) {
       const poItem = po.items.find(i => i.medicineId === item.medicineId);
       if (!poItem) {
-        throw new RpcException({ message: `Sản phẩm ${item.medicineId} không có trong đơn đặt hàng` });
+        throw new RpcException({ message: `Sản phẩm ${item.medicineId} không có trong đơn đặt hàng PO` });
       }
 
-      // Tính remaining quantity (cho partial delivery)
-      const remainingQuantity = poItem.quantity - poItem.receivedQuantity;
-      if (item.quantity > remainingQuantity) {
-        throw new RpcException({
-          message: `Số lượng thực nhận (${item.quantity}) vượt quá số lượng còn lại chưa nhận (${remainingQuantity}) cho sản phẩm ${item.medicineId}`,
-        });
-      }
+      // Update receivedQuantity on PO item using actualQty
+      poItem.receivedQuantity = (poItem.receivedQuantity || 0) + (item.actualQty ?? 0);
 
-      // ⚠️ EDGE CASE: Kiểm tra hàng cận date (< 3 tháng)
+      // Warning check for short expiry
       const expDate = new Date(item.expDate);
       const threeMonthsFromNow = new Date();
       threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
-
       if (expDate <= threeMonthsFromNow) {
         const daysRemaining = Math.ceil((expDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
         warnings.push(
-          `⚠️ CẢNH BÁO CẬN DATE: Lô "${item.batchNo}" có hạn sử dụng ${expDate.toLocaleDateString('vi-VN')} (còn ${daysRemaining} ngày). Cần xem xét có tiếp nhận lô hàng này hay yêu cầu NCC đổi trả.`,
+          `⚠️ Lô "${item.batchNo}" cận hạn sử dụng (${expDate.toLocaleDateString('vi-VN')}, còn ${daysRemaining} ngày).`
         );
       }
 
-      totalAmount += item.quantity * item.unitPrice;
-
-      // Tìm và lấy stock trước khi thay đổi (cho transaction log)
+      // Find or create batch
       let batch = await this.batchModel.findOne({
         medicineId: item.medicineId,
         batchNo: item.batchNo,
@@ -418,10 +509,8 @@ export class PurchaseService {
       }).exec();
 
       const stockBefore = batch ? batch.stock : 0;
-
-      // Cập nhật hoặc tạo mới MedicineBatch
       if (batch) {
-        batch.stock += item.quantity;
+        batch.stock += (item.actualQty ?? 0);
         batch.status = batch.expDate < new Date() ? 'EXPIRED' : 'ACTIVE';
         await batch.save();
       } else {
@@ -430,72 +519,54 @@ export class PurchaseService {
           branchId: 'CENTRAL_WH',
           batchNo: item.batchNo,
           expDate: new Date(item.expDate),
-          stock: item.quantity,
+          stock: (item.actualQty ?? 0),
           status: new Date(item.expDate) < new Date() ? 'EXPIRED' : 'ACTIVE',
         });
         await batch.save();
       }
 
-      // Cập nhật tồn kho tổng của thuốc
-      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: item.quantity } }).exec();
+      // Cập nhật tồn kho tổng của thuốc (dựa trên số lượng thực nhận actualQty)
+      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: (item.actualQty ?? 0) } }).exec();
 
-      // Cập nhật receivedQuantity trên PO item
-      poItem.receivedQuantity += item.quantity;
-
-      // Chuẩn bị transaction log
+      // Prepare transaction log
       const medicine = await this.medicineModel.findById(item.medicineId).exec();
       transactionLogs.push({
         type: 'GRN_IMPORT',
         medicineId: item.medicineId,
         medicineName: medicine ? medicine.name : 'Unknown',
         batchNo: item.batchNo,
-        quantityChange: item.quantity, // Dương = nhập kho
+        quantityChange: item.actualQty ?? 0,
         stockBefore,
-        stockAfter: stockBefore + item.quantity,
+        stockAfter: stockBefore + (item.actualQty ?? 0),
         referenceType: 'GRN',
-        performedBy: data.receivedBy || 'Thủ Kho',
-        notes: `Nhập kho từ PO ${po._id.toString().substring(18).toUpperCase()}`,
+        referenceId: grn._id.toString(),
+        performedBy: grn.receivedBy || 'Quản Lý',
+        notes: `Nhập kho thực tế từ PO ${po._id.toString().substring(18).toUpperCase()}`,
       });
     }
 
-    // Tạo Phiếu Nhập Kho (GRN)
-    const grn = new this.grnModel({
-      poId: data.poId,
-      items: data.items,
-      totalAmount,
-      receivedBy: data.receivedBy || 'Thủ Kho',
-      status: 'COMPLETED',
-    });
-
-    await grn.save();
-
-    // Ghi nhận công nợ NCC nếu PO là CREDIT
+    // 2. Record supplier credit if CREDIT
     if (po.paymentType === 'CREDIT') {
       try {
         await firstValueFrom(
           this.supplierClient.send('supplier.credit.record_grn', {
             supplierId: po.supplierId,
             grnId: grn._id.toString(),
-            amount: totalAmount,
-            performedBy: data.receivedBy || 'Thủ Kho',
+            amount: grn.totalAmount,
+            performedBy: grn.receivedBy || 'Quản Lý',
           }),
         );
       } catch (err) {
-        this.logger.error(`Error recording GRN payable: ${err.message}`, err.stack);
-        throw new RpcException({
-          message: `Không thể ghi nhận công nợ NCC: ${err.message || err}`,
-          statusCode: 500,
-        });
+        this.logger.error(`Error recording GRN credit: ${err.message}`);
       }
     }
 
-    // Cập nhật referenceId cho transaction logs rồi lưu
+    // 3. Save transaction logs
     for (const log of transactionLogs) {
-      log.referenceId = grn._id.toString();
       await new this.txnModel(log).save();
     }
 
-    // Xác định trạng thái PO mới: COMPLETED hay PARTIAL_RECEIVED
+    // 4. Update PO Status
     const allFullyReceived = po.items.every(item => item.receivedQuantity >= item.quantity);
     if (allFullyReceived) {
       po.status = 'COMPLETED';
@@ -504,12 +575,112 @@ export class PurchaseService {
     }
     await po.save();
 
+    // 5. Update GRN status
+    grn.status = 'COMPLETED';
+    if (discrepancyReason) {
+      grn.discrepancyReason = discrepancyReason;
+    }
+    await grn.save();
+
     return {
       success: true,
-      message: `Tạo phiếu nhập kho thành công. Tồn kho đã được cập nhật. Trạng thái PO: ${po.status}`,
+      message: `Duyệt nhập kho thành công. Trạng thái phiếu: COMPLETED. Trạng thái PO: ${po.status}`,
       data: grn,
       poStatus: po.status,
       warnings: warnings.length > 0 ? warnings : undefined,
+    };
+  }
+
+  async rejectGoodsReceiptNote(receiptId: string, action: string, reason: string) {
+    this.logger.log(`Rejecting Goods Receipt Note ${receiptId} with action ${action}. Reason: ${reason}`);
+
+    const grn = await this.grnModel.findById(receiptId).exec();
+    if (!grn) {
+      throw new RpcException({ message: `Không tìm thấy tài liệu tiếp nhận: ${receiptId}` });
+    }
+
+    if (grn.status !== 'PENDING_APPROVAL') {
+      throw new RpcException({ message: `Tài liệu tiếp nhận đang ở trạng thái "${grn.status}", không thể từ chối (yêu cầu PENDING_APPROVAL)` });
+    }
+
+    if (action === 'reinspect') {
+      grn.status = 'INSPECTING';
+      // Reset items verification status so they can check again on mobile
+      for (const item of grn.items) {
+        item.status = 'PENDING';
+        item.actualQty = undefined;
+      }
+      await grn.save();
+      return {
+        success: true,
+        message: 'Đã yêu cầu kiểm đếm lại. Trạng thái phiếu tiếp nhận chuyển về INSPECTING.',
+        data: grn,
+      };
+    } else if (action === 'cancel') {
+      grn.status = 'CANCELLED';
+      await grn.save();
+
+      // Revert parent PO status:
+      const po = await this.poModel.findById(grn.poId).exec();
+      if (po) {
+        // If there is any COMPLETED GRN linked to this PO, revert to PARTIAL_RECEIVED. Otherwise, revert to SHIPPING.
+        const otherCompletedGrns = await this.grnModel.findOne({
+          poId: grn.poId,
+          status: 'COMPLETED',
+        }).exec();
+
+        if (otherCompletedGrns) {
+          po.status = 'PARTIAL_RECEIVED';
+        } else {
+          po.status = 'SHIPPING';
+        }
+        await po.save();
+      }
+
+      return {
+        success: true,
+        message: 'Đã hủy bỏ phiên tiếp nhận hàng. Trạng thái phiếu tiếp nhận chuyển về CANCELLED.',
+        data: grn,
+      };
+    } else {
+      throw new RpcException({ message: `Hành động từ chối "${action}" không hợp lệ. Chỉ chấp nhận reinspect hoặc cancel.` });
+    }
+  }
+
+  async updateGoodsReceiptNote(id: string, data: any) {
+    this.logger.log(`Updating Goods Receipt Note (Receiving Document) ${id} in DRAFT/INSPECTING state`);
+    const grn = await this.grnModel.findById(id).exec();
+    if (!grn) {
+      throw new RpcException({ message: `Không tìm thấy tài liệu tiếp nhận: ${id}` });
+    }
+    if (grn.status !== 'DRAFT' && grn.status !== 'INSPECTING') {
+      throw new RpcException({ message: 'Chỉ được phép chỉnh sửa tài liệu tiếp nhận khi ở trạng thái DRAFT hoặc INSPECTING' });
+    }
+    
+    // Update items
+    if (data.items) {
+      for (const item of data.items) {
+        const grnItem = grn.items.find(i => i.medicineId === item.medicineId);
+        if (grnItem) {
+          if (item.batchNo !== undefined) grnItem.batchNo = item.batchNo;
+          if (item.expDate !== undefined) grnItem.expDate = new Date(item.expDate);
+          if (item.quantity !== undefined) grnItem.quantity = item.quantity;
+        }
+      }
+    }
+    
+    // Recalculate totalAmount
+    let totalAmount = 0;
+    for (const item of grn.items) {
+      totalAmount += item.quantity * item.unitPrice;
+    }
+    grn.totalAmount = totalAmount;
+    
+    await grn.save();
+    return {
+      success: true,
+      message: 'Cập nhật tài liệu tiếp nhận thành công',
+      data: grn
     };
   }
 

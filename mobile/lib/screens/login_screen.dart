@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/user_role.dart';
+import '../services/api_service.dart';
+import 'google_webview_screen.dart';
 import 'admin_screen.dart';
 import 'director_screen.dart';
 import 'warehouse_screen.dart';
@@ -91,6 +93,113 @@ class _LoginScreenState extends State<LoginScreen>
       context,
       MaterialPageRoute(builder: (context) => targetScreen),
     );
+  }
+
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          color: Colors.white,
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF1A73E8)),
+                SizedBox(height: 16),
+                Text(
+                  'Đang xử lý thông tin...',
+                  style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Lỗi đăng nhập', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Đóng', style: TextStyle(color: Color(0xFF1A73E8))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  UserRole _parseRole(String? roleStr) {
+    switch (roleStr) {
+      case 'admin':
+        return UserRole.admin;
+      case 'head_branch':
+        return UserRole.headBranch;
+      case 'warehouse':
+        return UserRole.warehouse;
+      case 'branch':
+        return UserRole.branch;
+      case 'pharmacist':
+        return UserRole.pharmacist;
+      case 'user':
+      default:
+        return UserRole.customer;
+    }
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    final String loginUrl = '${ApiService.baseUrl}/api/auth/google';
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GoogleWebViewScreen(loginUrl: loginUrl),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result != null && result is Map<String, dynamic>) {
+      if (result['success'] == true) {
+        final token = result['token'];
+        _showLoadingDialog();
+        
+        try {
+          final profile = await ApiService.getProfile(token);
+          if (!mounted) return;
+          Navigator.of(context).pop(); // dismiss loading dialog
+
+          if (profile != null) {
+            final roleStr = profile['role'];
+            final userRole = _parseRole(roleStr);
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Đăng nhập thành công! Chào mừng ${profile['fullName'] ?? ''}'),
+                backgroundColor: const Color(0xFF2E7D32),
+              ),
+            );
+            _navigateToDashboard(userRole);
+          } else {
+            _showErrorDialog('Không thể tải thông tin tài khoản sau khi đăng nhập Google.');
+          }
+        } catch (e) {
+          if (!mounted) return;
+          Navigator.of(context).pop(); // dismiss loading dialog
+          _showErrorDialog('Có lỗi xảy ra khi kết nối tới máy chủ: $e');
+        }
+      } else {
+        _showErrorDialog(result['error'] ?? 'Đăng nhập Google thất bại');
+      }
+    }
   }
 
   @override
@@ -262,6 +371,62 @@ class _LoginScreenState extends State<LoginScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                 ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const Row(
+                              children: [
+                                Expanded(child: Divider(color: Colors.black12)),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    'Hoặc',
+                                    style: TextStyle(
+                                      color: Colors.black45,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Divider(color: Colors.black12)),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            OutlinedButton(
+                              onPressed: _handleGoogleLogin,
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.black87,
+                                side: const BorderSide(color: Color(0xFFDADCE0)),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Image.network(
+                                    'https://developers.google.com/identity/images/g-logo.png',
+                                    height: 20,
+                                    width: 20,
+                                    errorBuilder: (context, error, stackTrace) => const Icon(
+                                      Icons.g_mobiledata,
+                                      color: Colors.red,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Đăng nhập bằng Google',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],

@@ -28,6 +28,7 @@ export function AdminLayout() {
     { name: "Tài chính", href: "/admin/finance", icon: <Banknote size={20} /> },
     { name: "Công nợ NCC", href: "/admin/supplier-credit", icon: <CreditCard size={20} /> },
     { name: "Báo cáo thống kê", href: "/admin/reports", icon: <BarChart3 size={20} /> },
+    { name: "Nhật ký hệ thống", href: "/admin/audit-logs", icon: <ShieldCheck size={20} /> },
     { name: "AI Insights", href: "/admin/ai-insights", icon: <Sparkles size={20} /> },
   ];
 

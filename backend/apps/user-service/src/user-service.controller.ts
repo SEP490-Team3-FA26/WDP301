@@ -2,6 +2,7 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { UserService } from './user-service.service';
 import { BranchService } from './branch.service';
+import { ExportJobStatusDto } from './dto/export-job-status.dto';
 
 @Controller()
 export class UserServiceController {
@@ -82,5 +83,24 @@ export class UserServiceController {
   handleUpdatePoints(@Payload() data: { phone?: string; userId?: string; pointsDelta: number; accumulatedDelta?: number }) {
     return this.userService.updatePoints(data);
   }
-}
 
+  @MessagePattern('audit.created')
+  handleCreateAuditLog(@Payload() data: any) {
+    return this.userService.createAuditLog(data);
+  }
+
+  @MessagePattern('user.audit.list')
+  handleListAuditLogs(@Payload() query: any) {
+    return this.userService.listAuditLogs(query);
+  }
+
+  @MessagePattern('user.audit.export')
+  handleExportAuditLogs(@Payload() query: any) {
+    return this.userService.exportAuditLogs(query);
+  }
+
+  @MessagePattern('user.audit.export_status')
+  async handleExportAuditLogsStatus(@Payload() data: { jobId: string }): Promise<ExportJobStatusDto> {
+    return this.userService.getExportJobStatus(data.jobId);
+  }
+}

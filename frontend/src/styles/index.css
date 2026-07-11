@@ -105,3 +105,17 @@
   border-color: rgba(45, 212, 191, 0.4) !important;
 }
 
+/* Live Audit Log Row Animations */
+@keyframes audit-row-highlight {
+  0% {
+    background-color: rgba(34, 197, 94, 0.2); /* Soft green highlight */
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.audit-row-new {
+  animation: fade-in 0.5s ease-out forwards, audit-row-highlight 2s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+

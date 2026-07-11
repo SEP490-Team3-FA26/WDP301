@@ -50,6 +50,7 @@ import { VoucherManagement } from "./pages/admin/VoucherManagement";
 import { HQApproval } from "./pages/admin/HQApproval";
 import { PriceManagement } from "./pages/admin/PriceManagement";
 import { SupplierCreditManagement } from "./pages/admin/SupplierCreditManagement";
+import { AuditLogs } from "./pages/admin/AuditLogs";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
@@ -112,6 +113,7 @@ export default function App() {
             <Route path="finance" element={<Finance />} />
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
@@ -139,6 +141,7 @@ export default function App() {
             <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
             <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
+            <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="profile" element={<Profile />} />
 
