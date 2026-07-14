@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, Filter, AlertCircle, CheckCircle2, Loader2, Eye, Package, Calendar } from "lucide-react";
 import { medicineService } from "../../services/medicine.service";
+import { useSocket } from "../../hooks/useSocket";
 
 // Helper to decode JWT token to extract branchId
 function getBranchIdFromToken() {
@@ -108,6 +109,21 @@ export function BranchInventory() {
   useEffect(() => {
     fetchBranchInventory();
   }, [debouncedSearch, page, limit, selectedCategory, selectedClassification, branchId]);
+
+  const { onEvent, offEvent } = useSocket();
+
+  useEffect(() => {
+    const handleInventoryUpdate = (data: any) => {
+      console.log('Inventory updated event received:', data);
+      fetchBranchInventory();
+    };
+
+    onEvent('broadcast.inventory_updated', handleInventoryUpdate);
+
+    return () => {
+      offEvent('broadcast.inventory_updated', handleInventoryUpdate);
+    };
+  }, [onEvent, offEvent, debouncedSearch, page, limit, selectedCategory, selectedClassification, branchId]);
 
   const totalPages = Math.ceil(total / limit);
 

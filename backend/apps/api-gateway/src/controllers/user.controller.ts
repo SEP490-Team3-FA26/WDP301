@@ -33,6 +33,9 @@ export class UserController implements OnModuleInit {
       'user.cart.update',
       'user.cart.delete',
       'user.cart.clear',
+      'user.loyalty.get',
+      'user.loyalty.lookup',
+      'user.loyalty.update_points',
     ]);
   }
 
@@ -102,6 +105,24 @@ export class UserController implements OnModuleInit {
   async clearCart(@Request() req) {
     return await sendKafkaMessage(this.kafkaClient, 'user.cart.clear', {
       userId: req.user.sub,
+    });
+  }
+
+  @Get('loyalty')
+  @ApiOperation({ summary: 'Lấy thông tin tích điểm khách hàng thân thiết' })
+  async getLoyalty(@Request() req) {
+    return await sendKafkaMessage(this.kafkaClient, 'user.loyalty.get', {
+      userId: req.user.sub,
+    });
+  }
+
+  @Get('loyalty/lookup')
+  @ApiOperation({ summary: 'Tra cứu thông tin tích điểm của khách hàng bằng số điện thoại' })
+  async lookupLoyalty(@Request() req, @Body('phone') bodyPhone?: string, @Param('phone') paramPhone?: string, @Request() queryReq?: any) {
+    // Check both query param and body
+    const phone = req.query.phone || bodyPhone || paramPhone;
+    return await sendKafkaMessage(this.kafkaClient, 'user.loyalty.lookup', {
+      phone,
     });
   }
 }

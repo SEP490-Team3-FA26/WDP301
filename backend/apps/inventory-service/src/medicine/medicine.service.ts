@@ -92,14 +92,18 @@ export class MedicineService implements OnModuleInit {
 
   async getMedicineById(id: string) {
     try {
+      this.logger.log(`[getMedicineById] Querying medicine by ID from MongoDB: "${id}"`);
       const medicine = await this.medicineModel.findById(id).exec();
       if (!medicine) {
-        throw new RpcException('Medicine not found');
+        this.logger.warn(`[getMedicineById] Medicine with ID "${id}" NOT found in MongoDB!`);
+        throw new RpcException(`Medicine with ID ${id} not found in database`);
       }
+      this.logger.log(`[getMedicineById] Found medicine: "${medicine.name}"`);
 
       // Lấy danh sách lô hàng khả dụng
       const batches = await this.batchModel.find({ medicineId: id, status: 'ACTIVE', stock: { $gt: 0 } }).exec();
       const totalStock = batches.reduce((sum, b) => sum + b.stock, 0);
+      this.logger.log(`[getMedicineById] Found ${batches.length} active batches. Total stock: ${totalStock}`);
 
       // Tìm hạn dùng gần nhất
       let earliestExpiryStr = '2026-12-31';
@@ -109,7 +113,7 @@ export class MedicineService implements OnModuleInit {
       }
 
       const medObj = medicine.toObject();
-      return {
+      const result = {
         ...medObj,
         id: medObj._id.toString(),
         stock: totalStock,
@@ -117,7 +121,10 @@ export class MedicineService implements OnModuleInit {
         status: totalStock > 0 ? 'In Stock' : 'Out of Stock',
         minStock: 50
       };
+      this.logger.log(`[getMedicineById] Returning enriched medicine object: ${JSON.stringify(result)}`);
+      return result;
     } catch (error) {
+      this.logger.error(`[getMedicineById] Error fetching medicine by ID "${id}": ${error.message}`, error.stack);
       throw new RpcException(error.message || 'Lỗi lấy chi tiết thuốc');
     }
   }
@@ -354,8 +361,16 @@ export class MedicineService implements OnModuleInit {
             if (aiData.length === 0 && !targetGroup && minPrice === undefined && maxPrice === undefined && !flavour && !country && !brand && !indication && !brandOrigin) {
               useFallback = true;
             } else {
+              // Filter AI results against actual database to prevent returning non-existent medicines
+              const rawAiMedIds = aiData.map((med: any) => (med._id || med.id || '').toString()).filter(id => id);
+              const existingMeds = await this.medicineModel.find({ _id: { $in: rawAiMedIds } }).select('_id stock price').lean().exec();
+              const existingMedIds = new Set(existingMeds.map(m => m._id.toString()));
+              const existingMedMap = new Map(existingMeds.map(m => [m._id.toString(), m]));
+
+              aiData = aiData.filter((med: any) => existingMedIds.has((med._id || med.id || '').toString()));
+              const aiMedIds = Array.from(existingMedIds);
+
               // Truy vấn lô hàng cho các kết quả từ AI Service
-              const aiMedIds = aiData.map((med: any) => (med._id || med.id || '').toString()).filter(id => id);
               const batchFilter: any = { medicineId: { $in: aiMedIds } };
               if (query.branchId) {
                 batchFilter.branchId = query.branchId;
@@ -370,9 +385,13 @@ export class MedicineService implements OnModuleInit {
 
               mappedAiData = aiData.map((med: any) => {
                 const medId = (med._id || med.id || '').toString();
+                const dbMed = existingMedMap.get(medId);
                 const medBatches = aiBatchesByMedId.get(medId) || [];
                 const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-                const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + b.stock, 0) : (med.stock || 0);
+                
+                // Use DB stock and price to ensure consistency
+                const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + b.stock, 0) : (dbMed?.stock || 0);
+                const actualPrice = dbMed?.price || med.price || 50000;
 
                 let earliestExpiryStr = '2026-12-31';
                 if (activeBatches.length > 0) {
@@ -385,7 +404,7 @@ export class MedicineService implements OnModuleInit {
                   name: med.name,
                   category: med.category || 'Chưa phân loại',
                   drug_classification: med.drug_classification || 'COMMON_SUPPLEMENT',
-                  price: med.price || 50000,
+                  price: actualPrice,
                   stock: totalStock,
                   minStock: 50,
                   status: totalStock > 0 ? 'In Stock' : 'Out of Stock',
@@ -856,6 +875,16 @@ export class MedicineService implements OnModuleInit {
           await log.save();
         }
       }
+    }
+
+    // Đồng bộ tồn kho cho bảng medicines
+    const uniqueMedicineIds = [...new Set(check.items.map((item: any) => item.medicineId))];
+    for (const medId of uniqueMedicineIds) {
+      const activeBatches = await this.batchModel.find({ medicineId: medId, status: 'ACTIVE', stock: { $gt: 0 } }).exec();
+      const totalStock = activeBatches.reduce((sum, b) => sum + b.stock, 0);
+      await this.medicineModel.findByIdAndUpdate(medId, {
+        $set: { stock: totalStock, status: totalStock > 0 ? 'In Stock' : 'Out of Stock' }
+      }).exec();
     }
   }
 

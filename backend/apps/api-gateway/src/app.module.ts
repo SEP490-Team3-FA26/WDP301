@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule, Transport, ClientKafka } from '@nestjs/microservices';
 
 import { SupplierController } from './controllers/supplier.controller';
 import { PurchaseRequisitionController } from './controllers/purchase-requisition.controller';
@@ -28,13 +28,12 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { S3StorageService } from './storage/s3-storage.service';
+import { WebsocketModule } from './websocket/websocket.module';
 
 /**
  * Root Module của API Gateway
  * Chỉ chứa các module để routing và caching — không kết nối trực tiếp Database
  */
-import { OnModuleInit, Inject } from '@nestjs/common';
-import { ClientKafka } from '@nestjs/microservices';
 
 @Module({
   imports: [
@@ -145,6 +144,7 @@ import { ClientKafka } from '@nestjs/microservices';
         },
       },
     ]),
+    WebsocketModule,
   ],
   controllers: [
     SupplierController,

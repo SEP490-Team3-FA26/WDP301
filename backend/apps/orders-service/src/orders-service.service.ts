@@ -5,8 +5,12 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { ClientKafka } from '@nestjs/microservices';
 import { PayOS } from '@payos/node';
+import { lastValueFrom } from 'rxjs';
 import { Order } from './schemas/order.schema';
+import { CreateOrderDto } from './dto/create-order.dto';
 import { Voucher } from './schemas/voucher.schema';
+
+const DEFAULT_PHONE_NUMBER = '0900000000';
 
 @Injectable()
 export class OrdersServiceService implements OnModuleInit {
@@ -18,21 +22,76 @@ export class OrdersServiceService implements OnModuleInit {
     @InjectModel(Voucher.name) private readonly voucherModel: Model<Voucher>,
     private readonly configService: ConfigService,
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
+    @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientKafka,
   ) {
     const clientId = this.configService.get<string>('PAYOS_CLIENT_ID');
     const apiKey = this.configService.get<string>('PAYOS_API_KEY');
     const checksumKey = this.configService.get<string>('PAYOS_CHECKSUM_KEY');
-    
+
     this.logger.log(`Initializing PayOS client with client ID: ${clientId ? 'FOUND' : 'MISSING'}`);
     this.payos = new PayOS({ clientId, apiKey, checksumKey });
   }
 
   async onModuleInit() {
     this.inventoryClient.subscribeToResponseOf('inventory.sale.create');
+    this.inventoryClient.subscribeToResponseOf('inventory.sale.revert');
+    this.userClient.subscribeToResponseOf('user.loyalty.get');
+    this.userClient.subscribeToResponseOf('user.loyalty.lookup');
+    this.userClient.subscribeToResponseOf('user.loyalty.update_points');
+    this.authClient.subscribeToResponseOf('auth.get.user.by.id');
     await this.inventoryClient.connect();
+    await this.userClient.connect();
+    await this.authClient.connect();
+
+    // Background job to cancel PENDING orders older than 15 minutes
+    setInterval(() => {
+      this.cancelExpiredOrdersInBackground().catch(err => {
+        this.logger.error('Failed to run cancel expired orders job:', err);
+      });
+    }, 5 * 60 * 1000); // Check every 5 minutes
   }
 
-  async createOrder(data: any) {
+  private async cancelExpiredOrdersInBackground() {
+    this.logger.log('Running background job to cancel expired PENDING orders...');
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    const expiredOrders = await this.orderModel.find({
+      paymentStatus: 'PENDING',
+      createdAt: { $lt: fifteenMinutesAgo },
+      paymentMethod: 'QR_PAY'
+    }).exec();
+
+    for (const order of expiredOrders) {
+      try {
+        if (order.payosPaymentLinkId) {
+          await this.payos.paymentRequests.cancel(order.orderCode, 'Hết hạn thanh toán (Quá 15 phút)');
+        }
+        order.paymentStatus = 'CANCELLED';
+        await order.save();
+
+        // Refund points if they were redeemed
+        if (order.redeemedPoints > 0 && order.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: order.patientPhone,
+              pointsDelta: order.redeemedPoints,
+            })
+          );
+        }
+        this.logger.log(`Cancelled expired order: ${order.orderCode}`);
+      } catch (err: any) {
+        this.logger.error(`Error cancelling expired order ${order.orderCode}: ${err.message}`);
+        // If PayOS already cancelled or not found, just mark as cancelled in DB
+        if (err.message?.includes('not found') || err.message?.includes('already')) {
+          order.paymentStatus = 'CANCELLED';
+          await order.save();
+        }
+      }
+    }
+  }
+
+
+  async createOrder(data: CreateOrderDto) {
     this.logger.log(`Creating order in DB. PaymentMethod: ${data.paymentMethod}`);
 
     // Generate a unique 64-bit int order code for PayOS
@@ -51,10 +110,105 @@ export class OrdersServiceService implements OnModuleInit {
       voucherDiscount = valRes.discount;
     }
 
+    let redeemedPoints = data.redeemedPoints || 0;
+    let pointsDiscount = 0;
+    let earnedPoints = 0;
+    let patientEmail = data.patientEmail || undefined;
+
+    // Nếu đơn hàng từ UserLoyalty, lấy thông tin email
+    if (data.userId) {
+      try {
+        const userLoyalty = await lastValueFrom(
+          this.userClient.send('user.loyalty.get', { userId: data.userId })
+        );
+        if (userLoyalty) {
+          // Gắn email để gửi hóa đơn
+          if (userLoyalty.email && !patientEmail) {
+            patientEmail = userLoyalty.email;
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to fetch user loyalty for ID ${data.userId}: ${err.message}`);
+      }
+
+      // Fallback: Lấy email từ auth-service (bảng users) nếu chưa có patientEmail
+      if (!patientEmail) {
+        try {
+          const authUser = await lastValueFrom(
+            this.authClient.send('auth.get.user.by.id', data.userId)
+          );
+          if (authUser && authUser.email) {
+            patientEmail = authUser.email;
+          }
+        } catch (err) {
+          this.logger.warn(`Failed to fetch user email from auth-service for ID ${data.userId}: ${err.message}`);
+        }
+      }
+    }
+
+    if (data.patientPhone && data.patientPhone !== DEFAULT_PHONE_NUMBER) {
+      try {
+        const userLoyalty = await lastValueFrom(
+          this.userClient.send('user.loyalty.lookup', { phone: data.patientPhone })
+        );
+        if (userLoyalty && !userLoyalty.error) {
+          const userPoints = userLoyalty.points || 0;
+          if (redeemedPoints > userPoints) {
+            throw new RpcException(`Số điểm quy đổi (${redeemedPoints}) lớn hơn số điểm bạn đang có (${userPoints})`);
+          }
+
+          if (userLoyalty.email && !patientEmail) {
+            patientEmail = userLoyalty.email;
+          }
+
+          // Enforce 50% max point redemption constraint
+          const subtotal = data.items.reduce((sum: number, it: any) => sum + it.price * it.quantity, 0);
+          const memberDiscount = Math.round(subtotal * 0.05);
+          const payableBeforePoints = subtotal - memberDiscount - voucherDiscount;
+          const maxRedeemPoints = Math.floor(payableBeforePoints * 0.5);
+
+          if (redeemedPoints > maxRedeemPoints) {
+            throw new RpcException(`Chỉ được phép tiêu điểm tối đa 50% giá trị đơn hàng (tối đa quy đổi ${maxRedeemPoints} điểm)`);
+          }
+
+          pointsDiscount = redeemedPoints * (userLoyalty.conversionRate || 1);
+
+          // Earned points: 1% * tier multiplier
+          earnedPoints = Math.round((data.totalAmount / 100) * (userLoyalty.multiplier || 1.0));
+        } else {
+          if (redeemedPoints > 0) {
+            throw new RpcException('Số điện thoại chưa đăng ký thành viên thân thiết');
+          }
+          earnedPoints = Math.round(data.totalAmount / 100);
+        }
+      } catch (err: any) {
+        this.logger.error(`Error looking up customer: ${err.message}`);
+        if (redeemedPoints > 0) {
+          throw new RpcException(err.message || 'Không thể xác thực điểm tích lũy của khách hàng.');
+        }
+        earnedPoints = Math.round(data.totalAmount / 100);
+      }
+    } else {
+      if (redeemedPoints > 0) {
+        throw new RpcException('Vui lòng cung cấp số điện thoại để tiêu điểm tích lũy.');
+      }
+    }
+
+    // Instantly deduct points from user balance if redeeming
+    if (redeemedPoints > 0) {
+      await lastValueFrom(
+        this.userClient.send('user.loyalty.update_points', {
+          phone: data.patientPhone,
+          pointsDelta: -redeemedPoints,
+        })
+      );
+    }
+
     const newOrder = new this.orderModel({
       orderCode,
       patientName: data.patientName,
       patientPhone: data.patientPhone,
+      patientEmail,
       shippingAddress: data.shippingAddress || 'Mua tại quầy',
       items: data.items,
       totalAmount: data.totalAmount,
@@ -63,13 +217,54 @@ export class OrdersServiceService implements OnModuleInit {
       type: data.type || 'ONLINE',
       voucherCode,
       voucherDiscount,
+      redeemedPoints,
+      pointsDiscount,
+      earnedPoints,
       userId: data.userId,
     });
 
+    // ========================================================
+    // ENTERPRISE SAGA PATTERN IMPLEMENTATION
+    // ========================================================
+
+    // Step 1: Claim Voucher atomically
+    if (newOrder.voucherCode) {
+      const voucherDoc = await this.voucherModel.findOne({ code: newOrder.voucherCode }).exec();
+      const usageLimitFilter = (voucherDoc?.usageLimit !== null && voucherDoc?.usageLimit !== undefined)
+        ? { usedCount: { $lt: voucherDoc.usageLimit } }
+        : {};
+
+      const claimed = await this.voucherModel.findOneAndUpdate(
+        { code: newOrder.voucherCode, isActive: true, ...usageLimitFilter },
+        { $inc: { usedCount: 1 } },
+        { new: true }
+      ).exec();
+
+      if (!claimed) {
+        throw new RpcException({ message: 'Mã giảm giá đã hết lượt sử dụng hoặc không còn hiệu lực' });
+      }
+    }
+
+    let saleRes;
+    // Step 2: Deduct Loyalty Points (Reserve)
+    if (redeemedPoints > 0) {
+      await lastValueFrom(
+        this.userClient.send('user.loyalty.update_points', {
+          phone: newOrder.patientPhone,
+          pointsDelta: -redeemedPoints,
+        })
+      );
+    }
+
+    // Step 3: Reserve Inventory
+    saleRes = await this.deductInventory(newOrder);
+
+    // Branching logic based on payment method
     if (data.paymentMethod === 'QR_PAY') {
       try {
+        // Step 4A: Generate PayOS Link
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-        
+
         // Clean description to avoid PayOS validation error (alphanumeric, no spaces, max 25 chars)
         const description = `WDP${orderCode}`.substring(0, 25);
 
@@ -78,7 +273,7 @@ export class OrdersServiceService implements OnModuleInit {
           amount: data.totalAmount,
           description,
           items: data.items.map((it: any) => ({
-            name: it.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').substring(0, 20), // remove vietnamese tones & limit length
+            name: it.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').substring(0, 20),
             quantity: it.quantity,
             price: it.price,
           })),
@@ -120,6 +315,22 @@ export class OrdersServiceService implements OnModuleInit {
       // Deduct inventory and record sale
       try {
         const saleRes = await this.deductInventory(newOrder);
+
+        // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
+        if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: newOrder.patientPhone,
+              pointsDelta: newOrder.earnedPoints,
+              accumulatedDelta: newOrder.earnedPoints,
+            })
+          );
+        }
+
+        newOrder.paymentStatus = 'PAID';
+        await newOrder.save();
+        this.sendInvoiceEmailAsync(newOrder);
+
         return {
           success: true,
           orderCode,
@@ -129,6 +340,10 @@ export class OrdersServiceService implements OnModuleInit {
         };
       } catch (err) {
         this.logger.error('Error deducting inventory:', err);
+
+        // Asynchronously trigger sending invoice email even if inventory deduction fails
+        this.sendInvoiceEmailAsync(newOrder);
+
         // Save with warning
         return {
           success: true,
@@ -148,8 +363,8 @@ export class OrdersServiceService implements OnModuleInit {
       throw new RpcException({ message: `Không tìm thấy đơn hàng với mã: ${orderCode}` });
     }
 
-    if (order.paymentStatus === 'PAID') {
-      return { success: true, status: 'PAID', order };
+    if (order.paymentStatus === 'PAID' || order.paymentStatus === 'CANCELLED') {
+      return { success: true, status: order.paymentStatus, order };
     }
 
     try {
@@ -171,18 +386,81 @@ export class OrdersServiceService implements OnModuleInit {
 
         // Deduct inventory
         const saleRes = await this.deductInventory(order);
+
+        // CREDIT POINTS ON SUCCESSFUL PAYOS PAYMENT
+        if (order.earnedPoints > 0 && order.patientPhone !== '0900000000') {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: order.patientPhone,
+              pointsDelta: order.earnedPoints,
+              accumulatedDelta: order.earnedPoints,
+            })
+          );
+        }
+
+        this.sendInvoiceEmailAsync(order);
+
         return { success: true, status: 'PAID', order, saleResult: saleRes };
       } else if (paymentInfo.status === 'CANCELLED') {
         order.paymentStatus = 'CANCELLED';
         await order.save();
+
+        // SAGA REVERT FOR CANCELLED QR_PAY
+
+        // 1. Revert Inventory
+        await lastValueFrom(this.inventoryClient.send('inventory.sale.revert', { orderCode: order.orderCode })).catch(e => this.logger.error('Failed to revert inventory on cancel', e));
+
+        // 2. Refund Points
+        if (order.redeemedPoints > 0 && order.patientPhone !== DEFAULT_PHONE_NUMBER) {
+          await lastValueFrom(
+            this.userClient.send('user.loyalty.update_points', {
+              phone: order.patientPhone,
+              pointsDelta: order.redeemedPoints,
+            })
+          ).catch(e => this.logger.error('Failed to refund points on cancel', e));
+        }
+
+        // 3. Revert Voucher
+        if (order.voucherCode) {
+          await this.voucherModel.updateOne(
+            { code: order.voucherCode },
+            { $inc: { usedCount: -1 } }
+          ).exec();
+        }
+
         return { success: true, status: 'CANCELLED', order };
       }
 
       return { success: true, status: 'PENDING', order };
     } catch (err) {
       this.logger.error(`Error querying PayOS for ${orderCode}:`, err);
-      // Return pending if transaction is not found or fails
       return { success: true, status: 'PENDING', order };
+    }
+  }
+
+  private sendInvoiceEmailAsync(order: any) {
+    if (order.patientEmail) {
+      this.logger.log(`Emitting orders.invoice.send event to auth-service for orderCode: ${order.orderCode} to email: ${order.patientEmail}`);
+      this.authClient.emit('orders.invoice.send', {
+        orderCode: order.orderCode,
+        patientName: order.patientName,
+        patientPhone: order.patientPhone,
+        patientEmail: order.patientEmail,
+        shippingAddress: order.shippingAddress,
+        items: order.items,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        type: order.type,
+        voucherCode: order.voucherCode,
+        voucherDiscount: order.voucherDiscount,
+        redeemedPoints: order.redeemedPoints,
+        pointsDiscount: order.pointsDiscount,
+        earnedPoints: order.earnedPoints,
+        createdAt: order.createdAt || new Date(),
+      });
+    } else {
+      this.logger.warn(`No patientEmail configured for orderCode: ${order.orderCode} — skipping invoice email`);
     }
   }
 
@@ -194,7 +472,7 @@ export class OrdersServiceService implements OnModuleInit {
     if (!userId) {
       throw new RpcException({ message: 'Thiếu thông tin người dùng' });
     }
-    
+
     // Tìm đơn hàng:
     // 1. Đơn mới: có userId khớp với người đang đăng nhập
     // 2. Đơn cũ theo tên: patientName khớp với tên tài khoản (case-insensitive)
@@ -205,13 +483,13 @@ export class OrdersServiceService implements OnModuleInit {
       { userId: null },
       { userId: '' },
     ];
-    
+
     if (fullName && fullName.trim() !== '') {
       orConditions.push({ patientName: { $regex: new RegExp(`^${fullName.trim()}$`, 'i') } });
     }
-    
+
     const query = { $or: orConditions };
-    
+
     this.logger.log(`[getMyOrders] Querying orders for userId=${userId}, fullName=${fullName}`);
     const results = await this.orderModel.find(query).sort({ createdAt: -1 }).exec();
     this.logger.log(`[getMyOrders] Found ${results.length} orders`);
@@ -247,7 +525,7 @@ export class OrdersServiceService implements OnModuleInit {
 
   async createVoucher(data: any) {
     const code = data.code.toUpperCase().trim();
-    
+
     // Check start and expiry date validity
     const start = new Date(data.startDate);
     const expiry = new Date(data.expiryDate);

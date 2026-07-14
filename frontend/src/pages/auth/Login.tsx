@@ -7,7 +7,7 @@ export function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [role, setRole] = useState("admin");
-  const [email, setEmail] = useState("admin@vinapharmacy.com");
+  const [email, setEmail] = useState("admin@ABC pharmacy.com");
   const [password, setPassword] = useState("123456");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,12 +29,12 @@ export function Login() {
   }, [searchParams, navigate]);
 
   const roles = [
-    { id: "admin", label: "Admin Tổng", subLabel: "Hệ thống", email: "admin@vinapharmacy.com", icon: <ShieldCheck size={20} />, activeColor: "bg-rose-50 border-rose-200 text-rose-700", iconColor: "text-rose-500" },
-    { id: "head_branch", label: "Tổng chi nhánh", subLabel: "Giám đốc", email: "director@vinapharmacy.com", icon: <Building2 size={20} />, activeColor: "bg-indigo-50 border-indigo-200 text-indigo-700", iconColor: "text-indigo-500" },
-    { id: "warehouse", label: "Quản lý kho", subLabel: "Kho vận", email: "warehouse@vinapharmacy.com", icon: <PackageSearch size={20} />, activeColor: "bg-amber-50 border-amber-200 text-amber-700", iconColor: "text-amber-500" },
-    { id: "branch", label: "QL Chi nhánh", subLabel: "Cơ sở", email: "manager@vinapharmacy.com", icon: <Store size={20} />, activeColor: "bg-emerald-50 border-emerald-200 text-emerald-700", iconColor: "text-emerald-500" },
-    { id: "pharmacist", label: "Thuốc / Bán", subLabel: "Dược sĩ", email: "pharmacist@vinapharmacy.com", icon: <Pill size={20} />, activeColor: "bg-blue-50 border-blue-200 text-blue-700", iconColor: "text-[#0057cd]" },
-    { id: "user", label: "Người dùng", subLabel: "Khách hàng", email: "user@vinapharmacy.com", icon: <Users size={20} />, activeColor: "bg-purple-50 border-purple-200 text-purple-700", iconColor: "text-purple-500" },
+    { id: "admin", label: "Admin Tổng", subLabel: "Hệ thống", email: "admin@ABC pharmacy.com", icon: <ShieldCheck size={20} />, activeColor: "bg-rose-50 border-rose-200 text-rose-700", iconColor: "text-rose-500" },
+    { id: "head_branch", label: "Tổng chi nhánh", subLabel: "Giám đốc", email: "director@ABC pharmacy.com", icon: <Building2 size={20} />, activeColor: "bg-indigo-50 border-indigo-200 text-indigo-700", iconColor: "text-indigo-500" },
+    { id: "warehouse", label: "Quản lý kho", subLabel: "Kho vận", email: "warehouse@ABC pharmacy.com", icon: <PackageSearch size={20} />, activeColor: "bg-amber-50 border-amber-200 text-amber-700", iconColor: "text-amber-500" },
+    { id: "branch", label: "QL Chi nhánh", subLabel: "Cơ sở", email: "manager@ABC pharmacy.com", icon: <Store size={20} />, activeColor: "bg-emerald-50 border-emerald-200 text-emerald-700", iconColor: "text-emerald-500" },
+    { id: "pharmacist", label: "Thuốc / Bán", subLabel: "Dược sĩ", email: "pharmacist@ABC pharmacy.com", icon: <Pill size={20} />, activeColor: "bg-blue-50 border-blue-200 text-blue-700", iconColor: "text-[#0057cd]" },
+    { id: "user", label: "Người dùng", subLabel: "Khách hàng", email: "user@ABC pharmacy.com", icon: <Users size={20} />, activeColor: "bg-purple-50 border-purple-200 text-purple-700", iconColor: "text-purple-500" },
   ];
 
   const handleRoleSelect = (selectedRole: any) => {
@@ -66,14 +66,14 @@ export function Login() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    
+
     try {
       const data = await authService.login(email, password);
 
       // Lưu JWT Token và Role
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("userRole", data.user.role);
-      
+
       // Redirect theo Role
       navigate(redirectByRole(data.user.role));
     } catch (err: any) {
@@ -97,14 +97,13 @@ export function Login() {
             {roles.map((r) => {
               const isActive = role === r.id;
               return (
-                <div 
+                <div
                   key={r.id}
                   onClick={() => handleRoleSelect(r)}
-                  className={`relative p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 flex flex-col items-center text-center gap-2 ${
-                    isActive 
-                      ? `${r.activeColor} shadow-sm scale-[1.02]` 
+                  className={`relative p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 flex flex-col items-center text-center gap-2 ${isActive
+                      ? `${r.activeColor} shadow-sm scale-[1.02]`
                       : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
+                    }`}
                 >
                   <div className={`${isActive ? r.iconColor : 'text-slate-400'} transition-colors`}>
                     {r.icon}
@@ -125,19 +124,19 @@ export function Login() {
         </div>
 
         <div className="border-t border-slate-100 pt-5">
-           <div className="space-y-4">
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-1.5">Email</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400">
                   <Mail size={18} />
                 </div>
-                <input 
-                  type="email" 
+                <input
+                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Nhập email..."
-                  className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                  className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   required
                 />
               </div>
@@ -154,12 +153,12 @@ export function Login() {
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400">
                   <Lock size={18} />
                 </div>
-                <input 
+                <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                  className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   required
                 />
               </div>
@@ -173,7 +172,7 @@ export function Login() {
           </div>
         </div>
 
-        <button 
+        <button
           type="submit"
           disabled={loading}
           className="w-full flex justify-center items-center gap-2 py-3.5 px-4 mt-6 border border-transparent rounded-xl shadow-md text-sm font-black text-white bg-[#0057cd] hover:bg-[#0a58ca] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0057cd] transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed"
@@ -191,7 +190,7 @@ export function Login() {
           </div>
         </div>
 
-        <a 
+        <a
           href="/api/auth/google"
           className="w-full flex justify-center items-center gap-3 py-3.5 px-4 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 hover:bg-slate-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-200 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
         >

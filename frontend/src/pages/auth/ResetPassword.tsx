@@ -14,12 +14,16 @@ export function ResetPassword() {
 
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
+  const isSubmitting = React.useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting.current) return;
+    isSubmitting.current = true;
     setLoading(true);
     setError("");
     setSuccess("");
@@ -27,11 +31,19 @@ export function ResetPassword() {
     if (!email) {
       setError("Thiếu thông tin email. Vui lòng quay lại bước gửi mã.");
       setLoading(false);
+      isSubmitting.current = false;
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("Mật khẩu xác nhận không khớp!");
+      setLoading(false);
+      isSubmitting.current = false;
       return;
     }
 
     try {
-      await authService.resetPassword(email, token, newPassword);
+      await authService.resetPassword(email.trim(), token.trim(), newPassword);
 
       setSuccess("Đặt lại mật khẩu thành công! Đang chuyển hướng...");
       setTimeout(() => {
@@ -41,6 +53,7 @@ export function ResetPassword() {
       setError(err.message);
     } finally {
       setLoading(false);
+      isSubmitting.current = false;
     }
   };
 
@@ -98,6 +111,23 @@ export function ResetPassword() {
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full pl-11 pr-4 py-3 bg-white/60 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] focus:bg-white transition-all shadow-sm"
               placeholder="Nhập mật khẩu mới"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block text-sm font-bold text-slate-700">Xác nhận mật khẩu mới</label>
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[#0057cd] transition-colors">
+              <Lock className="h-5 w-5" />
+            </div>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white/60 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] focus:bg-white transition-all shadow-sm"
+              placeholder="Nhập lại mật khẩu mới"
               required
             />
           </div>

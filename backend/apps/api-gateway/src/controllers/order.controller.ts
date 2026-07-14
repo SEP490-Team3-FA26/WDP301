@@ -1,13 +1,13 @@
-import { Controller, Post, Get, Body, Param, Inject, OnModuleInit, UseGuards, Req } from '@nestjs/common';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { Controller, Post, Get, Body, Param, Inject, OnModuleInit, Req, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('api/orders')
 export class OrderController implements OnModuleInit {
   constructor(
     @Inject('ORDER_SERVICE') private readonly orderClient: ClientKafka,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     await subscribeToKafkaTopics(this.orderClient, [
@@ -20,9 +20,20 @@ export class OrderController implements OnModuleInit {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  async createOrder(@Req() req: any, @Body() data: any) {
-    const payload = { ...data, userId: req.user.sub };
-    return await sendKafkaMessage(this.orderClient, 'orders.create', payload);
+  async createOrder(@Body() data: any, @Req() req: any) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        if (payload && payload.sub) {
+          data.userId = payload.sub;
+        }
+      } catch (err) {
+        // Ignore decoding errors
+      }
+    }
+    return await sendKafkaMessage(this.orderClient, 'orders.create', data);
   }
 
   @Get('check/:orderCode')
@@ -32,7 +43,19 @@ export class OrderController implements OnModuleInit {
 
   @UseGuards(JwtAuthGuard)
   @Post('payos-link')
-  async createPayOSLink(@Req() req: any, @Body() data: any) {
+  async createPayOSLink(@Body() data: any, @Req() req: any) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        if (payload && payload.sub) {
+          data.userId = payload.sub;
+        }
+      } catch (err) {
+        // Ignore decoding errors
+      }
+    }
     // Force method to QR_PAY and create payment link
     return await sendKafkaMessage(this.orderClient, 'orders.create', {
       ...data,
@@ -51,7 +74,7 @@ export class OrderController implements OnModuleInit {
   async getMyOrders(@Req() req: any) {
     const userId = req.user.sub;
     const fullName = req.user.fullName || '';
-    
+
     return await sendKafkaMessage(this.orderClient, 'orders.my-orders', { userId, fullName });
   }
 }

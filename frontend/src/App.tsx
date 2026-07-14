@@ -31,6 +31,7 @@ import { CustomerCart } from "./pages/customer/CustomerCart";
 import { CustomerCheckout } from "./pages/customer/CustomerCheckout";
 import { AIConsultant } from "./pages/customer/AIConsultant";
 import { CustomerProfile } from "./pages/customer/CustomerProfile";
+import { CustomerOrders } from "./pages/customer/CustomerOrders";
 
 // Master Data
 import { Products } from "./pages/master-data/Products";
@@ -93,14 +94,15 @@ export default function App() {
         <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
 
         {/* --- Customer Routes --- */}
-        <Route path="/customer/shop" element={<Landing />} />
         <Route path="/customer" element={<CustomerLayout />}>
           <Route index element={<Navigate to="shop" replace />} />
+          <Route path="shop" element={<CustomerShop />} />
           <Route path="cart" element={<CustomerCart />} />
           <Route path="checkout" element={<CustomerCheckout />} />
           <Route path="interactions" element={<DrugInteractions />} />
           <Route path="ai-consult" element={<AIConsultant />} />
           <Route path="profile" element={<CustomerProfile />} />
+          <Route path="orders" element={<CustomerOrders />} />
         </Route>
 
         {/* --- Admin / HQ Routes --- */}

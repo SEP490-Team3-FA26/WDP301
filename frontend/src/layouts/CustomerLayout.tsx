@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingCart, BrainCircuit, HeartPulse, Menu, X, LogOut, ShieldAlert } from "lucide-react";
+import { ShoppingCart, BrainCircuit, HeartPulse, Menu, X, LogOut, ShieldAlert, User, MapPin, ClipboardList, ChevronDown } from "lucide-react";
 import api from "../services/api";
 
 export function CustomerLayout() {
@@ -8,6 +8,21 @@ export function CustomerLayout() {
   const navigate = useNavigate();
   const [cartCount, setCartCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loyalty, setLoyalty] = useState<{ points: number; tier: string; fullName?: string } | null>(null);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+
+  const fetchLoyaltyInfo = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await api.get("/api/users/loyalty");
+      if (res.data && !res.data.error) {
+        setLoyalty(res.data);
+      }
+    } catch (err) {
+      console.error("Error reading loyalty info:", err);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -39,16 +54,14 @@ export function CustomerLayout() {
 
   useEffect(() => {
     updateCartCount();
+    fetchLoyaltyInfo();
 
     // Listen for custom event when items are added to cart
     window.addEventListener("cartUpdated", updateCartCount);
-
-    // Poll occasionally as fallback
-    const interval = setInterval(updateCartCount, 5000);
-
+    window.addEventListener("loyaltyUpdated", fetchLoyaltyInfo);
     return () => {
       window.removeEventListener("cartUpdated", updateCartCount);
-      clearInterval(interval);
+      window.removeEventListener("loyaltyUpdated", fetchLoyaltyInfo);
     };
   }, []);
 
@@ -85,8 +98,8 @@ export function CustomerLayout() {
                   key={item.href}
                   to={item.href}
                   className={`px-4.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${isActive
-                      ? "bg-[#f2f3ff] text-[#0d6efd] font-black"
-                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                    ? "bg-[#f2f3ff] text-[#0d6efd] font-black"
+                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                     }`}
                 >
                   {item.icon}
@@ -113,23 +126,70 @@ export function CustomerLayout() {
 
             {/* Profile / Login */}
             {hasToken ? (
-              <div className="hidden sm:flex items-center gap-2.5 pl-2 border-l border-slate-200">
-                <Link to="/customer/profile" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-                  <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-xs uppercase shadow-inner">
-                    KH
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800">Khách Hàng</span>
-                    <span className="text-[10px] font-medium text-slate-400 hover:text-blue-500 transition-colors">Hồ sơ & Lịch sử</span>
-                  </div>
-                </Link>
+              <div className="relative border-l border-slate-200 pl-2">
                 <button
-                  onClick={handleLogout}
-                  className="p-2 text-slate-400 hover:text-red-500 rounded-lg transition-colors ml-1 cursor-pointer"
-                  title="Đăng xuất"
+                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                  className="flex items-center gap-2.5 hover:bg-slate-50 p-1.5 rounded-xl transition-all cursor-pointer text-left focus:outline-none"
                 >
-                  <LogOut size={16} />
+                  <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-xs uppercase shadow-inner">
+                    {loyalty?.tier?.substring(0, 2) || "KH"}
+                  </div>
+                  <div className="hidden sm:flex flex-col">
+                    <span className="text-xs font-bold text-slate-800">{loyalty?.fullName || "Khách Hàng"}</span>
+                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                      Hạng {loyalty?.tier || "Bronze"} • <span className="text-blue-600">{loyalty?.points?.toLocaleString() || 0}đ</span>
+                    </span>
+                  </div>
+                  <ChevronDown size={14} className="text-slate-400" />
                 </button>
+
+                {showProfileDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowProfileDropdown(false)} />
+                    <div className="absolute right-0 mt-2.5 w-60 bg-white rounded-2xl border border-slate-100 shadow-xl py-2 z-50 animate-fade-in text-left">
+                      <div className="px-4 py-2 border-b border-slate-50 mb-1.5">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Tài khoản</span>
+                        <span className="text-xs font-extrabold text-slate-800 truncate block">{loyalty?.fullName || "Khách Hàng"}</span>
+                      </div>
+                      <Link
+                        to="/customer/profile"
+                        onClick={() => setShowProfileDropdown(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-blue-650 hover:bg-slate-50 transition-all"
+                      >
+                        <User size={15} />
+                        <span>Thông tin cá nhân</span>
+                      </Link>
+                      <Link
+                        to="/customer/orders"
+                        onClick={() => setShowProfileDropdown(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-blue-650 hover:bg-slate-50 transition-all"
+                      >
+                        <ClipboardList size={15} />
+                        <span>Đơn hàng của tôi</span>
+                      </Link>
+                      <Link
+                        to="/customer/addresses"
+                        onClick={() => setShowProfileDropdown(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-blue-650 hover:bg-slate-50 transition-all"
+                      >
+                        <MapPin size={15} />
+                        <span>Sổ địa chỉ nhận hàng</span>
+                      </Link>
+                      <div className="border-t border-slate-50 mt-1.5 pt-1.5">
+                        <button
+                          onClick={() => {
+                            setShowProfileDropdown(false);
+                            handleLogout();
+                          }}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-all cursor-pointer text-left"
+                        >
+                          <LogOut size={15} />
+                          <span>Đăng xuất</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <Link
@@ -161,8 +221,8 @@ export function CustomerLayout() {
                   to={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={`w-full px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-3 transition-all ${isActive
-                      ? "bg-[#f2f3ff] text-[#0d6efd]"
-                      : "text-slate-600 hover:bg-slate-50"
+                    ? "bg-[#f2f3ff] text-[#0d6efd]"
+                    : "text-slate-600 hover:bg-slate-50"
                     }`}
                 >
                   {item.icon}

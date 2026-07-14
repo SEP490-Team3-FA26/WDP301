@@ -1,8 +1,12 @@
 name: CI/CD — Test (dev + main) · Deploy EC2 (main only)
 
 # ──────────────────────────────────────────────────────────────
-#  push dev   → job "build-and-test"  (lint + test + build image verify)
-#  push main  → job "build-and-test" + job "deploy" (build → push ECR → EC2)
+#  push dev   → job "build-and-test"  (lint + test + verify build)
+#  push main  → job "build-and-test" + job "deploy" (build prod → ECR → EC2)
+#
+# Dockerfiles:
+#   backend/docker/backend.Dockerfile      ← PRODUCTION (build TS → JS, ít RAM)
+#   backend/docker/backend.Dockerfile.dev  ← DEV LOCAL (ts-node hot-reload)
 #
 # Required GitHub repo secrets (chỉ cần cho job deploy / main):
 #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY   (CI user push ECR)
