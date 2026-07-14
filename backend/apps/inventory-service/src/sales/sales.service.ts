@@ -790,6 +790,7 @@ export class SalesService implements OnModuleInit {
         paymentMethod: order.paymentMethod,
         soldBy: order.soldBy,
         createdAt: (order as any).createdAt,
+        branchId: order.branchId,
         gross,
         returned,
         exchangedOut,

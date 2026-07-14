@@ -22,6 +22,7 @@ export class PurchaseRequisitionController implements OnModuleInit {
 
   /**
    * BƯỚC 1: Chi nhánh tạo yêu cầu mua hàng (PR)
+   * Branch tạo PR → Thông báo cho Warehouse (để gom đơn)
    */
   @Post()
   async createPurchaseRequisition(@Body() data: any) {
@@ -29,7 +30,7 @@ export class PurchaseRequisitionController implements OnModuleInit {
     
     console.log('📋 PR Created - Full Result:', JSON.stringify(result, null, 2));
     
-    // Emit notification to admin room
+    // Emit notification to warehouse room (NOT admin)
     if (result && this.websocketGateway.server) {
       // Handle nested response structure (result.data or result directly)
       const prData = result.data || result;
@@ -47,8 +48,16 @@ export class PurchaseRequisitionController implements OnModuleInit {
         timestamp: new Date().toISOString(),
       };
       
-      console.log('🔔 Emitting notification:', notificationPayload);
-      this.websocketGateway.server.to('admin').emit('new_pr_notification', notificationPayload);
+      console.log('🔔 Emitting NEW_PR notification to WAREHOUSE:', notificationPayload);
+      
+      // Check how many clients in warehouse room
+      const warehouseClients = await this.websocketGateway.server.in('warehouse').fetchSockets();
+      console.log(`📊 Warehouse room has ${warehouseClients.length} connected clients`);
+      
+      // Chỉ gửi cho warehouse, không gửi admin
+      this.websocketGateway.server.to('warehouse').emit('new_pr_notification', notificationPayload);
+      
+      console.log('✅ Notification emitted to warehouse room');
     }
     
     return result;
@@ -78,12 +87,48 @@ export class PurchaseRequisitionController implements OnModuleInit {
   }
 
   @Patch(':id/status')
-  async updatePurchaseRequisitionStatus(@Param('id') id: string, @Body() data: { status: string }) {
-    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.update_status', { id, status: data.status });
+  async updatePurchaseRequisitionStatus(@Param('id') id: string, @Body() data: { status: string; rejectionReason?: string; approvedBy?: string }) {
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.update_status', { id, status: data.status, rejectionReason: data.rejectionReason, approvedBy: data.approvedBy });
+    
+    // Handle nested response
+    const prData = result.data || result;
     
     // Broadcast real-time event to all connected frontend clients
     if (this.websocketGateway.server) {
       this.websocketGateway.server.emit('pr_updated', { id, status: data.status });
+      
+      // Emit targeted notifications based on status
+      if (data.status === 'APPROVED' && prData.branchId) {
+        const notificationPayload = {
+          type: 'PR_APPROVED',
+          prId: prData._id || id,
+          prCode: prData.prCode || 'PR-???',
+          branchId: prData.branchId,
+          branchName: prData.branchName || 'Chi nhánh',
+          message: `Yêu cầu nhập hàng ${prData.prCode || 'PR-???'} đã được phê duyệt`,
+          approvedBy: data.approvedBy || 'Admin',
+          timestamp: new Date().toISOString(),
+        };
+        
+        console.log('✅ Emitting PR approved notification:', notificationPayload);
+        this.websocketGateway.server.to(`branch-${prData.branchId}`).emit('pr_approved_notification', notificationPayload);
+      }
+      
+      if (data.status === 'REJECTED' && prData.branchId) {
+        const notificationPayload = {
+          type: 'PR_REJECTED',
+          prId: prData._id || id,
+          prCode: prData.prCode || 'PR-???',
+          branchId: prData.branchId,
+          branchName: prData.branchName || 'Chi nhánh',
+          message: `Yêu cầu nhập hàng ${prData.prCode || 'PR-???'} bị từ chối${data.rejectionReason ? `: ${data.rejectionReason}` : ''}`,
+          rejectionReason: data.rejectionReason || 'Không có lý do cụ thể',
+          timestamp: new Date().toISOString(),
+        };
+        
+        console.log('❌ Emitting PR rejected notification:', notificationPayload);
+        this.websocketGateway.server.to(`branch-${prData.branchId}`).emit('pr_rejected_notification', notificationPayload);
+      }
     }
     
     return result;
