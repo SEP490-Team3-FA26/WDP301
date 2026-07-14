@@ -294,9 +294,6 @@ export class SalesService implements OnModuleInit {
         unit: medicine.unit || 'Hộp',
         batches: allocatedBatches
       });
-
-      // Cập nhật tồn kho tổng của thuốc
-      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: -item.quantity } }).exec();
     }
 
     // Tạo hóa đơn bán hàng
@@ -811,6 +808,75 @@ export class SalesService implements OnModuleInit {
         paymentMethodBreakdown
       },
       orders: details
+    };
+  }
+
+  async getInventoryPerformance(branchId: string, startDateStr: string, endDateStr: string) {
+    this.logger.log(`Generating inventory performance report. Branch: ${branchId}`);
+    
+    let startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30); // Default to last 30 days
+    if (startDateStr) startDate = new Date(startDateStr);
+    
+    let endDate = new Date();
+    if (endDateStr) endDate = new Date(endDateStr);
+
+    const query: any = {
+      createdAt: { $gte: startDate, $lte: endDate }
+    };
+    if (branchId && branchId !== 'all' && branchId !== 'CENTRAL_WH') {
+      query.branchId = branchId;
+    }
+
+    // 1. Top Selling Products
+    const topSelling = await this.saleModel.aggregate([
+      { $match: query },
+      { $unwind: "$items" },
+      { $group: {
+          _id: "$items.medicineId",
+          name: { $first: "$items.name" },
+          totalQuantity: { $sum: "$items.quantity" },
+          totalRevenue: { $sum: { $multiply: ["$items.quantity", "$items.price"] } }
+        }
+      },
+      { $sort: { totalQuantity: -1 } },
+      { $limit: 20 }
+    ]);
+
+    // 2. Slow Moving Products (Dead Stock)
+    // Find medicines that have stock > 0 but were NOT in any sales order in the given period
+    const activeMedicineIds = await this.saleModel.distinct("items.medicineId", query);
+    
+    const slowMovingQuery: any = {
+      stock: { $gt: 0 },
+      _id: { $nin: activeMedicineIds }
+    };
+    
+    const slowMovingMedicines = await this.medicineModel
+      .find(slowMovingQuery)
+      .sort({ stock: -1 })
+      .limit(50)
+      .select('name sku stock category unit price createdAt')
+      .lean();
+
+    return {
+      period: { startDate, endDate },
+      branchId: branchId || 'all',
+      topSelling: topSelling.map(t => ({
+        medicineId: t._id,
+        name: t.name,
+        totalQuantity: t.totalQuantity,
+        totalRevenue: t.totalRevenue
+      })),
+      slowMoving: slowMovingMedicines.map(m => ({
+        medicineId: m._id,
+        name: m.name,
+        sku: (m as any).sku || 'N/A',
+        stock: m.stock,
+        price: m.price || 0,
+        unit: m.unit || 'Hộp',
+        daysInStock: Math.floor((Date.now() - new Date((m as any).createdAt).getTime()) / (1000 * 3600 * 24))
+      }))
     };
   }
 }

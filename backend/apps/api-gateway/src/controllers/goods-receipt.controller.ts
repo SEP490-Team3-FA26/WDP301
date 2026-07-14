@@ -30,4 +30,30 @@ export class GoodsReceiptController implements OnModuleInit {
   async getGoodsReceiptNoteById(@Param('id') id: string) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.get_by_id', { id });
   }
+
+  // Inspection Endpoints
+  @Post('inspections')
+  async createInspectionRecord(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.inspection.create', data);
+  }
+
+  @Post('inspections/verify')
+  async verifyInspectionItem(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.inspection.verify_item', data);
+  }
+
+  @Post('inspections/submit')
+  async submitInspectionReport(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.inspection.submit', data);
+  }
+
+  @Post('approve')
+  async approveGoodsReceipt(@Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.approve', data);
+  }
+
+  @Get('inspections/all')
+  async listInspectionRecords() {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.inspection.list', {});
+  }
 }

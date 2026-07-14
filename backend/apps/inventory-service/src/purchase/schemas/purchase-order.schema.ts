@@ -34,7 +34,7 @@ export class PurchaseOrder extends Document {
   @Prop({
     type: String,
     default: 'PENDING_APPROVAL',
-    enum: ['PENDING_APPROVAL', 'SHIPPING', 'PARTIAL_RECEIVED', 'COMPLETED', 'RETURNED', 'CANCELLED'],
+    enum: ['PENDING_APPROVAL', 'SHIPPING', 'RECEIVING', 'PARTIAL_RECEIVED', 'COMPLETED', 'RETURNED', 'CANCELLED'],
   })
   status: string;
 
