@@ -67,7 +67,7 @@ export function useQuotaManagement() {
       ]);
 
       setSummary(sumData);
-      setQuotas(listData);
+      setQuotas(Array.isArray(listData) ? listData : (Array.isArray(listData?.data) ? listData.data : []));
     } catch (err: any) {
       console.error(err);
       setError(err.response?.data?.message || err.message || "Không thể tải dữ liệu hạn mức");
@@ -160,7 +160,8 @@ export function useQuotaManagement() {
     }
   };
 
-  const filteredQuotas = quotas.filter(q => {
+  const safeQuotas = Array.isArray(quotas) ? quotas : [];
+  const filteredQuotas = safeQuotas.filter(q => {
     const branchName = q.branchName || "";
     const note = q.note || "";
     return (

@@ -48,7 +48,7 @@ export function BranchTransfer() {
       try {
         const [branchList, invList] = await Promise.all([
           branchService.getBranches(),
-          medicineService.getMedicines({ branchId: activeBranchId, limit: 500 })
+          medicineService.getBranchMedicines(activeBranchId, { limit: 500, branchStockOnly: true })
         ]);
         
         // Filter out current branch from target branches list
@@ -136,7 +136,7 @@ export function BranchTransfer() {
       
       // Refresh current inventory
       setLoadingInv(true);
-      const invList = await medicineService.getMedicines({ branchId: activeBranchId, limit: 500 });
+      const invList = await medicineService.getBranchMedicines(activeBranchId, { limit: 500, branchStockOnly: true });
       setInventory(invList.data || []);
     } catch (err: any) {
       setMsg({ type: "error", text: err.message || "Đã xảy ra lỗi không xác định." });

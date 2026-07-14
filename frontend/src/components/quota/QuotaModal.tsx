@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { QuotaData } from "../../services/purchase/quota.service";
 
@@ -50,7 +50,7 @@ export function QuotaModal({
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">
-            {editingQuota ? "Cáº­p nháº­t phÃ¢n bá»• háº¡n má»©c" : "PhÃ¢n bá»• háº¡n má»©c má»›i"}
+            {editingQuota ? "Cập nhật phân bổ hạn mức" : "Phân bổ hạn mức mới"}
           </h2>
           <button 
             onClick={() => setIsModalOpen(false)} 
@@ -68,16 +68,16 @@ export function QuotaModal({
             </div>
           )}
 
-          {/* Chi nhÃ¡nh */}
+          {/* Chi nhánh */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Chi nhÃ¡nh nháº­n háº¡n má»©c</label>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Chi nhánh nhận hạn mức</label>
             <select
               disabled={!!editingQuota}
               value={formBranchId}
               onChange={(e) => setFormBranchId(e.target.value)}
               className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] disabled:bg-slate-50"
             >
-              <option value="">Chá»n chi nhÃ¡nh...</option>
+              <option value="">Chọn chi nhánh...</option>
               {branches.map(b => (
                 <option key={b.branchCode} value={b.branchCode}>{b.name} ({b.branchCode})</option>
               ))}
@@ -85,9 +85,9 @@ export function QuotaModal({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Chu ká»³ */}
+            {/* Chu kỳ */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Chu ká»³ (ThÃ¡ng)</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Chu kỳ (Tháng)</label>
               <input
                 type="month"
                 disabled={!!editingQuota}
@@ -97,42 +97,42 @@ export function QuotaModal({
               />
             </div>
 
-            {/* Tráº¡ng thÃ¡i */}
+            {/* Trạng thái */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Tráº¡ng thÃ¡i</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Trạng thái</label>
               <select
                 value={formStatus}
                 onChange={(e) => setFormStatus(e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd]"
               >
-                <option value="Active">Äang Ã¡p dá»¥ng</option>
-                <option value="Locked">Táº¡m khÃ³a</option>
+                <option value="Active">Đang áp dụng</option>
+                <option value="Locked">Tạm khóa</option>
               </select>
             </div>
           </div>
 
-          {/* NgÃ¢n sÃ¡ch */}
+          {/* Ngân sách */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Tá»•ng háº¡n má»©c ngÃ¢n sÃ¡ch (VNÄ)</label>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Tổng hạn mức ngân sách (VNĐ)</label>
             <div className="relative">
               <input
                 type="number"
                 value={formBudget}
                 onChange={(e) => setFormBudget(e.target.value)}
-                placeholder="Nháº­p sá»‘ tiá»n..."
+                placeholder="Nhập số tiền..."
                 className="w-full pl-3.5 pr-12 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0057cd]"
               />
-              <span className="absolute right-3.5 top-3 text-xs font-bold text-slate-400">VNÄ</span>
+              <span className="absolute right-3.5 top-3 text-xs font-bold text-slate-400">VNĐ</span>
             </div>
           </div>
 
-          {/* Ghi chÃº */}
+          {/* Ghi chú */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Ghi chÃº / LÃ½ do phÃ¢n bá»•</label>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Ghi chú / Lý do phân bổ</label>
             <textarea
               value={formNote}
               onChange={(e) => setFormNote(e.target.value)}
-              placeholder="Ghi chÃº phÃ¢n bá»• háº¡n má»©c..."
+              placeholder="Ghi chú phân bổ hạn mức..."
               rows={3}
               className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd]"
             />
@@ -145,7 +145,7 @@ export function QuotaModal({
               onClick={() => setIsModalOpen(false)}
               className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors text-sm"
             >
-              Há»§y bá»
+              Hủy bỏ
             </button>
             <button
               type="submit"
@@ -153,7 +153,7 @@ export function QuotaModal({
               className="flex-1 py-2.5 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors text-sm flex items-center justify-center gap-2"
             >
               {formSubmitting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
-              {editingQuota ? "Cáº­p nháº­t" : "LÆ°u háº¡n má»©c"}
+              {editingQuota ? "Cập nhật" : "Lưu hạn mức"}
             </button>
           </div>
         </form>
@@ -161,4 +161,3 @@ export function QuotaModal({
     </div>
   );
 }
-

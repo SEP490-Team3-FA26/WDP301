@@ -20,36 +20,36 @@ export interface QuotaSummary {
 
 export const quotaService = {
   getQuotaSummary: async (cycle: string): Promise<QuotaSummary> => {
-    const response = await api.get('/quotas/summary', { params: { cycle } });
+    const response = await api.get('/api/quotas/summary', { params: { cycle } });
     return response.data;
   },
 
   getQuotas: async (params?: { branchId?: string; cycle?: string }): Promise<QuotaData[]> => {
-    const response = await api.get('/quotas', { params });
+    const response = await api.get('/api/quotas', { params });
     return response.data;
   },
 
   getQuotaByBranch: async (branchId: string): Promise<QuotaData[]> => {
-    const response = await api.get(`/quotas/branch/${branchId}`);
+    const response = await api.get(`/api/quotas/branch/${branchId}`);
     return response.data;
   },
 
   getQuotaById: async (id: string): Promise<QuotaData> => {
-    const response = await api.get(`/quotas/${id}`);
+    const response = await api.get(`/api/quotas/${id}`);
     return response.data;
   },
 
   createQuota: async (data: QuotaData): Promise<QuotaData> => {
-    const response = await api.post('/quotas', data);
+    const response = await api.post('/api/quotas', data);
     return response.data;
   },
 
   updateQuota: async (id: string, data: Partial<QuotaData>): Promise<QuotaData> => {
-    const response = await api.put(`/quotas/${id}`, data);
+    const response = await api.put(`/api/quotas/${id}`, data);
     return response.data;
   },
 
   deleteQuota: async (id: string): Promise<void> => {
-    await api.delete(`/quotas/${id}`);
+    await api.delete(`/api/quotas/${id}`);
   }
 };

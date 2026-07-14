@@ -89,13 +89,13 @@ export function BranchInventory() {
   const fetchBranchInventory = async () => {
     setLoading(true);
     try {
-      const result = await medicineService.getMedicines({
+      const result = await medicineService.getBranchMedicines(branchId, {
         search: debouncedSearch || undefined,
         page,
         limit,
         category: selectedCategory || undefined,
         classification: selectedClassification || undefined,
-        branchId: branchId
+        branchStockOnly: true
       });
       setInventory(result.data || []);
       setTotal(result.total || 0);

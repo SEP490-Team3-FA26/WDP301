@@ -331,7 +331,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
     setLoading(true);
     try {
       const { branchId } = getBranchInfoFromToken();
-      const data = await medicineService.getMedicines({ limit: 10, search: query, branchId: branchId || undefined });
+      const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: query });
       setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);

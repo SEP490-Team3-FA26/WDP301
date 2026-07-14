@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { Wallet, TrendingUp, CheckCircle, Building2 } from "lucide-react";
 import { QuotaSummary } from "../../services/purchase/quota.service";
 
@@ -16,9 +16,9 @@ export function QuotaSummaryCards({ summary }: QuotaSummaryCardsProps) {
           <Wallet size={24} />
         </div>
         <div>
-          <p className="text-xs text-slate-500 font-semibold font-mono uppercase tracking-wider">Tá»•ng ngÃ¢n sÃ¡ch</p>
-          <h3 className="text-xl font-bold text-slate-900 mt-1">{(summary.totalBudget || 0).toLocaleString()}Ä‘</h3>
-          <p className="text-xs text-slate-400 mt-1">Chu ká»³: {summary.cycle}</p>
+          <p className="text-xs text-slate-500 font-semibold font-mono uppercase tracking-wider">Tổng ngân sách</p>
+          <h3 className="text-xl font-bold text-slate-900 mt-1">{(summary.totalBudget || 0).toLocaleString()}đ</h3>
+          <p className="text-xs text-slate-400 mt-1">Chu kỳ: {summary.cycle}</p>
         </div>
       </div>
 
@@ -27,10 +27,10 @@ export function QuotaSummaryCards({ summary }: QuotaSummaryCardsProps) {
           <TrendingUp size={24} />
         </div>
         <div>
-          <p className="text-xs text-slate-500 font-semibold font-mono uppercase tracking-wider">ÄÃ£ sá»­ dá»¥ng</p>
-          <h3 className="text-xl font-bold text-slate-900 mt-1">{(summary.totalUsed || 0).toLocaleString()}Ä‘</h3>
+          <p className="text-xs text-slate-500 font-semibold font-mono uppercase tracking-wider">Đã sử dụng</p>
+          <h3 className="text-xl font-bold text-slate-900 mt-1">{(summary.totalUsed || 0).toLocaleString()}đ</h3>
           <p className="text-xs text-rose-500 font-semibold mt-1">
-            {summary.totalBudget > 0 ? ((summary.totalUsed / summary.totalBudget) * 100).toFixed(1) : 0}% ngÃ¢n sÃ¡ch
+            {summary.totalBudget > 0 ? ((summary.totalUsed / summary.totalBudget) * 100).toFixed(1) : 0}% ngân sách
           </p>
         </div>
       </div>
@@ -40,9 +40,9 @@ export function QuotaSummaryCards({ summary }: QuotaSummaryCardsProps) {
           <CheckCircle size={24} />
         </div>
         <div>
-          <p className="text-xs text-slate-500 font-semibold font-mono uppercase tracking-wider">CÃ²n láº¡i</p>
-          <h3 className="text-xl font-bold text-slate-900 mt-1">{(summary.totalRemaining || 0).toLocaleString()}Ä‘</h3>
-          <p className="text-xs text-slate-400 mt-1">Sáºµn sÃ ng phÃ¢n bá»• bá»• sung</p>
+          <p className="text-xs text-slate-500 font-semibold font-mono uppercase tracking-wider">Còn lại</p>
+          <h3 className="text-xl font-bold text-slate-900 mt-1">{(summary.totalRemaining || 0).toLocaleString()}đ</h3>
+          <p className="text-xs text-slate-400 mt-1">Sẵn sàng phân bổ bổ sung</p>
         </div>
       </div>
 
@@ -51,12 +51,11 @@ export function QuotaSummaryCards({ summary }: QuotaSummaryCardsProps) {
           <Building2 size={24} />
         </div>
         <div>
-          <p className="text-xs text-slate-500 font-semibold font-mono uppercase tracking-wider">Sá»‘ chi nhÃ¡nh</p>
-          <h3 className="text-xl font-bold text-slate-900 mt-1">{summary.branchCount} chi nhÃ¡nh</h3>
-          <p className="text-xs text-slate-400 mt-1">ÄÃ£ cáº¥u hÃ¬nh háº¡n má»©c</p>
+          <p className="text-xs text-slate-500 font-semibold font-mono uppercase tracking-wider">Số chi nhánh</p>
+          <h3 className="text-xl font-bold text-slate-900 mt-1">{summary.branchCount} chi nhánh</h3>
+          <p className="text-xs text-slate-400 mt-1">Đã cấu hình hạn mức</p>
         </div>
       </div>
     </div>
   );
 }
-

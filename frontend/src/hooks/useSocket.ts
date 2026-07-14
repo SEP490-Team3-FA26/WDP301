@@ -3,42 +3,48 @@ import { io, Socket } from 'socket.io-client';
 
 const API_GATEWAY_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+// Global cache để dùng chung kết nối Socket, tránh mỗi component tạo 1 connection mới gây spam log backend
+const globalSockets: Record<string, Socket> = {};
+``
 export function useSocket(namespace: string = '') {
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // Get JWT token from localStorage
     const token = localStorage.getItem('token');
-    
-    // Kết nối đến API Gateway với JWT auth
-    const socket = io(`${API_GATEWAY_URL}${namespace}`, {
-      transports: ['websocket'],
-      autoConnect: true,
-      reconnection: true,
-      auth: {
-        token: token || '', // Send token in handshake
-      },
-    });
 
-    socket.on('connect', () => {
-      console.log(`✅ Socket connected to ${namespace || 'root'}`);
-      setIsConnected(true);
-    });
+    // Nếu chưa có kết nối cho namespace này thì mới tạo
+    if (!globalSockets[namespace]) {
+      globalSockets[namespace] = io(`${API_GATEWAY_URL}${namespace}`, {
+        transports: ['websocket'],
+        autoConnect: true,
+        reconnection: true,
+        auth: {
+          token: token || '',
+        },
+      });
+      // Tắt bớt log frontend để đỡ rác console
+      // globalSockets[namespace].on('connect', () => console.log(`✅ Socket connected to ${namespace || 'root'}`));
+      // globalSockets[namespace].on('disconnect', () => console.log(`❌ Socket disconnected from ${namespace || 'root'}`));
+      globalSockets[namespace].on('connect_error', (error) => {
+        // console.error('Socket connection error:', error.message);
+      });
+    }
 
-    socket.on('disconnect', () => {
-      console.log(`❌ Socket disconnected from ${namespace || 'root'}`);
-      setIsConnected(false);
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
-    });
-
+    const socket = globalSockets[namespace];
     socketRef.current = socket;
+    setIsConnected(socket.connected);
 
+    const onConnect = () => setIsConnected(true);
+    const onDisconnect = () => setIsConnected(false);
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+
+    // Không gọi socket.disconnect() ở đây vì các component khác có thể đang dùng chung socket này
     return () => {
-      socket.disconnect();
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
     };
   }, [namespace]);
 

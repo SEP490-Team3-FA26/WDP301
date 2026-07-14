@@ -14,7 +14,8 @@ export interface MedicineQueryParams {
   country?: string;
   brand?: string;
   indication?: string;
-  brandOrigin?: string;
+  branchOrigin?: string;
+  branchStockOnly?: boolean;
   _t?: number;
   [key: string]: unknown;
 }
@@ -49,6 +50,11 @@ export interface Medicine {
 export const medicineService = {
   async getMedicines(params: MedicineQueryParams = {}) {
     const response = await api.get<PaginatedResult<Medicine>>('/api/medicines', { params });
+    return response.data as PaginatedResult<Medicine>;
+  },
+
+  async getBranchMedicines(branchId: string, params: MedicineQueryParams = {}) {
+    const response = await api.get<PaginatedResult<Medicine>>(`/api/medicines/branch/${branchId}`, { params });
     return response.data as PaginatedResult<Medicine>;
   },
 

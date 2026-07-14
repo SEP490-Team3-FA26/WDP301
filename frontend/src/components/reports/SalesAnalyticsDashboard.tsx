@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import api from '../../services/core/api';
 import { KpiCard } from './KpiCard';
+import { Select } from '../ui/Select';
+import { MonthPicker } from '../ui/MonthPicker';
 
 const branchColors: Record<string, string> = {
   'BR-001': '#3182CE',
@@ -133,23 +135,19 @@ export function SalesAnalyticsDashboard() {
         </div>
         
         <div className="flex flex-wrap gap-3 w-full sm:w-auto">
-          <input
-            type="month"
+          <MonthPicker
             value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-3.5 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0057cd]"
+            onChange={setSelectedMonth}
           />
           
-          <select
+          <Select
             value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-            className="px-3.5 py-2 border border-slate-200 bg-white rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0057cd]"
-          >
-            <option value="all">Tất cả chi nhánh</option>
-            {branchesList.map(b => (
-              <option key={b.branchCode} value={b.branchCode}>{b.name}</option>
-            ))}
-          </select>
+            onChange={setSelectedBranch}
+            options={[
+              { value: 'all', label: 'Tất cả chi nhánh' },
+              ...branchesList.map(b => ({ value: b.branchCode, label: b.name }))
+            ]}
+          />
 
           <button 
             onClick={fetchAnalyticsData}

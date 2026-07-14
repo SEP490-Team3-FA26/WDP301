@@ -1,14 +1,14 @@
-﻿import React from "react";
+import React from "react";
 import { Plus, AlertTriangle } from "lucide-react";
 import { QuotaData } from "../../services/purchase/quota.service";
 
-// Import cÃ¡c reusable components Ä‘Ã£ bÃ³c tÃ¡ch
+// Import các reusable components đã bóc tách
 import { QuotaSummaryCards } from "../../components/quota/QuotaSummaryCards";
 import { QuotaFilterBar } from "../../components/quota/QuotaFilterBar";
 import { QuotaTable } from "../../components/quota/QuotaTable";
 import { QuotaModal } from "../../components/quota/QuotaModal";
 
-// Import custom hook chá»©a toÃ n bá»™ logic
+// Import custom hook chứa toàn bộ logic
 import { useQuotaManagement } from "../../hooks/useQuotaManagement";
 
 export function QuotaManagement() {
@@ -39,15 +39,15 @@ export function QuotaManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Háº¡n má»©c nháº­p hÃ ng chi nhÃ¡nh</h1>
-          <p className="text-slate-500 mt-1">PhÃ¢n bá»• vÃ  giÃ¡m sÃ¡t ngÃ¢n sÃ¡ch mua hÃ ng cá»§a tá»«ng chi nhÃ¡nh theo chu ká»³.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hạn mức nhập hàng chi nhánh</h1>
+          <p className="text-slate-500 mt-1">Phân bổ và giám sát ngân sách mua hàng của từng chi nhánh theo chu kỳ.</p>
         </div>
         <button
           onClick={openCreateModal}
           className="px-5 py-2.5 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap"
         >
           <Plus size={18} />
-          PhÃ¢n bá»• háº¡n má»©c má»›i
+          Phân bổ hạn mức mới
         </button>
       </div>
 
@@ -71,19 +71,19 @@ export function QuotaManagement() {
         <div className="flex items-center justify-center p-12 bg-white rounded-2xl border border-slate-200">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-4 border-slate-200 border-t-[#0057cd] rounded-full animate-spin"></div>
-            <p className="text-sm font-semibold text-slate-500">Äang táº£i dá»¯ liá»‡u háº¡n má»©c...</p>
+            <p className="text-sm font-semibold text-slate-500">Đang tải dữ liệu hạn mức...</p>
           </div>
         </div>
       ) : error ? (
         <div className="bg-rose-50 border border-rose-200 p-6 rounded-2xl text-center">
           <AlertTriangle size={36} className="mx-auto text-rose-500 mb-2" />
-          <h3 className="font-bold text-rose-800">ÄÃ£ xáº£y ra lá»—i</h3>
+          <h3 className="font-bold text-rose-800">Đã xảy ra lỗi</h3>
           <p className="text-rose-600 text-sm mt-1">{error}</p>
           <button
             onClick={loadQuotaDataApi}
             className="mt-4 px-4 py-2 bg-rose-600 text-white text-sm font-bold rounded-xl hover:bg-rose-700 transition-colors"
           >
-            Thá»­ láº¡i
+            Thử lại
           </button>
         </div>
       ) : (

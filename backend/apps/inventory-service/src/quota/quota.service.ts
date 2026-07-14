@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException, OnModuleInit, Logger,
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Quota, QuotaDocument } from './schemas/quota.schema';
+import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage } from '../../../api-gateway/src/common/kafka.helper';
 
 @Injectable()

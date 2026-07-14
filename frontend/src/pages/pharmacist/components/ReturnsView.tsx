@@ -111,7 +111,7 @@ export default function ReturnsView({ showToast }: ReturnsViewProps) {
       setLoadingMedicines(true);
       try {
         const { branchId } = getBranchInfoFromToken();
-        const data = await medicineService.getMedicines({ limit: 10, search: medicineSearchQuery, branchId: branchId || undefined });
+        const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: medicineSearchQuery });
         setMedicineSearchResults(data.data || []);
       } catch (err) {
         console.error("Lỗi khi tìm kiếm thuốc đổi:", err);
