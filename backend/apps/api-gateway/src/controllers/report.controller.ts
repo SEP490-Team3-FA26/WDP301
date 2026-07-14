@@ -47,6 +47,53 @@ export class ReportController implements OnModuleInit {
     return reports;
   }
 
+  @Get('revenue/analytics')
+  @ApiOperation({ summary: 'Lấy dữ liệu phân tích doanh thu (JSON only, không tạo PDF)' })
+  @ApiQuery({ name: 'period', required: true, enum: ['day', 'week', 'month', 'quarter'] })
+  @ApiQuery({ name: 'date', required: false, description: 'Định dạng YYYY-MM-DD, mặc định là hôm nay' })
+  @ApiQuery({ name: 'branchId', required: false, description: 'Chỉ áp dụng với Admin/HQ' })
+  async getRevenueAnalytics(
+    @Query('period') period: 'day' | 'week' | 'month' | 'quarter',
+    @Query('date') date?: string,
+    @Query('branchId') branchId?: string,
+    @Req() req?: any,
+  ) {
+    const user = req.user;
+    let targetBranchId = branchId;
+
+    if (user.role !== 'admin' && user.role !== 'head_branch') {
+      if (!user.branchId) {
+        throw new BadRequestException('Tài khoản của bạn chưa được liên kết với chi nhánh nào');
+      }
+      targetBranchId = user.branchId;
+    } else {
+      if (!targetBranchId) {
+        targetBranchId = user.branchId || 'all';
+      }
+    }
+
+    const reportDate = date || new Date().toISOString().split('T')[0];
+
+    try {
+      const reportData = await sendKafkaMessage(this.inventoryClient, 'inventory.sale.report', {
+        branchId: targetBranchId,
+        period,
+        date: reportDate,
+      });
+
+      if (!reportData || reportData.error) {
+        throw new InternalServerErrorException(reportData?.message || 'Không thể lấy dữ liệu báo cáo doanh thu');
+      }
+
+      return {
+        success: true,
+        data: reportData,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi lấy dữ liệu phân tích doanh thu');
+    }
+  }
+
   @Get('revenue')
   @ApiOperation({ summary: 'Tạo báo cáo doanh thu theo ngày/tuần/tháng/quý và lưu trên S3 (Xuất PDF)' })
   @ApiQuery({ name: 'period', required: true, enum: ['day', 'week', 'month', 'quarter'] })
