@@ -145,7 +145,7 @@ import { ClientKafka } from '@nestjs/microservices';
           producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
-    }),
+    ]),
     WebsocketModule,
   ],
   controllers: [
