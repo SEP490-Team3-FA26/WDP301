@@ -87,6 +87,29 @@ export function SalesAnalyticsDashboard() {
     }))
     .sort((a, b) => b.sales - a.sales);
 
+  // 1.5 Group Sales by Staff
+  const staffSalesMap: Record<string, { name: string; sales: number; count: number; color: string }> = {};
+  const staffColors = ['#805AD5', '#D53F8C', '#E53E3E', '#DD6B20', '#319795', '#3182CE', '#38A169'];
+  ordersList.forEach((o: any) => {
+    const sId = o.soldBy || 'System';
+    if (!staffSalesMap[sId]) {
+      staffSalesMap[sId] = {
+        name: sId,
+        sales: 0,
+        count: 0,
+        color: staffColors[Object.keys(staffSalesMap).length % staffColors.length],
+      };
+    }
+    staffSalesMap[sId].sales += o.net || 0;
+    staffSalesMap[sId].count += 1;
+  });
+  const staffAnalytics = Object.keys(staffSalesMap)
+    .map((key) => ({
+      id: key,
+      ...staffSalesMap[key],
+    }))
+    .sort((a, b) => b.sales - a.sales);
+
   // 2. Group Sales by Day of Month
   const dailyMap: Record<string, number> = {};
   ordersList.forEach((o: any) => {
@@ -117,6 +140,20 @@ export function SalesAnalyticsDashboard() {
     accumulatedPercent += percent;
     return {
       ...b,
+      percent,
+      strokeDasharray,
+      strokeDashoffset,
+    };
+  });
+
+  let staffAccumulatedPercent = 0;
+  const staffDonutSegments = staffAnalytics.map((s) => {
+    const percent = totalRevenue > 0 ? (s.sales / totalRevenue) * 100 : 0;
+    const strokeDasharray = `${(percent * 314) / 100} 314`;
+    const strokeDashoffset = `${314 - (staffAccumulatedPercent * 314) / 100}`;
+    staffAccumulatedPercent += percent;
+    return {
+      ...s,
       percent,
       strokeDasharray,
       strokeDashoffset,
@@ -346,6 +383,107 @@ export function SalesAnalyticsDashboard() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+          </div>
+
+          {/* Pivot Staff Table & Donut */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+              <h3 className="font-bold text-slate-880 text-sm mb-4">Tỷ trọng doanh thu theo Nhân viên</h3>
+              
+              {staffAnalytics.length === 0 ? (
+                <div className="h-48 flex items-center justify-center text-slate-400 text-sm font-semibold">
+                  Chưa có dữ liệu nhân viên.
+                </div>
+              ) : (
+                <div className="flex flex-row items-center justify-around gap-2 flex-1">
+                  <div className="relative w-[130px] h-[130px]">
+                    <svg width="130" height="130" viewBox="0 0 120 120" className="transform -rotate-90">
+                      <circle cx="60" cy="60" r="50" fill="transparent" stroke="#F1F5F9" strokeWidth="10" />
+                      {staffDonutSegments.map((segment, index) => (
+                        <circle
+                          key={index}
+                          cx="60"
+                          cy="60"
+                          r="50"
+                          fill="transparent"
+                          stroke={segment.color}
+                          strokeWidth="10"
+                          strokeDasharray={segment.strokeDasharray}
+                          strokeDashoffset={segment.strokeDashoffset}
+                          className="transition-all duration-305 hover:stroke-[12px]"
+                        />
+                      ))}
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">TỔNG CỘNG</span>
+                      <span className="text-xs font-black text-slate-800 mt-0.5">{totalRevenue.toLocaleString('vi-VN')}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-1">
+                    {staffDonutSegments.map((seg, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                        <div className="text-left">
+                          <p className="text-[10px] font-bold text-slate-700 leading-none truncate w-16" title={seg.id}>{seg.id}</p>
+                          <p className="text-[9px] text-slate-400 mt-0.5 font-semibold">{seg.percent.toFixed(1)}%</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden lg:col-span-2 flex flex-col">
+              <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <h3 className="font-bold text-slate-880 text-sm flex items-center gap-2">
+                  <Users size={16} className="text-[#0057cd]" /> Bảng tổng hợp doanh thu theo Nhân viên
+                </h3>
+              </div>
+              
+              <div className="overflow-x-auto flex-1 max-h-[300px] overflow-y-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-[10px] text-slate-500 font-bold uppercase tracking-wider bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-6 py-4">Nhân viên / ID</th>
+                      <th className="px-6 py-4 text-center">Số đơn</th>
+                      <th className="px-6 py-4 text-right">Doanh số thực tế (Net)</th>
+                      <th className="px-6 py-4 text-center">Tỷ lệ đóng góp</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {staffAnalytics.map((item, idx) => {
+                      const ratio = totalRevenue > 0 ? (item.sales / totalRevenue) * 100 : 0;
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-3.5 font-bold text-slate-800">{item.name}</td>
+                          <td className="px-6 py-3.5 text-center font-semibold text-slate-650">{item.count} đơn</td>
+                          <td className="px-6 py-3.5 text-right font-bold text-slate-900">{item.sales.toLocaleString('vi-VN')} VND</td>
+                          <td className="px-6 py-3.5">
+                            <div className="flex items-center gap-2 justify-center">
+                              <div className="w-24 bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${ratio}%`, backgroundColor: item.color }} />
+                              </div>
+                              <span className="text-[10px] font-bold text-slate-500 w-8">{ratio.toFixed(1)}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    
+                    {staffAnalytics.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center font-bold text-slate-400">
+                          Không tìm thấy dữ liệu nhân viên.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </>

@@ -22,6 +22,7 @@ export class ReportController implements OnModuleInit {
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
       'inventory.sale.report',
+      'inventory.sale.performance',
       'inventory.report.create',
       'inventory.report.list',
     ]);
@@ -185,6 +186,40 @@ export class ReportController implements OnModuleInit {
       };
     } catch (error) {
       throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi tạo báo cáo doanh thu');
+    }
+  }
+
+  @Get('inventory-performance')
+  @ApiOperation({ summary: 'Báo cáo hàng bán chạy và chậm luân chuyển' })
+  @ApiQuery({ name: 'branchId', required: false })
+  @ApiQuery({ name: 'startDate', required: false, description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'YYYY-MM-DD' })
+  async getInventoryPerformance(
+    @Query('branchId') branchId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Req() req?: any,
+  ) {
+    const user = req.user;
+    let targetBranchId = branchId;
+
+    if (user.role !== 'admin' && user.role !== 'head_branch') {
+      targetBranchId = user.branchId;
+    }
+
+    try {
+      const data = await sendKafkaMessage(this.inventoryClient, 'inventory.sale.performance', {
+        branchId: targetBranchId,
+        startDate,
+        endDate
+      });
+
+      return {
+        success: true,
+        data
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message || 'Lỗi lấy báo cáo hiệu suất');
     }
   }
 }

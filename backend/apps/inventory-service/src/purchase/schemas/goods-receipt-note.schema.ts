@@ -13,10 +13,16 @@ export class GoodsReceiptNoteItem {
   expDate: Date;
 
   @Prop({ type: Number, required: true, min: 1 })
-  quantity: number;
+  expectedQty: number;
+
+  @Prop({ type: Number, default: 0, min: 0 })
+  actualQty: number;
 
   @Prop({ type: Number, required: true, min: 0 })
   unitPrice: number;
+
+  @Prop({ type: String, default: 'PENDING', enum: ['PENDING', 'VERIFIED'] })
+  status: string;
 }
 export const GoodsReceiptNoteItemSchema = SchemaFactory.createForClass(GoodsReceiptNoteItem);
 
@@ -31,7 +37,7 @@ export class GoodsReceiptNote extends Document {
   @Prop({ type: Number, required: true, min: 0 })
   totalAmount: number;
 
-  @Prop({ type: String, default: 'COMPLETED', enum: ['COMPLETED', 'CANCELLED'] })
+  @Prop({ type: String, default: 'INSPECTING', enum: ['INSPECTING', 'COMPLETED', 'CANCELLED'] })
   status: string;
 
   @Prop({ type: String }) // Optional user ID of the receiver
