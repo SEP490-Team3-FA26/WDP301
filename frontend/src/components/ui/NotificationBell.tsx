@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, X, CheckCheck, Trash2, FileText, CheckCircle2, XCircle } from 'lucide-react';
+import { Bell, X, CheckCheck, Trash2, FileText, CheckCircle2, XCircle, Package, PackageCheck } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
-  const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotification, clearAll } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotification, clearAll, isSocketConnected, connectionMode } = useNotifications();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -34,6 +34,12 @@ export function NotificationBell() {
     // Navigate based on notification type
     if (notification.type === 'NEW_PR' && notification.prId) {
       navigate(`/admin/approvals`);
+    } else if (notification.type === 'PR_APPROVED' || notification.type === 'PR_REJECTED') {
+      navigate(`/branch/requisitions`);
+    } else if (notification.type === 'NEW_PO') {
+      navigate(`/warehouse/inventory/purchase-orders`);
+    } else if (notification.type === 'GRN_COMPLETED') {
+      navigate(`/warehouse/inventory/history?type=import`);
     }
   };
 
@@ -45,6 +51,10 @@ export function NotificationBell() {
         return <CheckCircle2 size={20} className="text-green-500" />;
       case 'PR_REJECTED':
         return <XCircle size={20} className="text-red-500" />;
+      case 'NEW_PO':
+        return <Package size={20} className="text-purple-500" />;
+      case 'GRN_COMPLETED':
+        return <PackageCheck size={20} className="text-teal-500" />;
       default:
         return <Bell size={20} className="text-gray-500" />;
     }
@@ -67,12 +77,21 @@ export function NotificationBell() {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Bell Button */}
+      {/* Bell Button with Connection Status */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 hover:bg-slate-100 rounded-full transition-colors"
+        title={`Connection: ${connectionMode === 'realtime' ? 'Real-time' : connectionMode === 'polling' ? 'Polling (Fallback)' : 'Offline'}`}
       >
         <Bell size={20} className="text-slate-600" />
+        
+        {/* Connection Status Indicator */}
+        <div className={`absolute bottom-0 right-0 w-2 h-2 rounded-full ${
+          connectionMode === 'realtime' ? 'bg-green-500' : 
+          connectionMode === 'polling' ? 'bg-yellow-500' : 
+          'bg-gray-400'
+        }`} title={connectionMode} />
+        
         {unreadCount > 0 && (
           <motion.span
             initial={{ scale: 0 }}
@@ -96,7 +115,20 @@ export function NotificationBell() {
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
               <div>
-                <h3 className="font-bold text-slate-800">Thông báo</h3>
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  Thông báo
+                  {/* Connection mode badge */}
+                  {connectionMode === 'polling' && (
+                    <span className="text-xs font-normal px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
+                      Polling
+                    </span>
+                  )}
+                  {connectionMode === 'offline' && (
+                    <span className="text-xs font-normal px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                      Offline
+                    </span>
+                  )}
+                </h3>
                 {unreadCount > 0 && (
                   <p className="text-xs text-slate-500">{unreadCount} thông báo chưa đọc</p>
                 )}
