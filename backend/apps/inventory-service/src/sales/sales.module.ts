@@ -34,4 +34,4 @@ import { InventoryTransaction, InventoryTransactionSchema } from '../purchase/sc
   controllers: [SalesController],
   providers: [SalesService],
 })
-export class SalesModule {}
+export class SalesModule { }

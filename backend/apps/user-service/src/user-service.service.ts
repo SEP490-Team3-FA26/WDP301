@@ -5,6 +5,8 @@ import { ClientKafka } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { User } from '../../auth-service/src/auth/user.schema';
 import { Cart } from './schemas/cart.schema';
+import * as bcrypt from 'bcryptjs';
+import { subscribeToKafkaTopics } from '../../api-gateway/src/common/kafka.helper';
 
 @Injectable()
 export class UserService implements OnModuleInit {
@@ -20,26 +22,13 @@ export class UserService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    this.inventoryClient.subscribeToResponseOf('inventory.medicine.get_by_id');
-    this.inventoryClient.subscribeToResponseOf('inventory.medicine.get_by_ids');
-    
-    const retries = 20;
-    const delay = 3000;
-    for (let i = 0; i < retries; i++) {
-      try {
-        await this.inventoryClient.connect();
-        this.logger.log('Successfully connected ClientKafka for INVENTORY_SERVICE');
-        return;
-      } catch (err: any) {
-        if (i === retries - 1) {
-          this.logger.error('Failed to connect to INVENTORY_SERVICE via Kafka after retries', err);
-          throw err;
-        }
-        this.logger.warn(`Kafka INVENTORY_SERVICE connection attempt ${i + 1} failed. Retrying in ${delay}ms...`);
-        try { await this.inventoryClient.close(); } catch(e) {}
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
+    await subscribeToKafkaTopics(
+      this.inventoryClient,
+      ['inventory.medicine.get_by_id', 'inventory.medicine.get_by_ids'],
+      20,
+      3000,
+    );
+    this.logger.log('Successfully connected ClientKafka for INVENTORY_SERVICE');
   }
 
 
@@ -118,7 +107,6 @@ export class UserService implements OnModuleInit {
         continue;
       }
 
-      const priceChanged = med.price !== item.addedPrice;
       const currentStock = med.stock || 0;
       let finalQty = item.quantity;
 
@@ -128,13 +116,26 @@ export class UserService implements OnModuleInit {
         hasHealed = true;
       }
 
+      let currentPrice = med.price;
+      if (med.priceTiers && med.priceTiers.length > 0) {
+        const applicableTiers = [...med.priceTiers].sort((a: any, b: any) => b.minQuantity - a.minQuantity);
+        for (const tier of applicableTiers) {
+          if (finalQty >= tier.minQuantity) {
+            currentPrice = tier.price;
+            break;
+          }
+        }
+      }
+
+      const priceChanged = currentPrice !== item.addedPrice;
+
       enrichedItems.push({
         id: item.medicineId,
         name: med.name,
         active_ingredient: med.active_ingredient || '',
         category: med.category || 'Chưa phân loại',
         unit: med.unit || 'Viên',
-        price: med.price,
+        price: currentPrice,
         addedPrice: item.addedPrice,
         priceChanged,
         stock: currentStock,
@@ -169,11 +170,14 @@ export class UserService implements OnModuleInit {
     let medicine: any;
     
     try {
+      this.logger.log(`[addToCart] Sending Kafka request to inventory for medicineId: ${medicineId} (userId: ${userId})`);
       medicine = await lastValueFrom(
         this.inventoryClient.send('inventory.medicine.get_by_id', { id: medicineId })
       );
+      this.logger.log(`[addToCart] Received medicine from inventory: ${JSON.stringify(medicine)}`);
     } catch (err: any) {
-      return { error: true, message: 'Không tìm thấy thông tin thuốc trên hệ thống', statusCode: 404 };
+      this.logger.error(`[addToCart] Error calling inventory.medicine.get_by_id for ID ${medicineId}: ${err.message}`, err.stack);
+      return { error: true, message: `Không tìm thấy thông tin thuốc trên hệ thống (Lỗi: ${err.message})`, statusCode: 404 };
     }
 
     if (!medicine) {
@@ -197,14 +201,40 @@ export class UserService implements OnModuleInit {
         return { error: true, message: `Chỉ còn ${currentStock} sản phẩm khả dụng trong kho!`, statusCode: 400 };
       }
       cart.items[existingIndex].quantity = newQty;
+      
+      // Update addedPrice to reflect new tiered price if applicable
+      let currentPrice = medicine.price;
+      if (medicine.priceTiers && medicine.priceTiers.length > 0) {
+        const applicableTiers = [...medicine.priceTiers].sort((a: any, b: any) => b.minQuantity - a.minQuantity);
+        for (const tier of applicableTiers) {
+          if (newQty >= tier.minQuantity) {
+            currentPrice = tier.price;
+            break;
+          }
+        }
+      }
+      cart.items[existingIndex].addedPrice = currentPrice;
+      
     } else {
       if (quantity > currentStock) {
         return { error: true, message: `Chỉ còn ${currentStock} sản phẩm khả dụng trong kho!`, statusCode: 400 };
       }
+      
+      let initialPrice = medicine.price;
+      if (medicine.priceTiers && medicine.priceTiers.length > 0) {
+        const applicableTiers = [...medicine.priceTiers].sort((a: any, b: any) => b.minQuantity - a.minQuantity);
+        for (const tier of applicableTiers) {
+          if (quantity >= tier.minQuantity) {
+            initialPrice = tier.price;
+            break;
+          }
+        }
+      }
+      
       cart.items.push({
         medicineId,
         quantity,
-        addedPrice: medicine.price,
+        addedPrice: initialPrice,
       } as any);
     }
 
@@ -245,6 +275,22 @@ export class UserService implements OnModuleInit {
     }
 
     cart.items[existingIndex].quantity = quantity;
+    
+    // Update addedPrice to reflect new tiered price if applicable
+    if (medicine) {
+      let currentPrice = medicine.price;
+      if (medicine.priceTiers && medicine.priceTiers.length > 0) {
+        const applicableTiers = [...medicine.priceTiers].sort((a: any, b: any) => b.minQuantity - a.minQuantity);
+        for (const tier of applicableTiers) {
+          if (quantity >= tier.minQuantity) {
+            currentPrice = tier.price;
+            break;
+          }
+        }
+      }
+      cart.items[existingIndex].addedPrice = currentPrice;
+    }
+    
     await cart.save();
     return { success: true, message: 'Cập nhật số lượng thành công!' };
   }
@@ -351,6 +397,90 @@ export class UserService implements OnModuleInit {
       tier: tierInfo.name,
       multiplier: tierInfo.multiplier,
     };
+  }
+
+  // --- ADMIN EMPLOYEE MANAGEMENT ---
+
+  async createEmployee(data: any) {
+    this.logger.log(`Admin creating new employee: ${data.email}`);
+    const existing = await this.userModel.findOne({ email: data.email }).exec();
+    if (existing) {
+      return { error: true, message: 'Email đã tồn tại', statusCode: 409 };
+    }
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
+
+    const newUser = new this.userModel({
+      email: data.email,
+      passwordHash,
+      fullName: data.fullName,
+      role: data.role,
+      branchId: data.branchId || null,
+      isActive: true,
+      isEmailVerified: true, // Auto verify for employee
+    });
+
+    await newUser.save();
+    const result = newUser.toObject();
+    delete result.passwordHash;
+    return result;
+  }
+
+  async listEmployees(query: any) {
+    this.logger.log('Admin listing employees');
+    // Mặc định bỏ qua role 'user' (khách hàng)
+    const filter: any = { role: { $ne: 'user' } };
+    if (query?.role) {
+      filter.role = query.role;
+    }
+    if (query?.branchId) {
+      filter.branchId = query.branchId;
+    }
+
+    const employees = await this.userModel.find(filter).select('-passwordHash').sort({ createdAt: -1 }).exec();
+    return employees;
+  }
+
+  async getEmployeeById(id: string) {
+    this.logger.log(`Admin fetching employee: ${id}`);
+    const employee = await this.userModel.findById(id).select('-passwordHash').exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+    return employee;
+  }
+
+  async updateEmployee(id: string, data: any) {
+    this.logger.log(`Admin updating employee: ${id}`);
+    const employee = await this.userModel.findById(id).exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+
+    if (data.fullName) employee.fullName = data.fullName;
+    if (data.role) employee.role = data.role;
+    if (data.branchId !== undefined) employee.branchId = data.branchId;
+
+    await employee.save();
+    const result = employee.toObject();
+    delete result.passwordHash;
+    return result;
+  }
+
+  async toggleBanEmployee(id: string) {
+    this.logger.log(`Admin toggling ban for employee: ${id}`);
+    const employee = await this.userModel.findById(id).exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+
+    // Toggle trạng thái isActive
+    employee.isActive = !employee.isActive;
+    await employee.save();
+    
+    const result = employee.toObject();
+    delete result.passwordHash;
+    return result;
   }
 }
 

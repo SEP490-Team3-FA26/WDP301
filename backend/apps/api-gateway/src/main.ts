@@ -37,6 +37,9 @@ async function bootstrap() {
       // Kubernetes liveness & readiness probe cần endpoint này trả 200
       // Nếu thiếu → probe trả 404 → K8s kill pod liên tục → CPU spike 98%
       const expressApp = app.getHttpAdapter().getInstance();
+      const path = require('path');
+      const express = require('express');
+      expressApp.use('/public', express.static(path.join(process.cwd(), 'public')));
       expressApp.get('/health', (_req: Request, res: Response) => {
         res.status(200).json({
           status: 'ok',

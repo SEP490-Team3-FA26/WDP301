@@ -1,11 +1,13 @@
 import { Controller, Post, Get, Patch, Query, Param, Body, Inject, OnModuleInit } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
+import { AppWebsocketGateway } from '../websocket/websocket.gateway';
 
 @Controller('api/purchase-requisitions')
 export class PurchaseRequisitionController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
+    private readonly websocketGateway: AppWebsocketGateway,
   ) {}
 
   async onModuleInit() {
@@ -14,6 +16,7 @@ export class PurchaseRequisitionController implements OnModuleInit {
       'inventory.pr.list',
       'inventory.pr.get_by_id',
       'inventory.pr.process_urgent',
+      'inventory.pr.update_status',
     ]);
   }
 
@@ -22,7 +25,33 @@ export class PurchaseRequisitionController implements OnModuleInit {
    */
   @Post()
   async createPurchaseRequisition(@Body() data: any) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.create', data);
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.create', data);
+    
+    console.log('📋 PR Created - Full Result:', JSON.stringify(result, null, 2));
+    
+    // Emit notification to admin room
+    if (result && this.websocketGateway.server) {
+      // Handle nested response structure (result.data or result directly)
+      const prData = result.data || result;
+      
+      const notificationPayload = {
+        type: 'NEW_PR',
+        prId: prData._id || prData.id,
+        prCode: prData.prCode || 'PR-UNKNOWN',
+        branchName: prData.branchName || data.branchName || 'Chi nhánh không rõ',
+        branchId: prData.branchId || data.branchId,
+        itemsCount: prData.items?.length || data.items?.length || 0,
+        createdAt: prData.createdAt || new Date().toISOString(),
+        createdBy: data.createdBy || prData.createdBy || 'Chi nhánh',
+        message: `${prData.branchName || data.branchName || 'Chi nhánh'} vừa tạo yêu cầu nhập hàng ${prData.prCode || 'PR-???'}`,
+        timestamp: new Date().toISOString(),
+      };
+      
+      console.log('🔔 Emitting notification:', notificationPayload);
+      this.websocketGateway.server.to('admin').emit('new_pr_notification', notificationPayload);
+    }
+    
+    return result;
   }
 
   /**
@@ -46,5 +75,17 @@ export class PurchaseRequisitionController implements OnModuleInit {
   @Post('process-urgent')
   async processUrgentPurchaseRequisitions(@Body() data: any) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.process_urgent', data);
+  }
+
+  @Patch(':id/status')
+  async updatePurchaseRequisitionStatus(@Param('id') id: string, @Body() data: { status: string }) {
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.update_status', { id, status: data.status });
+    
+    // Broadcast real-time event to all connected frontend clients
+    if (this.websocketGateway.server) {
+      this.websocketGateway.server.emit('pr_updated', { id, status: data.status });
+    }
+    
+    return result;
   }
 }

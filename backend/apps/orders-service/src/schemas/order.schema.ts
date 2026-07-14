@@ -46,7 +46,7 @@ export class Order extends Document {
   @Prop({ type: String, required: true, default: 'QR_PAY', enum: ['CASH', 'CARD', 'QR_PAY'] })
   paymentMethod: string;
 
-  @Prop({ type: String, required: true, default: 'PENDING', enum: ['PENDING', 'PAID', 'CANCELLED'] })
+  @Prop({ type: String, required: true, default: 'PENDING', enum: ['PENDING', 'PAID', 'CANCELLED', 'FAILED'] })
   paymentStatus: string;
 
   @Prop({ type: String })
@@ -69,5 +69,8 @@ export class Order extends Document {
 
   @Prop({ type: Number, default: 0 })
   earnedPoints?: number;
+
+  @Prop({ type: String, default: 'BR-001' })
+  branchId?: string;
 }
 export const OrderSchema = SchemaFactory.createForClass(Order);

@@ -364,7 +364,12 @@ export function SupplierCreditManagement() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" fontSize={11} stroke="#64748b" />
                     <YAxis fontSize={11} stroke="#64748b" />
-                    <Tooltip formatter={(value) => `${value.toLocaleString("vi-VN")}đ`} />
+                    <Tooltip 
+                      formatter={(value) => `${value.toLocaleString("vi-VN")}đ`}
+                      contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      labelStyle={{ color: '#0f172a', fontWeight: 'bold' }}
+                      itemStyle={{ color: '#334155' }}
+                    />
                     <Legend />
                     <Bar dataKey="Hạn mức" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="Dư nợ" fill="#6366f1" radius={[4, 4, 0, 0]} />
@@ -398,7 +403,12 @@ export function SupplierCreditManagement() {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value) => `${value.toLocaleString("vi-VN")}đ`} />
+                    <Tooltip 
+                      formatter={(value) => `${value.toLocaleString("vi-VN")}đ`}
+                      contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      labelStyle={{ color: '#0f172a', fontWeight: 'bold' }}
+                      itemStyle={{ color: '#334155' }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>

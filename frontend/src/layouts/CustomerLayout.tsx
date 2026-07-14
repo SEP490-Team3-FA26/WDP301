@@ -59,17 +59,9 @@ export function CustomerLayout() {
     // Listen for custom event when items are added to cart
     window.addEventListener("cartUpdated", updateCartCount);
     window.addEventListener("loyaltyUpdated", fetchLoyaltyInfo);
-    
-    // Poll occasionally as fallback
-    const interval = setInterval(() => {
-      updateCartCount();
-      fetchLoyaltyInfo();
-    }, 5000);
-
     return () => {
       window.removeEventListener("cartUpdated", updateCartCount);
       window.removeEventListener("loyaltyUpdated", fetchLoyaltyInfo);
-      clearInterval(interval);
     };
   }, []);
 

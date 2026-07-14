@@ -15,6 +15,7 @@ export class PurchaseOrderController implements OnModuleInit {
       'inventory.po.reject_delivery',
       'inventory.po.list',
       'inventory.po.get_by_id',
+      'inventory.po.receive',
     ]);
   }
 
@@ -43,5 +44,10 @@ export class PurchaseOrderController implements OnModuleInit {
   @Get(':id')
   async getPurchaseOrderById(@Param('id') id: string) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.po.get_by_id', { id });
+  }
+
+  @Post(':id/receive')
+  async receivePurchaseOrder(@Param('id') id: string, @Body() data: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.receive', { id, ...data });
   }
 }

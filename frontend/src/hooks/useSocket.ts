@@ -8,21 +8,31 @@ export function useSocket(namespace: string = '') {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // Kết nối đến API Gateway
+    // Get JWT token from localStorage
+    const token = localStorage.getItem('token');
+    
+    // Kết nối đến API Gateway với JWT auth
     const socket = io(`${API_GATEWAY_URL}${namespace}`, {
       transports: ['websocket'],
       autoConnect: true,
       reconnection: true,
+      auth: {
+        token: token || '', // Send token in handshake
+      },
     });
 
     socket.on('connect', () => {
-      console.log(`Socket connected to ${namespace}`);
+      console.log(`✅ Socket connected to ${namespace || 'root'}`);
       setIsConnected(true);
     });
 
     socket.on('disconnect', () => {
-      console.log(`Socket disconnected from ${namespace}`);
+      console.log(`❌ Socket disconnected from ${namespace || 'root'}`);
       setIsConnected(false);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
     });
 
     socketRef.current = socket;
