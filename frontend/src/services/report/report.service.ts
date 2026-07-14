@@ -1,4 +1,4 @@
-import api from './api';
+import api from '../core/api';
 
 export const reportService = {
   getHistory: async (branchId?: string, type?: string) => {

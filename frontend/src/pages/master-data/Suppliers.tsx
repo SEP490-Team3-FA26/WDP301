@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Search, Building2, AlertTriangle, CheckCircle2, ShieldAlert, X } from "lucide-react";
 import { motion } from "motion/react";
-import { supplierService } from "../../services/supplier.service";
+import { supplierService } from "../../services/purchase/supplier.service";
 
 export function Suppliers() {
   const [suppliers, setSuppliers] = useState<any[]>([]);

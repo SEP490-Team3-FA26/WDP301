@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { auditRealtimeService, ConnectionStatus } from '../services/audit-realtime.service';
-import { auditService, AuditLogItem, AuditLogQuery } from '../services/audit.service';
+import { auditRealtimeService, ConnectionStatus } from '../services/audit/audit-realtime.service';
+import { auditService, AuditLogItem, AuditLogQuery } from '../services/audit/audit.service';
 
 interface AuditRealtimeContextType {
   visibleLogs: AuditLogItem[];

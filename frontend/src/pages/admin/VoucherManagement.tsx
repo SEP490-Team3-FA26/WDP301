@@ -15,7 +15,7 @@ import {
   ToggleRight,
   Loader2
 } from "lucide-react";
-import { voucherService, VoucherPayload } from "../../services/voucher.service";
+import { voucherService, VoucherPayload } from "../../services/sales/voucher.service";
 
 export function VoucherManagement() {
   const [vouchers, setVouchers] = useState<any[]>([]);

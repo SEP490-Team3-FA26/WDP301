@@ -4,8 +4,8 @@ import {
   ShieldCheck, Calendar, Package, Eye, ArrowRight, DollarSign, Building2, CreditCard
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
-import api from "../../services/api";
+import { purchaseRequisitionService } from "../../services/purchase/purchaseRequisition.service";
+import api from "../../services/core/api";
 
 /**
  * Admin phê duyệt & thanh toán các Đơn Đặt Hàng (PO) đã được tự động tách theo NCC.

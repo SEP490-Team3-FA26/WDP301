@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShoppingCart, Trash2, ArrowRight, Minus, Plus, ShieldAlert, Sparkles, XCircle, Info, HeartPulse } from "lucide-react";
-import { cartService } from "../../services/cart.service";
-import { medicineService } from "../../services/medicine.service";
-import { voucherService } from "../../services/voucher.service";
+import { cartService } from "../../services/sales/cart.service";
+import { medicineService } from "../../services/inventory/medicine.service";
+import { voucherService } from "../../services/sales/voucher.service";
 
 export function CustomerCart() {
   const navigate = useNavigate();

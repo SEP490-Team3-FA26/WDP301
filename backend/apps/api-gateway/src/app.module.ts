@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule, Transport, ClientKafka } from '@nestjs/microservices';
 
 import { SupplierController } from './controllers/supplier.controller';
 import { PurchaseRequisitionController } from './controllers/purchase-requisition.controller';
@@ -23,6 +23,7 @@ import { MediaController } from './storage/media.controller';
 import { InventoryCheckController } from './controllers/inventory-check.controller';
 import { SupplierCreditController } from './controllers/supplier-credit.controller';
 import { StockTransferController } from './controllers/stock-transfer.controller';
+import { AdminEmployeeController } from './controllers/admin-employee.controller';
 import { ReportController } from './controllers/report.controller';
 import { QuotaController } from './controllers/quota.controller';
 
@@ -32,7 +33,6 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { S3StorageService } from './storage/s3-storage.service';
 import { ReportService } from './services/report.service';
 import { WebsocketModule } from './websocket/websocket.module';
-import { SocketGateway } from './socket/socket.gateway';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
 import { RedactionService } from './services/redaction.service';
@@ -42,23 +42,15 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
  * Root Module của API Gateway
  * Chỉ chứa các module để routing và caching — không kết nối trực tiếp Database
  */
-import { OnModuleInit, Inject } from '@nestjs/common';
-import { ClientKafka } from '@nestjs/microservices';
-
 @Module({
   imports: [
     // Đọc biến môi trường toàn cục
     ConfigModule.forRoot({ isGlobal: true }),
 
     // Redis Cache (Cache-Aside Strategy)
-    CacheModule.registerAsync({
+    CacheModule.register({
       isGlobal: true,
-      imports: [ConfigModule],
-      useFactory: async (config: ConfigService) => ({
-        store: 'memory', // Dùng memory store cho dev; thay bằng redis store cho production
-        ttl: 3600,       // Mặc định TTL 1 giờ
-      }),
-      inject: [ConfigService],
+      ttl: 3600,
     }),
 
     PassportModule.register({ defaultStrategy: 'jwt' }),
@@ -175,6 +167,7 @@ import { ClientKafka } from '@nestjs/microservices';
     InventoryCheckController,
     SupplierCreditController,
     StockTransferController,
+    AdminEmployeeController,
     ReportController,
     QuotaController,
   ],
@@ -228,6 +221,8 @@ export class AppGatewayModule {
       'inventory.transfer.get_by_id',
       'inventory.sale.report',
       'quota.get.by.id',
+      'quota.get.by.branch',
+      'quota.get.summary',
       'quota.get.all',
     ];
     for (const t of inventoryTopics) {
@@ -256,6 +251,11 @@ export class AppGatewayModule {
       'user.branch.create',
       'user.branch.update',
       'user.branch.delete',
+      'user.admin.employee.create',
+      'user.admin.employee.list',
+      'user.admin.employee.get',
+      'user.admin.employee.update',
+      'user.admin.employee.ban_unban',
     ];
     for (const t of userTopics) {
       this.userClient.subscribeToResponseOf(t);

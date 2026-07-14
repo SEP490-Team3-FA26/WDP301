@@ -21,7 +21,7 @@ export class SalesService implements OnModuleInit {
     private readonly pricingService: PricingService,
     @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
     @Inject('KAFKA_CLIENT') private readonly kafkaClient: ClientKafka,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     await this.kafkaClient.connect();
@@ -387,10 +387,10 @@ export class SalesService implements OnModuleInit {
 
     // Revert prescription status if any
     if (order.prescriptionId) {
-       await this.prescriptionModel.updateOne(
-         { _id: order.prescriptionId },
-         { status: 'APPROVED' }
-       ).exec();
+      await this.prescriptionModel.updateOne(
+        { _id: order.prescriptionId },
+        { status: 'APPROVED' }
+      ).exec();
     }
 
     // Delete the sales order record
@@ -434,7 +434,7 @@ export class SalesService implements OnModuleInit {
     }
 
     const returnLogItems = [];
-    
+
     for (const returnItem of items) {
       const { medicineId, quantity, reason } = returnItem;
       const orderItem = salesOrder.items.find(
@@ -461,7 +461,7 @@ export class SalesService implements OnModuleInit {
             medicineId: orderItem.medicineId,
             batchNo: batchAlloc.batchNo
           }).exec();
-          
+
           if (dbBatch) {
             dbBatch.stock += Math.min(batchAlloc.quantity, remainingToReturn);
             if (dbBatch.status === 'EXPIRED' && dbBatch.expDate >= new Date()) {
@@ -503,7 +503,7 @@ export class SalesService implements OnModuleInit {
 
     salesOrder.returns = salesOrder.returns || [];
     salesOrder.returns.push(returnEntry);
-    
+
     salesOrder.markModified('items');
     salesOrder.markModified('returns');
     await salesOrder.save();
@@ -532,7 +532,7 @@ export class SalesService implements OnModuleInit {
 
     const today = new Date();
     const returnLogItems = [];
-    
+
     for (const returnItem of returnedItems) {
       const { medicineId, quantity, reason } = returnItem;
       const orderItem = salesOrder.items.find(
@@ -559,7 +559,7 @@ export class SalesService implements OnModuleInit {
             medicineId: orderItem.medicineId,
             batchNo: batchAlloc.batchNo
           }).exec();
-          
+
           if (dbBatch) {
             dbBatch.stock += Math.min(batchAlloc.quantity, remainingToReturn);
             if (dbBatch.status === 'EXPIRED' && dbBatch.expDate >= new Date()) {

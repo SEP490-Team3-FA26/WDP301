@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Search, Filter, AlertCircle, CheckCircle2, Loader2, Eye, Package, Calendar } from "lucide-react";
-import { medicineService } from "../../services/medicine.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 import { useSocket } from "../../hooks/useSocket";
 
 // Helper to decode JWT token to extract branchId

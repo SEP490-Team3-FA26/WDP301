@@ -9,7 +9,7 @@ import { InventoryTransaction } from './schemas/inventory-transaction.schema';
 import { StockTransfer } from './schemas/stock-transfer.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
-import { firstValueFrom } from 'rxjs';
+import { subscribeToKafkaTopics, sendKafkaMessage } from '../../../api-gateway/src/common/kafka.helper';
 
 @Injectable()
 export class PurchaseService {
@@ -27,10 +27,16 @@ export class PurchaseService {
   ) { }
 
   async onModuleInit() {
-    this.supplierClient.subscribeToResponseOf('supplier.get_by_id');
-    this.supplierClient.subscribeToResponseOf('supplier.credit.check_limit');
-    this.supplierClient.subscribeToResponseOf('supplier.credit.record_grn');
-    await this.supplierClient.connect();
+    await subscribeToKafkaTopics(
+      this.supplierClient,
+      [
+        'supplier.get_by_id',
+        'supplier.credit.check_limit',
+        'supplier.credit.record_grn',
+      ],
+      20,
+      3000,
+    );
   }
 
   // ===========================================================================================
@@ -92,7 +98,7 @@ export class PurchaseService {
 
     await pr.save();
 
-    const msg = isUrgent 
+    const msg = isUrgent
       ? `Tạo YÊU CẦU HỎA TỐC ${prCode} thành công. Đã gửi thẳng lên Headquarters.`
       : `Tạo yêu cầu mua hàng ${prCode} thành công. Đang chờ Quản lý kho gom đơn.`;
 
@@ -143,7 +149,7 @@ export class PurchaseService {
    */
   async processUrgentPurchaseRequisition(data: { prId: string, action: 'CREATE_EMERGENCY_TRANSFER' | 'CREATE_URGENT_PO', approvedBy?: string }) {
     this.logger.log(`Processing urgent PR: ${data.prId} with action ${data.action}`);
-    
+
     const pr = await this.prModel.findById(data.prId).exec();
     if (!pr) {
       throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${data.prId}` });
@@ -155,7 +161,7 @@ export class PurchaseService {
 
     // Nghiệp vụ: CREATE_EMERGENCY_TRANSFER -> Xuất kho nội bộ
     // Nghiệp vụ: CREATE_URGENT_PO -> Đặt thẳng từ NCC giao tận nơi chi nhánh
-    
+
     pr.status = 'APPROVED';
     pr.approvedBy = data.approvedBy || 'HQ Admin';
     pr.approvedAt = new Date();
@@ -180,7 +186,7 @@ export class PurchaseService {
     }
 
     const today = new Date();
-    
+
     // Enrich items with supplierId from DB if missing
     for (const item of data.items) {
       const med = await this.medicineModel.findById(item.medicineId || item.id).exec();
@@ -210,8 +216,10 @@ export class PurchaseService {
     for (const [supplierId, items] of supplierGroups.entries()) {
       let supplier;
       try {
-        supplier = await firstValueFrom(
-          this.supplierClient.send('supplier.get_by_id', { id: supplierId })
+        supplier = await sendKafkaMessage(
+          this.supplierClient,
+          'supplier.get_by_id',
+          { id: supplierId }
         );
       } catch (e) {
         throw new RpcException({ message: `Không thể thẩm định NCC: ${supplierId}` });
@@ -306,11 +314,13 @@ export class PurchaseService {
 
     if (paymentType === 'CREDIT') {
       try {
-        const checkResult = await firstValueFrom(
-          this.supplierClient.send('supplier.credit.check_limit', {
+        const checkResult = await sendKafkaMessage(
+          this.supplierClient,
+          'supplier.credit.check_limit',
+          {
             supplierId: po.supplierId,
             amount: po.totalAmount,
-          }),
+          }
         );
         if (!checkResult || !checkResult.allowed) {
           throw new RpcException({
@@ -346,7 +356,7 @@ export class PurchaseService {
    */
   async rejectPurchaseOrderDelivery(data: { poId: string, reason?: string }) {
     this.logger.log(`Rejecting delivery for PO: ${data.poId}`);
-    
+
     const po = await this.poModel.findById(data.poId).exec();
     if (!po) {
       throw new RpcException({ message: `Không tìm thấy đơn hàng PO: ${data.poId}` });
@@ -597,13 +607,15 @@ export class PurchaseService {
     // 2. Record supplier credit if CREDIT
     if (po.paymentType === 'CREDIT') {
       try {
-        await firstValueFrom(
-          this.supplierClient.send('supplier.credit.record_grn', {
+        await sendKafkaMessage(
+          this.supplierClient,
+          'supplier.credit.record_grn',
+          {
             supplierId: po.supplierId,
             grnId: grn._id.toString(),
             amount: grn.totalAmount,
             performedBy: grn.receivedBy || 'Quản Lý',
-          }),
+          }
         );
       } catch (err) {
         this.logger.error(`Error recording GRN credit: ${err.message}`);
@@ -827,7 +839,7 @@ export class PurchaseService {
           const deductQty = Math.min(batch.stock, needed);
 
           const stockBefore = batch.stock;
-          
+
           // Sử dụng OCC / Atomic Update để trừ tồn kho an toàn chống Race Condition
           const updatedBatch = await this.batchModel.findOneAndUpdate(
             {
@@ -956,7 +968,7 @@ export class PurchaseService {
         let stockBefore = 0;
         if (branchBatch) {
           stockBefore = branchBatch.stock;
-          
+
           // Sử dụng Atomic update để tăng tồn kho an toàn
           const updatedBranchBatch = await this.batchModel.findOneAndUpdate(
             {
@@ -1095,12 +1107,12 @@ export class PurchaseService {
       const medId = med._id.toString();
       const current = currentStockByMedicine.get(medId) || 0;
       const offset = backtrackOffset.get(medId) || 0;
-      
+
       const opening = current - offset;
 
       const imported = periodImports.get(medId) || 0;
       const exported = periodExports.get(medId) || 0;
-      
+
       const closing = opening + imported - exported;
 
       return {
@@ -1163,7 +1175,7 @@ export class PurchaseService {
           const deductQty = Math.min(batch.stock, needed);
 
           const stockBefore = batch.stock;
-          
+
           // Sử dụng OCC / Atomic Update để trừ tồn kho an toàn chống Race Condition
           const updatedBatch = await this.batchModel.findOneAndUpdate(
             {

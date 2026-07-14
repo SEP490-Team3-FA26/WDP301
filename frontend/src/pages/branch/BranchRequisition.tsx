@@ -4,8 +4,8 @@ import {
   Calendar, Package, Trash2, Send, FileText, ChevronRight, Eye, Search, ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
-import { medicineService } from "../../services/medicine.service";
+import { purchaseRequisitionService } from "../../services/purchase/purchaseRequisition.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 import { CreatePRModal } from "../../components/CreatePRModal";
 import { useSocket } from "../../hooks/useSocket";
 

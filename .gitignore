@@ -37,3 +37,6 @@ taste-skill/
 .idea/
 .vscode/
 !.vscode/settings.json
+
+docker-compose.yml
+next

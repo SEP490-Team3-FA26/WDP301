@@ -1,4 +1,4 @@
-import api from "./api";
+import api from '../core/api';
 
 export const userService = {
   getLoyaltyInfo: async () => {

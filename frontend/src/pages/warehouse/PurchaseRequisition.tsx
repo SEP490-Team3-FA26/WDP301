@@ -5,10 +5,10 @@ import {
   Loader2, ClipboardList, Building, Calendar, Eye, ArrowRight, FileText
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
-import { branchService } from "../../services/branch.service";
+import { purchaseRequisitionService } from "../../services/purchase/purchaseRequisition.service";
+import { branchService } from "../../services/admin/branch.service";
 import { CreatePOModal } from "../../components/CreatePOModal";
-import api from "../../services/api";
+import api from "../../services/core/api";
 
 // --- In-memory cache for instant back-navigation (resets on page refresh/new login) ---
 const prCache: Record<string, { data: any[]; ts: number }> = {};

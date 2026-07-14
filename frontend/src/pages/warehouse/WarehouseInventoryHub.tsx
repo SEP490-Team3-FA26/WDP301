@@ -9,10 +9,10 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { CreatePOModal } from "../../components/CreatePOModal";
-import { branchService } from "../../services/branch.service";
-import { purchaseOrderService } from "../../services/purchaseOrder.service";
-import { goodsReceiptService } from "../../services/goodsReceipt.service";
-import { supplierService } from "../../services/supplier.service";
+import { branchService } from "../../services/admin/branch.service";
+import { purchaseOrderService } from "../../services/purchase/purchaseOrder.service";
+import { goodsReceiptService } from "../../services/purchase/goodsReceipt.service";
+import { supplierService } from "../../services/purchase/supplier.service";
 import { useSocket } from "../../hooks/useSocket";
 
 // ─────────────────────────────────────────

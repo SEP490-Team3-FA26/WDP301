@@ -1,4 +1,4 @@
-import api from './api';
+import api from '../core/api';
 
 const PENDING_EMAIL_KEY = "pendingVerificationEmail";
 

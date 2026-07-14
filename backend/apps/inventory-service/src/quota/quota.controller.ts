@@ -1,10 +1,20 @@
-import { Controller } from '@nestjs/common';
-import { MessagePattern, EventPattern, Payload } from '@nestjs/microservices';
+import { Controller, Inject, OnModuleInit } from '@nestjs/common';
+import { MessagePattern, EventPattern, Payload, ClientKafka } from '@nestjs/microservices';
 import { QuotaService } from './quota.service';
+import { subscribeToKafkaTopics } from '../../../api-gateway/src/common/kafka.helper';
 
 @Controller()
-export class QuotaController {
-  constructor(private readonly quotaService: QuotaService) {}
+export class QuotaController implements OnModuleInit {
+  constructor(
+    private readonly quotaService: QuotaService,
+    @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
+  ) {}
+
+  async onModuleInit() {
+    await subscribeToKafkaTopics(this.userClient, ['user.branch.list']);
+  }
+
+
 
   @EventPattern('quota.event.create')
   async handleQuotaCreate(@Payload() data: string) {
@@ -31,9 +41,21 @@ export class QuotaController {
     return this.quotaService.findById(id);
   }
 
+  @MessagePattern('quota.get.by.branch')
+  async getQuotaByBranch(@Payload() branchId: string) {
+    return this.quotaService.findByBranch(branchId);
+  }
+
+  @MessagePattern('quota.get.summary')
+  async getQuotaSummary(@Payload() queryPayload: string) {
+    const query = queryPayload ? JSON.parse(queryPayload) : {};
+    return this.quotaService.getSummary(query);
+  }
+
   @MessagePattern('quota.get.all')
   async getAllQuotas(@Payload() queryPayload: string) {
     const query = queryPayload ? JSON.parse(queryPayload) : {};
     return this.quotaService.findAll(query);
   }
 }
+

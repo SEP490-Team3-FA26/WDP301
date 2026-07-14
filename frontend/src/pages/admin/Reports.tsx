@@ -39,7 +39,7 @@ export function Reports() {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const { reportService } = await import("../../services/report.service");
+      const { reportService } = await import("../../services/report/report.service");
       const data = await reportService.getHistory();
       setReports(data);
     } catch (error) {

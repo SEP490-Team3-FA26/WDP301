@@ -1,4 +1,4 @@
-import api from './api';
+import api from '../core/api';
 
 export interface MedicineQueryParams {
   page?: number | string;
@@ -16,17 +16,49 @@ export interface MedicineQueryParams {
   indication?: string;
   brandOrigin?: string;
   _t?: number;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  pagination?: PaginationInfo;
+}
+
+export interface Medicine {
+  id: string;
+  name: string;
+  price?: number;
+  sku?: string;
+  image?: string;
+  images?: string[];
+  active_ingredient?: string;
+  drug_classification?: string;
+  type?: string;
+  unit?: string;
+  supplierId?: string;
+  status?: string;
 }
 
 export const medicineService = {
   async getMedicines(params: MedicineQueryParams = {}) {
-    const response = await api.get('/api/medicines', { params });
-    return response.data;
+    const response = await api.get<PaginatedResult<Medicine>>('/api/medicines', { params });
+    return response.data as PaginatedResult<Medicine>;
   },
 
   async getMedicineById(id: string) {
-    const response = await api.get(`/api/medicines/${id}`);
+    const response = await api.get<Medicine>(`/api/medicines/${id}`);
+    return response.data as Medicine;
+  },
+
+  async getAlternatives(id: string, branchId: string) {
+    const response = await api.get(`/api/medicines/${id}/alternatives`, { params: { branchId } });
     return response.data;
   },
 
@@ -57,6 +89,11 @@ export const medicineService = {
 
   async updatePriceTiers(id: string, priceTiers: { minQuantity: number; price: number }[]) {
     const response = await api.patch(`/api/medicines/${id}/price-tiers`, { priceTiers });
+    return response.data;
+  },
+
+  async updatePrice(id: string, price: number) {
+    const response = await api.patch<{ success?: boolean; message?: string; price?: number }>(`/api/medicines/${id}/price`, { price });
     return response.data;
   },
 

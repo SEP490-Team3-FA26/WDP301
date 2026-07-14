@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, Send, ArrowRightLeft, Trash2, Plus, AlertCircle, CheckCircle2, Loader2, Package } from "lucide-react";
-import { branchService } from "../../services/branch.service";
-import { medicineService } from "../../services/medicine.service";
+import { branchService } from "../../services/admin/branch.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 
 // Helper to decode JWT token to extract branchId and user info
 function getBranchInfoFromToken() {
