@@ -282,17 +282,9 @@ export class MedicineService implements OnModuleInit {
         conditions.push({ 'thong_tin_chi_tiet.Xuất xứ thương hiệu': { $regex: brandOrigin, $options: 'i' } });
       }
 
-      let branchMedicineIds = null;
-      if (query.branchId) {
-        const activeBranchBatches = await this.batchModel.find({
-          branchId: query.branchId,
-          status: 'ACTIVE',
-          stock: { $gt: 0 }
-        }).distinct('medicineId').exec();
-        branchMedicineIds = activeBranchBatches.map(id => id.toString());
-        conditions.push({ _id: { $in: branchMedicineIds } });
-      }
-
+      // Xoá logic filter cứng `stock > 0` theo branchId ở đây để
+      // các thuốc hết hàng (stock = 0) vẫn được trả về trong kết quả tìm kiếm.
+      // Khi đó, UI sẽ hiển thị Tồn kho: 0 và cho phép user bấm "Gợi ý thay thế" (UC-36).
       if (search) {
         // AI SERVICE VECTOR SEARCH with Mongoose fallback
         let aiServiceUrl = `http://ai-service:8000/api/ai/medicines?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`;
@@ -343,13 +335,6 @@ export class MedicineService implements OnModuleInit {
                   if (!new RegExp(brandOrigin, 'i').test(val)) return false;
                 }
                 return true;
-              });
-            }
-
-            if (branchMedicineIds) {
-              aiData = aiData.filter((med: any) => {
-                const medId = (med._id || med.id || '').toString();
-                return branchMedicineIds.includes(medId);
               });
             }
 
@@ -993,6 +978,436 @@ export class MedicineService implements OnModuleInit {
       });
     } catch (error) {
       throw new RpcException(error.message || 'Lỗi lấy danh sách chọn thuốc');
+    }
+  }
+  async findAlternatives(medicineId: string, branchId: string) {
+    try {
+      this.logger.log(`Finding alternatives for medicine ${medicineId} at branch ${branchId}`);
+      const medicine = await this.medicineModel.findById(medicineId).lean().exec();
+      if (!medicine) {
+        throw new RpcException('Medicine not found');
+      }
+
+      let alternatives = [];
+      const orConditions: any[] = [];
+
+      // 1. Điều kiện trùng hoạt chất (kèm dạng bào chế nếu có)
+      if (medicine.active_ingredient) {
+        const activeIngredientCondition: any = { active_ingredient: medicine.active_ingredient };
+        if (medicine.dosage_form) {
+          activeIngredientCondition.dosage_form = medicine.dosage_form;
+        }
+        orConditions.push(activeIngredientCondition);
+      }
+
+      // 2. Điều kiện trùng danh mục
+      if (medicine.category) {
+        orConditions.push({ category: medicine.category });
+      }
+
+      // Query database 1 lần bằng $or
+      if (orConditions.length > 0) {
+        const query = {
+          _id: { $ne: medicine._id },
+          $or: orConditions
+        };
+        alternatives = await this.medicineModel.find(query).lean().exec();
+      }
+
+      if (alternatives.length === 0) {
+        return [];
+      }
+
+      // 3. Filter theo tồn kho tại chi nhánh hiện tại (stock > 0)
+      const altIds = alternatives.map(a => a._id.toString());
+      const batches = await this.batchModel.find({
+        medicineId: { $in: altIds },
+        branchId: branchId || 'CENTRAL_WH',
+        status: 'ACTIVE',
+        stock: { $gt: 0 }
+      }).lean().exec();
+
+      const stockByMedId = new Map<string, number>();
+      for (const b of batches) {
+        stockByMedId.set(b.medicineId, (stockByMedId.get(b.medicineId) || 0) + b.stock);
+      }
+
+      const availableAlternatives = alternatives
+        .filter(a => stockByMedId.has(a._id.toString()))
+        .map(a => ({
+          ...a,
+          id: a._id.toString(),
+          stock: stockByMedId.get(a._id.toString())
+        }))
+        .sort((a, b) => {
+          // 1. Ưu tiên thuốc trùng hoạt chất lên đầu
+          const aMatchesActive = medicine.active_ingredient && a.active_ingredient === medicine.active_ingredient;
+          const bMatchesActive = medicine.active_ingredient && b.active_ingredient === medicine.active_ingredient;
+          if (aMatchesActive && !bMatchesActive) return -1;
+          if (!aMatchesActive && bMatchesActive) return 1;
+
+          // 2. Nếu cùng mức độ ưu tiên hoạt chất, ưu tiên thuốc có tồn kho nhiều nhất
+          return b.stock - a.stock;
+        });
+
+      return availableAlternatives;
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi tìm thuốc thay thế');
+    }
+  }
+
+  async updateMedicinePrice(id: string, price: number) {
+    try {
+      const medicine = await this.medicineModel.findById(id).exec();
+      if (!medicine) {
+        throw new RpcException('Medicine not found');
+      }
+
+      medicine.price = price;
+      await medicine.save();
+
+      return {
+        success: true,
+        message: 'Cập nhật giá thuốc thành công',
+        price: medicine.price,
+      };
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi cập nhật giá thuốc');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // UC-30: XEM TỒN KHO THỜI GIAN THỰC TOÀN CHUỖI + THUẬT TOÁN AN TOÀN
+  // ═══════════════════════════════════════════════════════════════════
+  async calculateSafeStockChain(query: {
+    serviceLevel?: number;
+    periodDays?: number;
+    branchId?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    try {
+      this.logger.log('[UC-30] Starting safe stock calculation for entire chain...');
+      const {
+        serviceLevel = 0.95,
+        periodDays = 30,
+        branchId,
+        page = 1,
+        limit = 20,
+      } = query;
+
+      // FIX: dùng hàm thay vì object key (tránh lỗi float key lookup)
+      const getZ = (sl: number): number => {
+        if (sl >= 0.99) return 2.33;
+        if (sl >= 0.98) return 2.05;
+        if (sl >= 0.95) return 1.65;
+        if (sl >= 0.90) return 1.28;
+        return 1.65;
+      };
+      const Z = getZ(Number(serviceLevel));
+
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - Number(periodDays));
+
+      // Lấy toàn bộ medicines và batches song song
+      const [medicines, allBatches, exportTxns] = await Promise.all([
+        this.medicineModel.find().select('name category unit price stock').lean().exec(),
+        this.batchModel.find({ status: 'ACTIVE', stock: { $gt: 0 } })
+          .select('medicineId branchId stock batchNo expDate')
+          .lean().exec(),
+        this.txnModel.find({
+          type: { $in: ['SALE_EXPORT', 'DISPOSE'] },
+          createdAt: { $gte: startDate, $lte: endDate },
+        }).select('medicineId quantityChange createdAt stockBefore stockAfter').lean().exec(),
+      ]);
+
+      this.logger.log(`[UC-30] Fetched: ${medicines.length} medicines, ${allBatches.length} batches, ${exportTxns.length} txns`);
+
+      // Nhóm batches theo medicineId (và branchId nếu có filter)
+      const batchesByMedId = new Map<string, any[]>();
+      for (const b of allBatches) {
+        if (branchId && b.branchId !== branchId) continue;
+        const list = batchesByMedId.get(b.medicineId.toString()) || [];
+        list.push(b);
+        batchesByMedId.set(b.medicineId.toString(), list);
+      }
+
+      // Nhóm giao dịch theo medicineId
+      const txnsByMed = new Map<string, any[]>();
+      for (const t of exportTxns) {
+        const list = txnsByMed.get(t.medicineId.toString()) || [];
+        list.push(t);
+        txnsByMed.set(t.medicineId.toString(), list);
+      }
+
+      const skip = (page - 1) * Number(limit);
+      const results = [];
+
+      for (const med of medicines) {
+        const medId = med._id.toString();
+        const medTxns = txnsByMed.get(medId) || [];
+        const medBatches = batchesByMedId.get(medId) || [];
+        const currentStock = medBatches.reduce((sum, b) => sum + b.stock, 0);
+
+        // ── TÍNH NHU CẦU THEO NGÀY ──
+        const dailyMap: Record<string, number> = {};
+        let totalExported = 0;
+        for (const t of medTxns) {
+          const dayKey = new Date(t.createdAt).toISOString().split('T')[0];
+          const qty = Math.abs(t.quantityChange);
+          dailyMap[dayKey] = (dailyMap[dayKey] || 0) + qty;
+          totalExported += qty;
+        }
+
+        // Điền 0 cho các ngày không có giao dịch
+        const numPeriodDays = Number(periodDays);
+        const allDays: number[] = [];
+        for (let i = 0; i < numPeriodDays; i++) {
+          const d = new Date(startDate);
+          d.setDate(d.getDate() + i);
+          const key = d.toISOString().split('T')[0];
+          allDays.push(dailyMap[key] || 0);
+        }
+
+        const avgDailyDemand = totalExported / numPeriodDays;
+        const variance = allDays.reduce((sum, v) => sum + Math.pow(v - avgDailyDemand, 2), 0) / numPeriodDays;
+        const stdDevDemand = Math.sqrt(variance);
+
+        // ── TÍNH LEAD TIME GIẢ ĐỊNH (7 ngày mặc định nếu không có lịch sử) ──
+        const avgLeadTime = 7;
+        const stdDevLeadTime = 1.5;
+
+        // ── VÒNG QUAY TỒN KHO ──
+        const firstTxn = medTxns[0];
+        const lastTxn = medTxns[medTxns.length - 1];
+        const openingStock = firstTxn?.stockBefore ?? (currentStock + totalExported);
+        const closingStock = lastTxn?.stockAfter ?? currentStock;
+        const avgInventory = (openingStock + closingStock) / 2;
+        const inventoryTurnoverRate = avgInventory > 0 ? totalExported / avgInventory : 0;
+        const daysInInventory = inventoryTurnoverRate > 0 ? periodDays / inventoryTurnoverRate : periodDays;
+
+        // ── SAFETY STOCK (Công thức đầy đủ xét cả biến động Lead Time) ──
+        const safetyStock = Math.ceil(
+          Z * Math.sqrt(avgLeadTime * Math.pow(stdDevDemand, 2) + Math.pow(avgDailyDemand, 2) * Math.pow(stdDevLeadTime, 2))
+        );
+
+        // ── REORDER POINT ──
+        const reorderPoint = Math.ceil(avgDailyDemand * avgLeadTime + safetyStock);
+
+        // ── EOQ ──
+        const annualDemand = avgDailyDemand * 365;
+        const orderingCost = 200000;
+        const holdingCost = 0.05 * (med.price || 10000);
+        const eoq = holdingCost > 0 ? Math.ceil(Math.sqrt((2 * annualDemand * orderingCost) / holdingCost)) : 100;
+
+        // ── ĐÁNH GIÁ TRẠNG THÁI ──
+        let stockStatus: 'CRITICAL' | 'LOW' | 'SAFE' | 'OVERSTOCK';
+        if (currentStock <= 0) {
+          stockStatus = 'CRITICAL';
+        } else if (currentStock < safetyStock) {
+          stockStatus = 'LOW';
+        } else if (currentStock < reorderPoint) {
+          stockStatus = 'SAFE';
+        } else if (currentStock > eoq * 3) {
+          stockStatus = 'OVERSTOCK';
+        } else {
+          stockStatus = 'SAFE';
+        }
+
+        results.push({
+          medicineId: medId,
+          medicineName: med.name,
+          category: med.category || 'Chưa phân loại',
+          unit: med.unit || 'Hộp',
+          currentStock,
+          stockStatus,
+          demand: {
+            totalExported,
+            avgDailyDemand: Math.round(avgDailyDemand * 100) / 100,
+            stdDevDemand: Math.round(stdDevDemand * 100) / 100,
+          },
+          leadTime: { avgDays: avgLeadTime, stdDevDays: stdDevLeadTime },
+          turnover: {
+            openingStock,
+            closingStock,
+            avgInventory: Math.round(avgInventory * 100) / 100,
+            inventoryTurnoverRate: Math.round(inventoryTurnoverRate * 100) / 100,
+            daysInInventory: Math.round(daysInInventory * 100) / 100,
+          },
+          thresholds: {
+            safetyStock,
+            reorderPoint,
+            eoq,
+            serviceLevel: `${Math.round(Number(serviceLevel) * 100)}%`,
+          },
+          branchBreakdown: medBatches.map(b => ({
+            branchId: b.branchId || 'CENTRAL_WH',
+            batchNo: b.batchNo,
+            stock: b.stock,
+            expDate: b.expDate,
+          })),
+        });
+      }
+
+      // Sắp xếp: CRITICAL lên đầu, OVERSTOCK xuống cuối
+      const ORDER = { CRITICAL: 0, LOW: 1, SAFE: 2, OVERSTOCK: 3 };
+      results.sort((a, b) => ORDER[a.stockStatus] - ORDER[b.stockStatus]);
+
+      const total = results.length;
+      const paginated = results.slice(skip, skip + Number(limit));
+
+      this.logger.log(`[UC-30] Completed. ${total} medicines analyzed. Page ${page}/${Math.ceil(total / Number(limit))}`);
+      return { data: paginated, total, page: Number(page), limit: Number(limit), periodDays: Number(periodDays), serviceLevel: Number(serviceLevel) };
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi tính toán tồn kho an toàn toàn chuỗi');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // UC-37: PHÁT HIỆN BẤT THƯỜNG TỒN KHO (TOÁN THỐNG KÊ - Z-SCORE / 3-SIGMA)
+  // ═══════════════════════════════════════════════════════════════════
+  async detectAnomalies(query: { periodDays?: number; zScoreThreshold?: number }) {
+    try {
+      this.logger.log('[UC-37] Starting anomaly detection using Z-Score/3-Sigma statistics...');
+      const numPeriodDays = Number(query.periodDays ?? 60);
+      const numZScore = Number(query.zScoreThreshold ?? 3);
+
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - numPeriodDays);
+
+      // Lấy toàn bộ giao dịch xuất kho trong kỳ phân tích
+      const allTxns = await this.txnModel.find({
+        createdAt: { $gte: startDate, $lte: endDate },
+      }).select('medicineId medicineName type quantityChange createdAt referenceId referenceType notes performedBy stockBefore stockAfter').lean().exec();
+
+      // Nhóm theo medicineId
+      const txnsByMed = new Map<string, any[]>();
+      for (const t of allTxns) {
+        const list = txnsByMed.get(t.medicineId) || [];
+        list.push(t);
+        txnsByMed.set(t.medicineId, list);
+      }
+
+      const anomalies = [];
+
+      for (const [medicineId, txns] of txnsByMed.entries()) {
+        // Chỉ lấy giao dịch xuất kho (giảm số lượng) để phân tích nhu cầu bình thường
+        const exportTxns = txns.filter(t => ['SALE_EXPORT', 'DISPOSE'].includes(t.type));
+
+        // Cần ít nhất 7 điểm dữ liệu để tính thống kê có ý nghĩa
+        if (exportTxns.length < 7) continue;
+
+        // Nhóm giao dịch theo ngày để tính lượng xuất mỗi ngày
+        const dailyMap: Record<string, number> = {};
+        for (const t of exportTxns) {
+          const dayKey = new Date(t.createdAt).toISOString().split('T')[0];
+          dailyMap[dayKey] = (dailyMap[dayKey] || 0) + Math.abs(t.quantityChange);
+        }
+        const dailyValues = Object.values(dailyMap);
+        const n = dailyValues.length;
+
+        // Tính Mean và Standard Deviation
+        const mean = dailyValues.reduce((a, b) => a + b, 0) / n;
+        const variance = dailyValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / n;
+        const stdDev = Math.sqrt(variance);
+
+        // Ngưỡng bất thường: mean ± numZScore * stdDev
+        const upperThreshold = mean + numZScore * stdDev;
+        const lowerThreshold = Math.max(0, mean - numZScore * stdDev);
+
+        // Tìm các giao dịch đơn lẻ vượt ngưỡng (bất thường tức thời)
+        for (const t of exportTxns) {
+          const qty = Math.abs(t.quantityChange);
+          const zScore = stdDev > 0 ? Math.abs(qty - mean) / stdDev : 0;
+
+          if (zScore >= numZScore) {
+            const medicine = await this.medicineModel.findById(medicineId).select('name category').lean().exec();
+            anomalies.push({
+              id: t._id?.toString() || `${medicineId}-${t.createdAt}`,
+              medicineId,
+              medicineName: t.medicineName || medicine?.name || 'Không xác định',
+              category: medicine?.category || 'Chưa phân loại',
+              anomalyType: qty > upperThreshold ? 'SPIKE_EXPORT' : 'UNUSUAL_LOW',
+              severity: zScore >= numZScore * 1.5 ? 'HIGH' : 'MEDIUM',
+              transactionType: t.type,
+              quantityChange: t.quantityChange,
+              detectedAt: t.createdAt,
+              referenceId: t.referenceId || null,
+              referenceType: t.referenceType || null,
+              performedBy: t.performedBy || 'Không xác định',
+              statistics: {
+                avgDailyExport: Math.round(mean * 100) / 100,
+                stdDev: Math.round(stdDev * 100) / 100,
+                zScore: Math.round(zScore * 100) / 100,
+                upperThreshold: Math.round(upperThreshold * 100) / 100,
+                lowerThreshold: Math.round(lowerThreshold * 100) / 100,
+              },
+              description: qty > upperThreshold
+                ? `Xuất kho bất thường: ${qty} đơn vị (gấp ${(zScore).toFixed(1)}σ mức bình thường)`
+                : `Mức xuất bất thường thấp: ${qty} đơn vị (${(zScore).toFixed(1)}σ dưới mức bình thường)`,
+            });
+          }
+        }
+
+        // Phát hiện giao dịch ĐIỀU CHỈNH (ADJUSTMENT) lớn bất thường
+        const adjustTxns = txns.filter(t => t.type === 'ADJUSTMENT');
+        for (const t of adjustTxns) {
+          const qty = Math.abs(t.quantityChange);
+          const deviationPercent = mean > 0 ? (qty / mean) * 100 : 0;
+
+          // Nếu điều chỉnh > 50% nhu cầu trung bình ngày thì đáng nghi
+          if (deviationPercent > 50 && qty > 10) {
+            const medicine = await this.medicineModel.findById(medicineId).select('name category').lean().exec();
+            anomalies.push({
+              id: `adj-${t._id?.toString() || medicineId}`,
+              medicineId,
+              medicineName: t.medicineName || medicine?.name || 'Không xác định',
+              category: medicine?.category || 'Chưa phân loại',
+              anomalyType: 'LARGE_ADJUSTMENT',
+              severity: deviationPercent > 200 ? 'HIGH' : 'MEDIUM',
+              transactionType: 'ADJUSTMENT',
+              quantityChange: t.quantityChange,
+              detectedAt: t.createdAt,
+              referenceId: t.referenceId || null,
+              referenceType: 'INVENTORY_CHECK',
+              performedBy: t.performedBy || 'Không xác định',
+              statistics: {
+                avgDailyExport: Math.round(mean * 100) / 100,
+                stdDev: Math.round(stdDev * 100) / 100,
+                zScore: stdDev > 0 ? Math.round((qty / stdDev) * 100) / 100 : 0,
+                upperThreshold: Math.round(upperThreshold * 100) / 100,
+                lowerThreshold: Math.round(lowerThreshold * 100) / 100,
+              },
+              description: `Điều chỉnh kho lớn bất thường: ${t.quantityChange > 0 ? '+' : ''}${t.quantityChange} đơn vị (${deviationPercent.toFixed(0)}% nhu cầu TB ngày). Lý do: ${t.notes || 'Không có ghi chú'}`,
+            });
+          }
+        }
+      }
+
+      // Sắp xếp: HIGH severity và mới nhất lên đầu
+      anomalies.sort((a, b) => {
+        if (a.severity !== b.severity) return a.severity === 'HIGH' ? -1 : 1;
+        return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
+      });
+
+      this.logger.log(`[UC-37] Anomaly detection complete. Found ${anomalies.length} anomalies from ${txnsByMed.size} medicines analyzed.`);
+      return {
+        data: anomalies,
+        total: anomalies.length,
+        periodDays: numPeriodDays,
+        zScoreThreshold: numZScore,
+        analyzedAt: new Date().toISOString(),
+        summary: {
+          high: anomalies.filter(a => a.severity === 'HIGH').length,
+          medium: anomalies.filter(a => a.severity === 'MEDIUM').length,
+          spikeExport: anomalies.filter(a => a.anomalyType === 'SPIKE_EXPORT').length,
+          largeAdjustment: anomalies.filter(a => a.anomalyType === 'LARGE_ADJUSTMENT').length,
+        },
+      };
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi phát hiện bất thường tồn kho');
     }
   }
 }

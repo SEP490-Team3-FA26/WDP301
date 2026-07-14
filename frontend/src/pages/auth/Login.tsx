@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Mail, Lock, Building2, PackageSearch, Store, Pill, ShieldCheck, CheckCircle2, Users } from "lucide-react";
 import { authService } from "../../services/auth.service";
+import { requestNotificationPermission } from "../../utils/notificationPermission";
 
 export function Login() {
   const navigate = useNavigate();
@@ -29,12 +30,11 @@ export function Login() {
   }, [searchParams, navigate]);
 
   const roles = [
-    { id: "admin", label: "Admin Tổng", subLabel: "Hệ thống", email: "admin@ABC pharmacy.com", icon: <ShieldCheck size={20} />, activeColor: "bg-rose-50 border-rose-200 text-rose-700", iconColor: "text-rose-500" },
-    { id: "head_branch", label: "Tổng chi nhánh", subLabel: "Giám đốc", email: "director@ABC pharmacy.com", icon: <Building2 size={20} />, activeColor: "bg-indigo-50 border-indigo-200 text-indigo-700", iconColor: "text-indigo-500" },
-    { id: "warehouse", label: "Quản lý kho", subLabel: "Kho vận", email: "warehouse@ABC pharmacy.com", icon: <PackageSearch size={20} />, activeColor: "bg-amber-50 border-amber-200 text-amber-700", iconColor: "text-amber-500" },
-    { id: "branch", label: "QL Chi nhánh", subLabel: "Cơ sở", email: "manager@ABC pharmacy.com", icon: <Store size={20} />, activeColor: "bg-emerald-50 border-emerald-200 text-emerald-700", iconColor: "text-emerald-500" },
-    { id: "pharmacist", label: "Thuốc / Bán", subLabel: "Dược sĩ", email: "pharmacist@ABC pharmacy.com", icon: <Pill size={20} />, activeColor: "bg-blue-50 border-blue-200 text-blue-700", iconColor: "text-[#0057cd]" },
-    { id: "user", label: "Người dùng", subLabel: "Khách hàng", email: "user@ABC pharmacy.com", icon: <Users size={20} />, activeColor: "bg-purple-50 border-purple-200 text-purple-700", iconColor: "text-purple-500" },
+    { id: "admin", label: "Admin Tổng", subLabel: "Hệ thống", email: "admin@vinapharmacy.com", icon: <ShieldCheck size={20} />, activeColor: "bg-rose-50 border-rose-200 text-rose-700", iconColor: "text-rose-500" },
+    { id: "warehouse", label: "Quản lý kho", subLabel: "Kho vận", email: "warehouse@vinapharmacy.com", icon: <PackageSearch size={20} />, activeColor: "bg-amber-50 border-amber-200 text-amber-700", iconColor: "text-amber-500" },
+    { id: "branch", label: "QL Chi nhánh", subLabel: "Cơ sở", email: "manager@vinapharmacy.com", icon: <Store size={20} />, activeColor: "bg-emerald-50 border-emerald-200 text-emerald-700", iconColor: "text-emerald-500" },
+    { id: "pharmacist", label: "Thuốc / Bán", subLabel: "Dược sĩ", email: "pharmacist@vinapharmacy.com", icon: <Pill size={20} />, activeColor: "bg-blue-50 border-blue-200 text-blue-700", iconColor: "text-[#0057cd]" },
+    { id: "user", label: "Người dùng", subLabel: "Khách hàng", email: "user@vinapharmacy.com", icon: <Users size={20} />, activeColor: "bg-purple-50 border-purple-200 text-purple-700", iconColor: "text-purple-500" },
   ];
 
   const handleRoleSelect = (selectedRole: any) => {
@@ -74,6 +74,11 @@ export function Login() {
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("userRole", data.user.role);
 
+      // Request notification permission (don't block login)
+      requestNotificationPermission().catch(err => {
+        console.warn('Failed to request notification permission:', err);
+      });
+
       // Redirect theo Role
       navigate(redirectByRole(data.user.role));
     } catch (err: any) {
@@ -101,8 +106,8 @@ export function Login() {
                   key={r.id}
                   onClick={() => handleRoleSelect(r)}
                   className={`relative p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 flex flex-col items-center text-center gap-2 ${isActive
-                      ? `${r.activeColor} shadow-sm scale-[1.02]`
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                    ? `${r.activeColor} shadow-sm scale-[1.02]`
+                    : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
                     }`}
                 >
                   <div className={`${isActive ? r.iconColor : 'text-slate-400'} transition-colors`}>

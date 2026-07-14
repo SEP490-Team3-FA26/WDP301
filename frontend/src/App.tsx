@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { NotificationProvider } from "./contexts/NotificationContext";
 
 // Layouts
 import { AuthLayout } from "./layouts/AuthLayout";
@@ -12,7 +13,7 @@ import { CustomerLayout } from "./layouts/CustomerLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 // Auth Pages
-import { Landing } from "./pages/common/Landing";
+import { Landing } from "./components/common/Landing";
 import { Login } from "./pages/auth/Login";
 import { Register } from "./pages/auth/Register";
 import { ForgotPassword } from "./pages/auth/ForgotPassword";
@@ -20,10 +21,10 @@ import { ResetPassword } from "./pages/auth/ResetPassword";
 import { VerifyEmail } from "./pages/auth/VerifyEmail";
 
 // Common Pages
-import { DashboardHome } from "./pages/common/Dashboard";
-import { Profile } from "./pages/common/Profile";
-import { Settings } from "./pages/common/Settings";
-import { AIInsights } from "./pages/common/AIInsights";
+import { DashboardHome } from "./components/common/Dashboard";
+import { Profile } from "./components/common/Profile";
+import { Settings } from "./components/common/Settings";
+import { AIInsights } from "./components/common/AIInsights";
 
 // Customer Pages
 import { CustomerShop } from "./pages/customer/CustomerShop";
@@ -40,18 +41,20 @@ import { Suppliers } from "./pages/master-data/Suppliers";
 // Warehouse Pages
 import { Inventory } from "./pages/warehouse/Inventory";
 import { InventoryHistory } from "./pages/warehouse/InventoryHistory";
-import { PurchaseOrderCreate } from "./pages/warehouse/PurchaseOrderCreate";
 import { PurchaseRequisition } from "./pages/warehouse/PurchaseRequisition";
 import { InventoryCheck } from "./pages/warehouse/InventoryCheck";
+import { WarehouseInventoryHub } from "./pages/warehouse/WarehouseInventoryHub";
 
 // Admin / HQ Pages
 import { Finance } from "./pages/admin/Finance";
 import { Reports } from "./pages/admin/Reports";
 import { Branches } from "./pages/admin/Branches";
+import { Employees } from "./pages/admin/Employees";
 import { VoucherManagement } from "./pages/admin/VoucherManagement";
 import { HQApproval } from "./pages/admin/HQApproval";
 import { PriceManagement } from "./pages/admin/PriceManagement";
 import { SupplierCreditManagement } from "./pages/admin/SupplierCreditManagement";
+import { SupplyChainDashboard } from "./pages/admin/SupplyChainDashboard";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
@@ -72,7 +75,8 @@ function RedirectWithSearch({ to }: { to: string }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <NotificationProvider>
+        <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/interactions" element={<DrugInteractions />} />
@@ -110,19 +114,20 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="branches" element={<Branches />} />
+            <Route path="employees" element={<Employees />} />
             <Route path="vouchers" element={<VoucherManagement />} />
             <Route path="approvals" element={<HQApproval />} />
             <Route path="finance" element={<Finance />} />
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />
             <Route path="ai-insights" element={<AIInsights />} />
+            <Route path="supply-chain" element={<SupplyChainDashboard />} />
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
 
             <Route path="inventory" element={<Inventory />} />
             <Route path="inventory/checks" element={<InventoryCheck />} />
             <Route path="inventory/import" element={<InventoryHistory type="import" />} />
-            <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
             <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
 
@@ -137,9 +142,8 @@ export default function App() {
             <Route index element={<DashboardHome />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="inventory/checks" element={<InventoryCheck />} />
-            <Route path="inventory/requisitions" element={<PurchaseRequisition />} />
-            <Route path="inventory/import" element={<InventoryHistory type="import" />} />
-            <Route path="inventory/import/new" element={<PurchaseOrderCreate />} />
+            <Route path="inventory/requisitions" element={<WarehouseInventoryHub />} />
+            <Route path="inventory/import" element={<WarehouseInventoryHub />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
             <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
             <Route path="ai-insights" element={<AIInsights />} />
@@ -184,6 +188,7 @@ export default function App() {
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </NotificationProvider>
     </BrowserRouter>
   );
 }

@@ -19,6 +19,9 @@ export class BranchPriceList extends Document {
   @Prop({ type: String, required: true })
   medicineId: string; // Ref tới medicines._id
 
+  @Prop({ type: Number, default: 0 })
+  minStock: number; // Mức tồn kho tối thiểu cảnh báo (UC-38)
+
   @Prop({ type: Number, default: null })
   retailPrice: number; // Giá bán lẻ tại chi nhánh (null → fallback medicine.price)
 

@@ -21,7 +21,7 @@ export class SalesService implements OnModuleInit {
     private readonly pricingService: PricingService,
     @InjectModel(InventoryTransaction.name) private readonly txnModel: Model<InventoryTransaction>,
     @Inject('KAFKA_CLIENT') private readonly kafkaClient: ClientKafka,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     await this.kafkaClient.connect();
@@ -311,6 +311,7 @@ export class SalesService implements OnModuleInit {
       patientPhone: data.patientPhone || (prescription ? prescription.patientPhone : undefined),
       soldBy: data.soldBy || 'Dược sĩ',
       orderCode: data.orderCode,
+      branchId: data.branchId || null,
     });
     await salesOrder.save();
 
@@ -386,10 +387,10 @@ export class SalesService implements OnModuleInit {
 
     // Revert prescription status if any
     if (order.prescriptionId) {
-       await this.prescriptionModel.updateOne(
-         { _id: order.prescriptionId },
-         { status: 'APPROVED' }
-       ).exec();
+      await this.prescriptionModel.updateOne(
+        { _id: order.prescriptionId },
+        { status: 'APPROVED' }
+      ).exec();
     }
 
     // Delete the sales order record
@@ -433,7 +434,7 @@ export class SalesService implements OnModuleInit {
     }
 
     const returnLogItems = [];
-    
+
     for (const returnItem of items) {
       const { medicineId, quantity, reason } = returnItem;
       const orderItem = salesOrder.items.find(
@@ -460,7 +461,7 @@ export class SalesService implements OnModuleInit {
             medicineId: orderItem.medicineId,
             batchNo: batchAlloc.batchNo
           }).exec();
-          
+
           if (dbBatch) {
             dbBatch.stock += Math.min(batchAlloc.quantity, remainingToReturn);
             if (dbBatch.status === 'EXPIRED' && dbBatch.expDate >= new Date()) {
@@ -502,7 +503,7 @@ export class SalesService implements OnModuleInit {
 
     salesOrder.returns = salesOrder.returns || [];
     salesOrder.returns.push(returnEntry);
-    
+
     salesOrder.markModified('items');
     salesOrder.markModified('returns');
     await salesOrder.save();
@@ -531,7 +532,7 @@ export class SalesService implements OnModuleInit {
 
     const today = new Date();
     const returnLogItems = [];
-    
+
     for (const returnItem of returnedItems) {
       const { medicineId, quantity, reason } = returnItem;
       const orderItem = salesOrder.items.find(
@@ -558,7 +559,7 @@ export class SalesService implements OnModuleInit {
             medicineId: orderItem.medicineId,
             batchNo: batchAlloc.batchNo
           }).exec();
-          
+
           if (dbBatch) {
             dbBatch.stock += Math.min(batchAlloc.quantity, remainingToReturn);
             if (dbBatch.status === 'EXPIRED' && dbBatch.expDate >= new Date()) {
@@ -693,6 +694,123 @@ export class SalesService implements OnModuleInit {
       message: 'Xử lý đổi hàng thành công!',
       warnings: allWarnings,
       data: salesOrder
+    };
+  }
+
+  async getRevenueReportData(branchId: string, period: string, dateStr: string) {
+    this.logger.log(`Generating revenue report data. Branch: ${branchId}, Period: ${period}, Date: ${dateStr}`);
+    
+    let targetDate = new Date();
+    if (dateStr) {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        targetDate = parsed;
+      }
+    }
+
+    let startDate: Date;
+    let endDate: Date;
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth();
+    const day = targetDate.getDate();
+
+    if (period === 'day') {
+      startDate = new Date(year, month, day, 0, 0, 0, 0);
+      endDate = new Date(year, month, day, 23, 59, 59, 999);
+    } else if (period === 'week') {
+      const currentDay = targetDate.getDay();
+      const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+      startDate = new Date(year, month, day - distanceToMonday, 0, 0, 0, 0);
+      endDate = new Date(startDate.getTime());
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'month') {
+      startDate = new Date(year, month, 1, 0, 0, 0, 0);
+      endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    } else if (period === 'quarter') {
+      const quarter = Math.floor(month / 3);
+      startDate = new Date(year, quarter * 3, 1, 0, 0, 0, 0);
+      endDate = new Date(year, (quarter + 1) * 3, 0, 23, 59, 59, 999);
+    } else {
+      throw new RpcException({ message: 'Period không hợp lệ. Hỗ trợ: day, week, month, quarter' });
+    }
+
+    const query: any = {
+      createdAt: { $gte: startDate, $lte: endDate }
+    };
+
+    if (branchId && branchId !== 'all' && branchId !== 'CENTRAL_WH') {
+      query.branchId = branchId;
+    }
+
+    const orders = await this.saleModel.find(query).sort({ createdAt: 1 }).exec();
+
+    let totalGrossRevenue = 0;
+    let totalReturnedAmount = 0;
+    let totalExchangedOutAmount = 0;
+    let netRevenue = 0;
+    const paymentMethodBreakdown = {
+      CASH: { count: 0, amount: 0 },
+      CARD: { count: 0, amount: 0 },
+      QR_PAY: { count: 0, amount: 0 }
+    };
+
+    const details = orders.map(order => {
+      const gross = order.totalAmount || 0;
+      
+      const returned = (order.returns || []).reduce((sum, r) => {
+        return sum + (r.items || []).reduce((s: number, it: any) => s + ((it.quantity || 0) * (it.price || 0)), 0);
+      }, 0) + (order.exchanges || []).reduce((sum, e) => {
+        return sum + (e.returnedItems || []).reduce((s: number, it: any) => s + ((it.quantity || 0) * (it.price || 0)), 0);
+      }, 0);
+
+      const exchangedOut = (order.exchanges || []).reduce((sum, e) => {
+        return sum + (e.newItems || []).reduce((s: number, it: any) => s + ((it.quantity || 0) * (it.price || 0)), 0);
+      }, 0);
+
+      const net = gross - returned + exchangedOut;
+
+      totalGrossRevenue += gross;
+      totalReturnedAmount += returned;
+      totalExchangedOutAmount += exchangedOut;
+      netRevenue += net;
+
+      const method = (order.paymentMethod || 'CASH').toUpperCase() as 'CASH' | 'CARD' | 'QR_PAY';
+      if (paymentMethodBreakdown[method]) {
+        paymentMethodBreakdown[method].count += 1;
+        paymentMethodBreakdown[method].amount += net;
+      }
+
+      return {
+        orderId: order._id.toString(),
+        orderCode: order.orderCode,
+        patientName: order.patientName || 'Khách lẻ',
+        patientPhone: order.patientPhone || '',
+        type: order.type || 'RETAIL',
+        paymentMethod: order.paymentMethod,
+        soldBy: order.soldBy,
+        createdAt: (order as any).createdAt,
+        gross,
+        returned,
+        exchangedOut,
+        net
+      };
+    });
+
+    return {
+      period,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      branchId: branchId || 'all',
+      summary: {
+        totalOrders: orders.length,
+        totalGrossRevenue,
+        totalReturnedAmount,
+        totalExchangedOutAmount,
+        netRevenue,
+        paymentMethodBreakdown
+      },
+      orders: details
     };
   }
 }

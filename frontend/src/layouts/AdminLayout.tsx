@@ -1,10 +1,11 @@
 import { BaseDashboardLayout } from "./BaseDashboardLayout";
-import { LayoutDashboard, Settings, Building2, Banknote, BarChart3, Sparkles, PackageSearch, ShieldCheck, Tag, CreditCard } from "lucide-react";
+import { LayoutDashboard, Settings, Building2, Banknote, BarChart3, Sparkles, PackageSearch, ShieldCheck, Tag, CreditCard, Users, Link2 } from "lucide-react";
 
 export function AdminLayout() {
   const adminNavItems = [
     { name: "Tổng quan Admin", href: "/admin", icon: <LayoutDashboard size={20} /> },
     { name: "Quản lý chi nhánh", href: "/admin/branches", icon: <Building2 size={20} /> },
+    { name: "Quản lý nhân viên", href: "/admin/employees", icon: <Users size={20} /> },
     { name: "Quản lý Voucher", href: "/admin/vouchers", icon: <Tag size={20} /> },
     { name: "Phê duyệt mua hàng", href: "/admin/approvals", icon: <ShieldCheck size={20} /> },
     { 
@@ -29,6 +30,7 @@ export function AdminLayout() {
     { name: "Công nợ NCC", href: "/admin/supplier-credit", icon: <CreditCard size={20} /> },
     { name: "Báo cáo thống kê", href: "/admin/reports", icon: <BarChart3 size={20} /> },
     { name: "AI Insights", href: "/admin/ai-insights", icon: <Sparkles size={20} /> },
+    { name: "Chuỗi Cung Ứng", href: "/admin/supply-chain", icon: <Link2 size={20} /> },
   ];
 
   return <BaseDashboardLayout navItems={adminNavItems} userRole="admin" />;

@@ -3,7 +3,7 @@ version: '3.8'
 services:
   redis:
     image: redis:7-alpine
-    container_name: wdp301-redis
+
     ports:
       - "6379:6379"
     command: redis-server --save 60 1 --loglevel warning
@@ -12,7 +12,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
-    container_name: wdp301-kafka
+
     ports:
       - "9092:9092"
     environment:
@@ -44,7 +44,7 @@ services:
 
   backend:
     image: node:20-alpine
-    container_name: wdp301-backend
+
     restart: on-failure
     working_dir: /app
     volumes:
@@ -61,6 +61,9 @@ services:
       - REDIS_PORT=6379
       - KAFKA_BROKERS=kafka:29092
       - TS_NODE_TRANSPILE_ONLY=true
+      #hot module reload
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     command: sh -c "npm install --legacy-peer-deps && npm run dev:all"
     depends_on:
       kafka:
@@ -72,35 +75,41 @@ services:
 
   frontend:
     image: node:20-alpine
-    container_name: wdp301-frontend
+
     working_dir: /app
     volumes:
       - ./frontend:/app
       - /app/node_modules
     ports:
       - "3000:3000"
+    environment:
+      - DOCKER=true
+      #hot module reload
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - VITE_USE_POLLING=true
     command: sh -c "npm install --no-audit --no-fund --quiet && npm run dev"
     depends_on:
       - backend
     networks:
       - wdp301-network
 
-  ai-service:
-    build:
-      context: ./backend/apps/ai-service
-    container_name: wdp301-ai-service
-    restart: on-failure
-    env_file:
-      - ./backend/.env
-    ports:
-      - "8000:8000"
-      - "6006:6006"
-    environment:
-      - QDRANT_HOST=qdrant
-    depends_on:
-      - qdrant
-    networks:
-      - wdp301-network
+  # ai-service:
+  #   build:
+  #     context: ./backend/apps/ai-service
+  #   container_name: wdp301-ai-service
+  #   restart: on-failure
+  #   env_file:
+  #     - ./backend/.env
+  #   ports:
+  #     - "8000:8000"
+  #     - "6006:6006"
+  #   environment:
+  #     - QDRANT_HOST=qdrant
+  #   depends_on:
+  #     - qdrant
+  #   networks:
+  #     - wdp301-network
 
   qdrant:
     image: qdrant/qdrant:latest

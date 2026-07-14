@@ -4,7 +4,7 @@ import { MedicineService } from './medicine.service';
 
 @Controller()
 export class MedicineController {
-  constructor(private readonly medicineService: MedicineService) {}
+  constructor(private readonly medicineService: MedicineService) { }
 
   @MessagePattern('inventory.medicine.list')
   async listMedicines(@Payload() query: any) {
@@ -43,6 +43,16 @@ export class MedicineController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật giá sỉ bậc thang');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.update_price')
+  async updateMedicinePrice(@Payload() data: { id: string; price: number }) {
+    try {
+      return await this.medicineService.updateMedicinePrice(data.id, data.price);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật giá thuốc');
     }
   }
 
@@ -143,6 +153,44 @@ export class MedicineController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách chọn thuốc');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.get_alternatives')
+  async getAlternatives(@Payload() data: { medicineId: string; branchId: string }) {
+    try {
+      return await this.medicineService.findAlternatives(data.medicineId, data.branchId);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tìm thuốc thay thế');
+    }
+  }
+
+  // UC-30: Tồn kho thời gian thực toàn chuỗi + Thuật toán tồn kho an toàn
+  @MessagePattern('inventory.medicine.safe_stock_chain')
+  async calculateSafeStockChain(@Payload() query: {
+    serviceLevel?: number;
+    periodDays?: number;
+    branchId?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    try {
+      return await this.medicineService.calculateSafeStockChain(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tính toán tồn kho an toàn');
+    }
+  }
+
+  // UC-37: Phát hiện bất thường tồn kho (Z-Score / 3-Sigma Statistics)
+  @MessagePattern('inventory.medicine.detect_anomalies')
+  async detectAnomalies(@Payload() query: { periodDays?: number; zScoreThreshold?: number }) {
+    try {
+      return await this.medicineService.detectAnomalies(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi phát hiện bất thường tồn kho');
     }
   }
 }

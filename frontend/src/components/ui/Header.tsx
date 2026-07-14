@@ -1,6 +1,7 @@
-import { Bell, History, Search, LogOut, Menu, X } from "lucide-react";
+import { History, Search, LogOut, Menu, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
+import { NotificationBell } from "./NotificationBell";
 
 interface HeaderProps {
   userRole: string;
@@ -25,9 +26,7 @@ export function Header({
       <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200 print:hidden">
         <Logo />
         <div className="flex items-center gap-4">
-          <button className="text-slate-500 hover:text-slate-900">
-            <Bell size={20} />
-          </button>
+          <NotificationBell />
           <button 
             className="text-slate-500 hover:text-slate-900"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -53,10 +52,7 @@ export function Header({
           </div>
         </div>
         <div className="flex items-center gap-4 ml-4">
-          <button className="text-slate-600 hover:text-[#0057cd] relative transition-colors">
-            <Bell size={22} />
-            <span className="absolute top-0 -right-0.5 w-[9px] h-[9px] bg-rose-500 rounded-full border-2 border-white"></span>
-          </button>
+          <NotificationBell />
           <button className="text-slate-600 hover:text-[#0057cd] transition-colors relative mt-0.5">
             <History size={22} />
           </button>
