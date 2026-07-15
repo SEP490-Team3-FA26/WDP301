@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, Inject, OnModuleInit } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 @Controller('api/suppliers')
@@ -11,6 +11,7 @@ export class SupplierController implements OnModuleInit {
     await subscribeToKafkaTopics(this.supplierClient, [
       'supplier.get_all',
       'supplier.create',
+      'supplier.update',
     ]);
   }
 
@@ -22,5 +23,10 @@ export class SupplierController implements OnModuleInit {
   @Post()
   async createSupplier(@Body() data: any) {
     return await sendKafkaMessage(this.supplierClient, 'supplier.create', data);
+  }
+
+  @Put(':id')
+  async updateSupplier(@Param('id') id: string, @Body() data: any) {
+    return await sendKafkaMessage(this.supplierClient, 'supplier.update', { id, data });
   }
 }

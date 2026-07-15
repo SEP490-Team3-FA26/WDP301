@@ -260,6 +260,7 @@ export class AppGatewayModule {
       'orders.create',
       'orders.check',
       'orders.list',
+      'orders.my-orders',
     ];
     for (const t of orderTopics) {
       this.orderClient.subscribeToResponseOf(t);

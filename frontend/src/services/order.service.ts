@@ -18,6 +18,7 @@ export interface OrderPayload {
   shippingAddress?: string;
   notes?: string;
   voucherCode?: string;
+  userId?: string;
 }
 
 export interface SalePayload {
@@ -52,6 +53,7 @@ export interface PayOSLinkPayload {
     price: number;
     unit: string;
   }[];
+  userId?: string;
 }
 
 export const orderService = {
@@ -62,6 +64,11 @@ export const orderService = {
 
   async checkOrderStatus(orderCode: number | string) {
     const response = await api.get(`/api/orders/check/${orderCode}`);
+    return response.data;
+  },
+
+  async getMyOrders() {
+    const response = await api.get('/api/orders/my-orders');
     return response.data;
   },
 
