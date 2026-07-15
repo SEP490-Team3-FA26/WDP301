@@ -44,6 +44,7 @@ import { InventoryHistory } from "./pages/warehouse/InventoryHistory";
 import { PurchaseRequisition } from "./pages/warehouse/PurchaseRequisition";
 import { InventoryCheck } from "./pages/warehouse/InventoryCheck";
 import { WarehouseInventoryHub } from "./pages/warehouse/WarehouseInventoryHub";
+import { MobileAIInspection } from "./pages/warehouse/MobileAIInspection";
 
 // Admin / HQ Pages
 import { Finance } from "./pages/admin/Finance";
@@ -144,6 +145,7 @@ export default function App() {
             <Route path="inventory/import" element={<WarehouseInventoryHub />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
             <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
+            <Route path="inspection" element={<MobileAIInspection />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="profile" element={<Profile />} />
 
