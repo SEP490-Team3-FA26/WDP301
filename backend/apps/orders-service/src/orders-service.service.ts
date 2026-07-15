@@ -221,11 +221,8 @@ export class OrdersServiceService implements OnModuleInit {
       redeemedPoints,
       pointsDiscount,
       earnedPoints,
-<<<<<<< HEAD
       userId: data.userId,
-=======
       branchId: data.branchId || 'BR-001',
->>>>>>> 8e9ccaee0e7dc292e34bb7144334c001d94466da
     });
 
     // ========================================================
