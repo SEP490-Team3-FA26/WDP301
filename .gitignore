@@ -24,3 +24,6 @@ infra/**/.build/
 phuc/
 agents.md
 taste-skill/
+
+# Docker Compose personal overrides
+docker-compose.override.yml

@@ -70,4 +70,8 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   userId?: string;
+
+  @IsString()
+  @IsOptional()
+  branchId?: string;
 }

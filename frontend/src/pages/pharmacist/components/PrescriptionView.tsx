@@ -156,7 +156,8 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
 
   const searchMedicines = async (query: string) => {
     try {
-      const data = await medicineService.getMedicines({ limit: 10, search: query, _t: Date.now() });
+      const { branchId } = getBranchInfoFromToken();
+      const data = await medicineService.getMedicines({ limit: 10, search: query, _t: Date.now(), branchId: branchId || undefined });
       setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);

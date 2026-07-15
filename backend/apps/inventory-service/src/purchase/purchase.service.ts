@@ -10,6 +10,7 @@ import { StockTransfer } from './schemas/stock-transfer.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
 import { firstValueFrom } from 'rxjs';
+import { subscribeToKafkaTopics } from '../../../api-gateway/src/common/kafka.helper';
 
 @Injectable()
 export class PurchaseService {
@@ -27,10 +28,16 @@ export class PurchaseService {
   ) { }
 
   async onModuleInit() {
-    this.supplierClient.subscribeToResponseOf('supplier.get_by_id');
-    this.supplierClient.subscribeToResponseOf('supplier.credit.check_limit');
-    this.supplierClient.subscribeToResponseOf('supplier.credit.record_grn');
-    await this.supplierClient.connect();
+    await subscribeToKafkaTopics(
+      this.supplierClient,
+      [
+        'supplier.get_by_id',
+        'supplier.credit.check_limit',
+        'supplier.credit.record_grn',
+      ],
+      20,
+      3000,
+    );
   }
 
   // ===========================================================================================
@@ -92,7 +99,7 @@ export class PurchaseService {
 
     await pr.save();
 
-    const msg = isUrgent 
+    const msg = isUrgent
       ? `Tạo YÊU CẦU HỎA TỐC ${prCode} thành công. Đã gửi thẳng lên Headquarters.`
       : `Tạo yêu cầu mua hàng ${prCode} thành công. Đang chờ Quản lý kho gom đơn.`;
 
@@ -122,6 +129,17 @@ export class PurchaseService {
     return pr;
   }
 
+  /**
+   * Cập nhật trạng thái PR (ví dụ: OUT_OF_STOCK)
+   */
+  async updatePurchaseRequisitionStatus(id: string, status: string) {
+    const pr = await this.prModel.findById(id).exec();
+    if (!pr) throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${id}` });
+    pr.status = status;
+    await pr.save();
+    return pr;
+  }
+
   // ===========================================================================================
   // BƯỚC 2: APPROVAL & CONSOLIDATION (Gom đơn bởi Quản lý kho → Duyệt bởi HQ)
   // ===========================================================================================
@@ -132,7 +150,7 @@ export class PurchaseService {
    */
   async processUrgentPurchaseRequisition(data: { prId: string, action: 'CREATE_EMERGENCY_TRANSFER' | 'CREATE_URGENT_PO', approvedBy?: string }) {
     this.logger.log(`Processing urgent PR: ${data.prId} with action ${data.action}`);
-    
+
     const pr = await this.prModel.findById(data.prId).exec();
     if (!pr) {
       throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${data.prId}` });
@@ -144,7 +162,7 @@ export class PurchaseService {
 
     // Nghiệp vụ: CREATE_EMERGENCY_TRANSFER -> Xuất kho nội bộ
     // Nghiệp vụ: CREATE_URGENT_PO -> Đặt thẳng từ NCC giao tận nơi chi nhánh
-    
+
     pr.status = 'APPROVED';
     pr.approvedBy = data.approvedBy || 'HQ Admin';
     pr.approvedAt = new Date();
@@ -169,7 +187,7 @@ export class PurchaseService {
     }
 
     const today = new Date();
-    
+
     // Enrich items with supplierId from DB if missing
     for (const item of data.items) {
       const med = await this.medicineModel.findById(item.medicineId || item.id).exec();
@@ -187,6 +205,12 @@ export class PurchaseService {
       const group = supplierGroups.get(item.supplierId) || [];
       group.push(item);
       supplierGroups.set(item.supplierId, group);
+    }
+
+    let prCodes: string[] = [];
+    if (data.prIds && data.prIds.length > 0) {
+      const prs = await this.prModel.find({ _id: { $in: data.prIds } }).exec();
+      prCodes = prs.map(pr => pr.prCode);
     }
 
     const createdPoIds: string[] = [];
@@ -231,6 +255,8 @@ export class PurchaseService {
         expectedIncoming,
         status: 'PENDING_APPROVAL',
         createdBy: data.createdBy || '',
+        linkedPrIds: data.prIds || [],
+        linkedPrCodes: prCodes,
       });
 
       await po.save();
@@ -327,7 +353,7 @@ export class PurchaseService {
    */
   async rejectPurchaseOrderDelivery(data: { poId: string, reason?: string }) {
     this.logger.log(`Rejecting delivery for PO: ${data.poId}`);
-    
+
     const po = await this.poModel.findById(data.poId).exec();
     if (!po) {
       throw new RpcException({ message: `Không tìm thấy đơn hàng PO: ${data.poId}` });
@@ -350,6 +376,36 @@ export class PurchaseService {
   // ===========================================================================================
   // BƯỚC 4: GRN - GOODS RECEIPT NOTE (Phiếu nhập kho — chốt chặn quan trọng nhất)
   // ===========================================================================================
+
+  async receivePurchaseOrder(data: { id: string; receivedBy: string }) {
+    this.logger.log(`Auto receiving PO: ${data.id}`);
+    const po = await this.poModel.findById(data.id).exec();
+    if (!po) {
+      throw new RpcException({ message: `Không tìm thấy PO: ${data.id}` });
+    }
+
+    // Auto-generate items for full receipt
+    const expDate = new Date();
+    expDate.setFullYear(expDate.getFullYear() + 1); // Mock 1 year expDate
+    
+    const items = po.items.map((item, index) => ({
+      medicineId: item.medicineId,
+      batchNo: `BATCH-${new Date().getTime().toString().slice(-6)}-${index}`,
+      expDate: expDate.toISOString(),
+      quantity: item.quantity - (item.receivedQuantity || 0),
+      unitPrice: item.unitPrice
+    })).filter(item => item.quantity > 0);
+
+    if (items.length === 0) {
+      throw new RpcException({ message: 'Đơn hàng này đã nhận đủ số lượng' });
+    }
+
+    return await this.createGoodsReceiptNote({
+      poId: data.id,
+      receivedBy: data.receivedBy || 'Thủ Kho',
+      items
+    });
+  }
 
   /**
    * Tạo Goods Receipt Note khi hàng về.
@@ -607,7 +663,7 @@ export class PurchaseService {
           const deductQty = Math.min(batch.stock, needed);
 
           const stockBefore = batch.stock;
-          
+
           // Sử dụng OCC / Atomic Update để trừ tồn kho an toàn chống Race Condition
           const updatedBatch = await this.batchModel.findOneAndUpdate(
             {
@@ -736,7 +792,7 @@ export class PurchaseService {
         let stockBefore = 0;
         if (branchBatch) {
           stockBefore = branchBatch.stock;
-          
+
           // Sử dụng Atomic update để tăng tồn kho an toàn
           const updatedBranchBatch = await this.batchModel.findOneAndUpdate(
             {
@@ -875,12 +931,12 @@ export class PurchaseService {
       const medId = med._id.toString();
       const current = currentStockByMedicine.get(medId) || 0;
       const offset = backtrackOffset.get(medId) || 0;
-      
+
       const opening = current - offset;
 
       const imported = periodImports.get(medId) || 0;
       const exported = periodExports.get(medId) || 0;
-      
+
       const closing = opening + imported - exported;
 
       return {
@@ -943,7 +999,7 @@ export class PurchaseService {
           const deductQty = Math.min(batch.stock, needed);
 
           const stockBefore = batch.stock;
-          
+
           // Sử dụng OCC / Atomic Update để trừ tồn kho an toàn chống Race Condition
           const updatedBatch = await this.batchModel.findOneAndUpdate(
             {

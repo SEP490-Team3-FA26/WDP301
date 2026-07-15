@@ -256,8 +256,24 @@ export function CustomerCheckout() {
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-      if (!fullname || !phone || !address) {
+      if (!fullname.trim() || !phone.trim() || !address.trim()) {
         showAlert("Vui lòng điền đầy đủ các thông tin giao hàng!");
+        return;
+      }
+
+      if (fullname.trim().length < 2) {
+        showAlert("Họ và tên quá ngắn, vui lòng kiểm tra lại!");
+        return;
+      }
+
+      const phoneRegex = /^(84|0[3|5|7|8|9])[0-9]{8}$/;
+      if (!phoneRegex.test(phone.trim())) {
+        showAlert("Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam (10 chữ số)!");
+        return;
+      }
+
+      if (address.trim().length < 5) {
+        showAlert("Địa chỉ quá ngắn. Vui lòng nhập địa chỉ chi tiết hơn (tối thiểu 5 ký tự)!");
         return;
       }
 

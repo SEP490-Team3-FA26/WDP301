@@ -4,11 +4,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { ClientKafka } from '@nestjs/microservices';
-import { PayOS } from '@payos/node';
 import { lastValueFrom } from 'rxjs';
+import { PayOS } from '@payos/node';
 import { Order } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Voucher } from './schemas/voucher.schema';
+import { subscribeToKafkaTopics } from '../../api-gateway/src/common/kafka.helper';
 
 const DEFAULT_PHONE_NUMBER = '0900000000';
 
@@ -220,7 +221,11 @@ export class OrdersServiceService implements OnModuleInit {
       redeemedPoints,
       pointsDiscount,
       earnedPoints,
+<<<<<<< HEAD
       userId: data.userId,
+=======
+      branchId: data.branchId || 'BR-001',
+>>>>>>> 8e9ccaee0e7dc292e34bb7144334c001d94466da
     });
 
     // ========================================================
@@ -246,19 +251,20 @@ export class OrdersServiceService implements OnModuleInit {
     }
 
     let saleRes;
-    // Step 2: Deduct Loyalty Points (Reserve)
-    if (redeemedPoints > 0) {
-      await lastValueFrom(
-        this.userClient.send('user.loyalty.update_points', {
-          phone: newOrder.patientPhone,
-          pointsDelta: -redeemedPoints,
-        })
-      );
+    try {
+      // Step 2: Deduct Loyalty Points (Reserve)
+      if (redeemedPoints > 0) {
+        await lastValueFrom(
+          this.userClient.send('user.loyalty.update_points', {
+            phone: newOrder.patientPhone,
+            pointsDelta: -redeemedPoints,
+          })
+        );
+      }
+    } catch (err) {
+      this.logger.error('Error reserving loyalty points:', err);
+      throw new RpcException({ message: `Lỗi trừ điểm tích lũy: ${err.message}` });
     }
-
-    // Step 3: Reserve Inventory
-    saleRes = await this.deductInventory(newOrder);
-
     // Branching logic based on payment method
     if (data.paymentMethod === 'QR_PAY') {
       try {
@@ -295,64 +301,64 @@ export class OrdersServiceService implements OnModuleInit {
           qrCode: paymentLinkRes.qrCode,
           order: newOrder,
         };
-      } catch (err) {
+      } catch (err: any) {
         this.logger.error('Error creating PayOS payment link:', err);
         throw new RpcException({ message: `Lỗi tạo link thanh toán PayOS: ${err.message}` });
       }
-    } else {
-      // CASH or CARD: Complete order instantly
+    }
+
+    // CASH or CARD: Complete order instantly
+    newOrder.paymentStatus = 'PAID';
+    await newOrder.save();
+
+    // Increment voucher usage on successful payment
+    if (newOrder.voucherCode) {
+      await this.voucherModel.updateOne(
+        { code: newOrder.voucherCode },
+        { $inc: { usedCount: 1 } }
+      ).exec();
+    }
+
+    // Deduct inventory and record sale
+    try {
+      const saleRes = await this.deductInventory(newOrder);
+
+      // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
+      if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
+        await lastValueFrom(
+          this.userClient.send('user.loyalty.update_points', {
+            phone: newOrder.patientPhone,
+            pointsDelta: newOrder.earnedPoints,
+            accumulatedDelta: newOrder.earnedPoints,
+          })
+        );
+      }
+
       newOrder.paymentStatus = 'PAID';
       await newOrder.save();
+      this.sendInvoiceEmailAsync(newOrder);
 
-      // Increment voucher usage on successful payment
-      if (newOrder.voucherCode) {
-        await this.voucherModel.updateOne(
-          { code: newOrder.voucherCode },
-          { $inc: { usedCount: 1 } }
-        ).exec();
-      }
+      return {
+        success: true,
+        orderCode,
+        paymentMethod: data.paymentMethod,
+        order: newOrder,
+        saleResult: saleRes,
+      };
+    } catch (err: any) {
+      this.logger.error('Error deducting inventory:', err);
 
-      // Deduct inventory and record sale
-      try {
-        const saleRes = await this.deductInventory(newOrder);
+      // Asynchronously trigger sending invoice email even if inventory deduction fails
+      this.sendInvoiceEmailAsync(newOrder);
 
-        // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
-        if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
-              phone: newOrder.patientPhone,
-              pointsDelta: newOrder.earnedPoints,
-              accumulatedDelta: newOrder.earnedPoints,
-            })
-          );
-        }
-
-        newOrder.paymentStatus = 'PAID';
-        await newOrder.save();
-        this.sendInvoiceEmailAsync(newOrder);
-
-        return {
-          success: true,
-          orderCode,
-          paymentMethod: data.paymentMethod,
-          order: newOrder,
-          saleResult: saleRes,
-        };
-      } catch (err) {
-        this.logger.error('Error deducting inventory:', err);
-
-        // Asynchronously trigger sending invoice email even if inventory deduction fails
-        this.sendInvoiceEmailAsync(newOrder);
-
-        // Save with warning
-        return {
-          success: true,
-          orderCode,
-          paymentMethod: data.paymentMethod,
-          order: newOrder,
-          warning: `Đơn hàng đã lưu nhưng trừ kho thất bại: ${err.message}`,
-        };
-      }
+      // Save with warning
+      return {
+        success: true,
+        orderCode,
+        paymentMethod: data.paymentMethod,
+        order: newOrder,
+        warning: `Đơn hàng đã lưu nhưng trừ kho thất bại: ${err.message}`,
+      };
     }
   }
 
@@ -509,6 +515,7 @@ export class OrdersServiceService implements OnModuleInit {
       patientName: order.patientName,
       patientPhone: order.patientPhone,
       soldBy: order.type === 'ONLINE' ? 'Khách đặt online' : 'Dược sĩ tại quầy',
+      branchId: order.branchId || null,
     };
 
     return new Promise((resolve, reject) => {

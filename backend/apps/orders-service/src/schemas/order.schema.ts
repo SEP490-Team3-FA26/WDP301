@@ -72,5 +72,8 @@ export class Order extends Document {
 
   @Prop({ type: String })
   userId?: string;
+
+  @Prop({ type: String, default: 'BR-001' })
+  branchId?: string;
 }
 export const OrderSchema = SchemaFactory.createForClass(Order);

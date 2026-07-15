@@ -64,6 +64,7 @@ export function Sidebar({
                       <NavLink
                         key={subItem.name}
                         to={subItem.href}
+                        end
                         onClick={() => setIsMobileMenuOpen(false)}
                         className={({ isActive }) => `
                           block px-3 py-2 rounded-lg font-medium transition-colors text-[13px]
@@ -82,6 +83,7 @@ export function Sidebar({
             ) : (
               <NavLink
                 to={item.href!}
+                end
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={({ isActive }) => `
                   flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold transition-colors text-sm
