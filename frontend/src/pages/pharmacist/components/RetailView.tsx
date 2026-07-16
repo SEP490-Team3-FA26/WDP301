@@ -414,7 +414,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
         type: "RETAIL",
         branchId: currentBranchId || undefined,
         items: cart.map(it => ({
-          medicineId: it.id,
+          medicineId: it.id || it._id,
           quantity: it.quantity
         })),
         paymentMethod,
@@ -474,8 +474,8 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const earnedPoints = Math.round(total / 100) * (loyaltyInfo ? loyaltyInfo.multiplier || 1.0 : 1.0);
 
   // Cảnh báo tương tác thuốc trong giỏ hàng lẻ
-  const hasCiprofloxacin = cart.some(it => it.name.toLowerCase().includes("ciprofloxacin") || it.active_ingredient.toLowerCase().includes("ciprofloxacin"));
-  const hasWarfarin = cart.some(it => it.name.toLowerCase().includes("warfarin") || it.active_ingredient.toLowerCase().includes("warfarin"));
+  const hasCiprofloxacin = cart.some(it => it.name?.toLowerCase().includes("ciprofloxacin") || it.active_ingredient?.toLowerCase().includes("ciprofloxacin"));
+  const hasWarfarin = cart.some(it => it.name?.toLowerCase().includes("warfarin") || it.active_ingredient?.toLowerCase().includes("warfarin"));
   const hasInteraction = hasCiprofloxacin && hasWarfarin;
 
   return (

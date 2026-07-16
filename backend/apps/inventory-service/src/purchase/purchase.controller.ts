@@ -283,4 +283,62 @@ export class PurchaseController {
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy chi tiết chuyển kho');
     }
   }
+
+  // ===========================================================================================
+  // INSPECTION & GRN ENDPOINTS
+  // ===========================================================================================
+
+  @MessagePattern('inventory.grn.create')
+  async createGoodsReceiptNote(@Payload() data: { poId: string; items: any[]; receivedBy: string }) {
+    try {
+      return await this.purchaseService.createGoodsReceiptNote(data);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi tạo phiếu GRN');
+    }
+  }
+
+  @MessagePattern('inventory.inspection.create')
+  async createInspectionRecord(@Payload() data: { grnId: string; inspectedBy: string }) {
+    try {
+      return await this.purchaseService.createInspectionRecord(data.grnId, data.inspectedBy);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi mở phiên kiểm đếm');
+    }
+  }
+
+  @MessagePattern('inventory.inspection.verify_item')
+  async verifyInspectionItem(@Payload() data: { recordId: string; itemId: string; actualQty: number }) {
+    try {
+      return await this.purchaseService.verifyInspectionItem(data.recordId, data.itemId, data.actualQty);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi xác nhận số lượng kiểm đếm');
+    }
+  }
+
+  @MessagePattern('inventory.inspection.submit')
+  async submitInspectionReport(@Payload() data: { recordId: string }) {
+    try {
+      return await this.purchaseService.submitInspectionReport(data.recordId);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi nộp báo cáo kiểm đếm');
+    }
+  }
+
+  @MessagePattern('inventory.grn.approve')
+  async approveGoodsReceipt(@Payload() data: { recordId: string; approvedBy: string }) {
+    try {
+      return await this.purchaseService.approveGoodsReceipt(data.recordId, data.approvedBy);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi duyệt báo cáo nhập kho');
+    }
+  }
+
+  @MessagePattern('inventory.inspection.list')
+  async listInspectionRecords() {
+    try {
+      return await this.purchaseService.listInspectionRecords();
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi lấy danh sách kiểm đếm');
+    }
+  }
 }

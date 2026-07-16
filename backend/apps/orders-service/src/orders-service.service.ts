@@ -230,6 +230,7 @@ export class OrdersServiceService implements OnModuleInit {
       redeemedPoints,
       pointsDiscount,
       earnedPoints,
+      userId: data.userId,
       branchId: data.branchId || 'BR-001',
     });
 
@@ -255,7 +256,7 @@ export class OrdersServiceService implements OnModuleInit {
       }
     }
 
-      let saleRes;
+    let saleRes;
     try {
       // Step 2: Deduct Loyalty Points (Reserve)
       if (redeemedPoints > 0) {
@@ -272,7 +273,6 @@ export class OrdersServiceService implements OnModuleInit {
       this.logger.error('Error reserving loyalty points:', err);
       throw new RpcException({ message: `Lỗi trừ điểm tích lũy: ${err.message}` });
     }
-
     // Branching logic based on payment method
     if (data.paymentMethod === 'QR_PAY') {
       try {
@@ -486,6 +486,34 @@ export class OrdersServiceService implements OnModuleInit {
 
   async listOrders() {
     return this.orderModel.find().sort({ createdAt: -1 }).exec();
+  }
+
+  async getMyOrders(userId: string, fullName?: string) {
+    if (!userId) {
+      throw new RpcException({ message: 'Thiếu thông tin người dùng' });
+    }
+
+    // Tìm đơn hàng:
+    // 1. Đơn mới: có userId khớp với người đang đăng nhập
+    // 2. Đơn cũ theo tên: patientName khớp với tên tài khoản (case-insensitive)
+    // 3. Đơn cũ chưa gán userId: những đơn legacy chưa có trường userId
+    const orConditions: any[] = [
+      { userId },
+      { userId: { $exists: false } },
+      { userId: null },
+      { userId: '' },
+    ];
+
+    if (fullName && fullName.trim() !== '') {
+      orConditions.push({ patientName: { $regex: new RegExp(`^${fullName.trim()}$`, 'i') } });
+    }
+
+    const query = { $or: orConditions };
+
+    this.logger.log(`[getMyOrders] Querying orders for userId=${userId}, fullName=${fullName}`);
+    const results = await this.orderModel.find(query).sort({ createdAt: -1 }).exec();
+    this.logger.log(`[getMyOrders] Found ${results.length} orders`);
+    return results;
   }
 
   private async deductInventory(order: any) {

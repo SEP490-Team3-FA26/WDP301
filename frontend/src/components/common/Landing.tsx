@@ -8,7 +8,7 @@ import {
   Box, Search, History, BrainCircuit, ScanBarcode, ArrowRightLeft,
   ShoppingCart, Heart, Sparkles, HeartPulse, Award, Shield, 
   Check, Info, Sparkle, Stethoscope, Star, SparklesIcon,
-  ShieldAlert, XCircle
+  ShieldAlert, XCircle, User, LogOut
 } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -29,6 +29,14 @@ export function Landing() {
   const cartIconRef = useRef<HTMLAnchorElement>(null);
   const isFirstRender = useRef(true);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
+  
+  const hasToken = !!localStorage.getItem("token");
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("userRole");
+    navigate("/login");
+  };
   
   // E-commerce states
   const [medicines, setMedicines] = useState<any[]>([]);
@@ -499,12 +507,33 @@ export function Landing() {
             </Link>
 
             <span className="w-px h-4 bg-slate-200"></span>
-            <Link 
-              to="/login"
-              className="bg-gradient-to-r from-[#0d6efd] to-[#0b5ed7] hover:from-[#0b5ed7] hover:to-[#0d6efd] text-white px-5.5 py-2.5 rounded-full font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-blue-700/15 hover:-translate-y-0.5 active:scale-95"
-            >
-              Hệ thống Login →
-            </Link>
+            {hasToken ? (
+              <div className="hidden sm:flex items-center gap-2.5 pl-2 border-l border-slate-200">
+                <Link to="/customer/profile" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+                  <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-xs uppercase shadow-inner">
+                    KH
+                  </div>
+                  <div className="flex flex-col text-left">
+                    <span className="text-xs font-bold text-slate-800">Khách Hàng</span>
+                    <span className="text-[10px] font-medium text-slate-400 hover:text-blue-500 transition-colors">Hồ sơ & Lịch sử</span>
+                  </div>
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="p-2 text-slate-400 hover:text-red-500 rounded-lg transition-colors ml-1 cursor-pointer"
+                  title="Đăng xuất"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            ) : (
+              <Link 
+                to="/login"
+                className="bg-gradient-to-r from-[#0d6efd] to-[#0b5ed7] hover:from-[#0b5ed7] hover:to-[#0d6efd] text-white px-5.5 py-2.5 rounded-full font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-blue-700/15 hover:-translate-y-0.5 active:scale-95"
+              >
+                Hệ thống Login →
+              </Link>
+            )}
           </div>
         </div>
       </nav>

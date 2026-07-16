@@ -40,3 +40,7 @@ taste-skill/
 
 docker-compose.yml
 next
+
+# Docker Compose personal overrides
+docker-compose.override.yml
+

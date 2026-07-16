@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Building2, AlertTriangle, CheckCircle2, ShieldAlert, X } from "lucide-react";
+import { Plus, Search, Building2, AlertTriangle, CheckCircle2, ShieldAlert, X, Edit2 } from "lucide-react";
 import { motion } from "motion/react";
 import { supplierService } from "../../services/purchase/supplier.service";
 
 export function Suppliers() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   
   // Form State
-  const [formData, setFormData] = useState({ name: "", phone: "", gdpExpiry: "" });
+  const [formData, setFormData] = useState({ 
+    _id: "",
+    name: "", 
+    contact_info: "", 
+    business_registration_number: "",
+    gdp_certificate_number: "",
+    gdp_expiry_date: "" 
+  });
 
   useEffect(() => {
     supplierService.getSuppliers()
@@ -16,14 +24,19 @@ export function Suppliers() {
       .catch(err => console.error('Failed to fetch suppliers', err));
   }, []);
 
-  const toggleStatus = (id: number) => {
-    // In a real app, this would call an API
-    setSuppliers(suppliers.map(s => {
-      if (s._id === id) {
-        return { ...s, status: s.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" };
-      }
-      return s;
-    }));
+  const toggleStatus = async (id: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+      await supplierService.updateSupplier(id, { status: newStatus });
+      setSuppliers(suppliers.map(s => {
+        if (s._id === id) {
+          return { ...s, status: newStatus };
+        }
+        return s;
+      }));
+    } catch (error) {
+      console.error('Failed to toggle status', error);
+    }
   };
 
   const isExpired = (dateString: string) => {
@@ -33,26 +46,52 @@ export function Suppliers() {
     return expiry < today;
   };
 
-  const handleAddSupplier = async (e: React.FormEvent) => {
+  const handleOpenAdd = () => {
+    setFormData({ _id: "", name: "", contact_info: "", business_registration_number: "", gdp_certificate_number: "", gdp_expiry_date: "" });
+    setIsEditing(false);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (supplier: any) => {
+    setFormData({ 
+      _id: supplier._id, 
+      name: supplier.name, 
+      contact_info: supplier.contact_info || "", 
+      business_registration_number: supplier.business_registration_number || "",
+      gdp_certificate_number: supplier.gdp_certificate_number || "",
+      gdp_expiry_date: supplier.gdp_expiry_date ? new Date(supplier.gdp_expiry_date).toISOString().split('T')[0] : "" 
+    });
+    setIsEditing(true);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.gdpExpiry) return;
+    if (!formData.name || !formData.gdp_certificate_number || !formData.gdp_expiry_date) return;
     
     try {
-      const newSupplier = await supplierService.createSupplier({
+      const payload = {
         name: formData.name,
-        phone: formData.phone || "N/A",
-        gdp_expiry_date: formData.gdpExpiry,
-        status: "ACTIVE"
-      } as any);
-      setSuppliers([...suppliers, newSupplier]);
+        contact_info: formData.contact_info,
+        business_registration_number: formData.business_registration_number,
+        gdp_certificate_number: formData.gdp_certificate_number,
+        gdp_expiry_date: formData.gdp_expiry_date,
+      };
+
+      if (isEditing && formData._id) {
+        await supplierService.updateSupplier(formData._id, payload);
+        setSuppliers(suppliers.map(s => s._id === formData._id ? { ...s, ...payload } : s));
+      } else {
+        const newSupplier = await supplierService.createSupplier({ ...payload, status: "ACTIVE" } as any);
+        setSuppliers([...suppliers, newSupplier]);
+      }
       setIsModalOpen(false);
-      setFormData({ name: "", phone: "", gdpExpiry: "" });
     } catch (err) {
-      console.error('Failed to create supplier', err);
+      console.error('Failed to save supplier', err);
     }
   };
 
-  const isFormExpired = isExpired(formData.gdpExpiry);
+  const isFormExpired = isExpired(formData.gdp_expiry_date);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -62,7 +101,7 @@ export function Suppliers() {
           <p className="text-slate-500 mt-1">Thẩm định pháp lý và cấu hình trạng thái hoạt động</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenAdd}
           className="bg-[#0057cd] hover:bg-[#004bb1] text-white px-4 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2 shadow-sm"
         >
           <Plus size={18} />
@@ -70,7 +109,7 @@ export function Suppliers() {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[500px]">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 160px)' }}>
         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
           <div className="relative max-w-md w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -82,7 +121,7 @@ export function Suppliers() {
           </div>
         </div>
 
-        <div className="overflow-x-auto flex-1">
+        <div className="overflow-auto flex-1 relative">
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-white border-b border-slate-100 text-slate-900 font-medium uppercase text-xs tracking-wider sticky top-0 z-10">
               <tr>
@@ -112,7 +151,7 @@ export function Suppliers() {
                         <span className="font-bold text-slate-800">{supplier.name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 font-medium text-slate-600">{supplier.phone}</td>
+                    <td className="px-6 py-4 font-medium text-slate-600 max-w-[200px] truncate" title={supplier.contact_info}>{supplier.contact_info}</td>
                     <td className="px-6 py-4 text-center">
                       <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold text-[11px] border ${expired ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
                         {supplier.gdp_expiry_date ? new Date(supplier.gdp_expiry_date).toLocaleDateString() : 'N/A'}
@@ -139,18 +178,27 @@ export function Suppliers() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button 
-                        onClick={() => toggleStatus(supplier.id)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#0057cd] focus:ring-offset-2 ${
-                          supplier.status === 'ACTIVE' ? 'bg-[#0057cd]' : 'bg-slate-300'
-                        }`}
-                      >
-                        <span 
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            supplier.status === 'ACTIVE' ? 'translate-x-6' : 'translate-x-1'
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          onClick={() => handleOpenEdit(supplier)}
+                          className="text-slate-400 hover:text-[#0057cd] transition-colors p-1"
+                          title="Chỉnh sửa thông tin"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button 
+                          onClick={() => toggleStatus(supplier._id, supplier.status)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#0057cd] focus:ring-offset-2 ${
+                            supplier.status === 'ACTIVE' ? 'bg-[#0057cd]' : 'bg-slate-300'
                           }`}
-                        />
-                      </button>
+                        >
+                          <span 
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              supplier.status === 'ACTIVE' ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
                     </td>
                   </motion.tr>
                 );
@@ -171,28 +219,38 @@ export function Suppliers() {
              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                    <Building2 className="text-[#0057cd]" size={20} />
-                   Thêm Hồ Sơ Nhà Cung Cấp
+                   {isEditing ? 'Cập Nhật Hồ Sơ Nhà Cung Cấp' : 'Thêm Hồ Sơ Nhà Cung Cấp'}
                 </h2>
                 <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:bg-slate-200 hover:text-slate-700 p-1.5 rounded-full transition-colors">
                    <X size={20} />
                 </button>
              </div>
 
-             <form onSubmit={handleAddSupplier} className="p-6 space-y-5">
+             <form onSubmit={handleSaveSupplier} className="p-6 space-y-5">
                 <div className="space-y-1.5">
                    <label className="text-sm font-bold text-slate-700">Tên Doanh Nghiệp (Nhà Cung Cấp) *</label>
                    <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" placeholder="Ví dụ: Công ty Dược phẩm X" />
                 </div>
                 <div className="space-y-1.5">
-                   <label className="text-sm font-bold text-slate-700">Số điện thoại liên hệ</label>
-                   <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" placeholder="Ví dụ: 0901234567" />
+                   <label className="text-sm font-bold text-slate-700">Thông tin liên hệ (SĐT / Email)</label>
+                   <input type="text" value={formData.contact_info} onChange={e => setFormData({...formData, contact_info: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" placeholder="Ví dụ: 0901234567 - sales@example.com" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700">Số Đăng ký Kinh doanh</label>
+                    <input type="text" value={formData.business_registration_number} onChange={e => setFormData({...formData, business_registration_number: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" placeholder="Ví dụ: DKKD-12345" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700">Số Chứng nhận GDP *</label>
+                    <input required type="text" value={formData.gdp_certificate_number} onChange={e => setFormData({...formData, gdp_certificate_number: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" placeholder="Ví dụ: GDP-123/HN" />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                    <label className="text-sm font-bold text-slate-700">Ngày hết hạn Giấy Chứng Nhận GDP *</label>
-                   <input required type="date" value={formData.gdpExpiry} onChange={e => setFormData({...formData, gdpExpiry: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" />
+                   <input required type="date" value={formData.gdp_expiry_date} onChange={e => setFormData({...formData, gdp_expiry_date: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all" />
                 </div>
 
-                {formData.gdpExpiry && (
+                {formData.gdp_expiry_date && (
                    <div className={`p-4 rounded-xl border ${isFormExpired ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
                       <div className="flex items-start gap-3">
                          {isFormExpired ? <ShieldAlert size={20} className="text-rose-600 mt-0.5 shrink-0" /> : <CheckCircle2 size={20} className="text-emerald-600 mt-0.5 shrink-0" />}
