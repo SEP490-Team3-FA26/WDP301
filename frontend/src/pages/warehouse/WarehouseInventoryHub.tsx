@@ -9,10 +9,10 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { CreatePOModal } from "../../components/CreatePOModal";
-import { branchService } from "../../services/branch.service";
-import { purchaseOrderService } from "../../services/purchaseOrder.service";
-import { goodsReceiptService } from "../../services/goodsReceipt.service";
-import { supplierService } from "../../services/supplier.service";
+import { branchService } from "../../services/admin/branch.service";
+import { purchaseOrderService } from "../../services/purchase/purchaseOrder.service";
+import { goodsReceiptService } from "../../services/purchase/goodsReceipt.service";
+import { supplierService } from "../../services/purchase/supplier.service";
 import { useSocket } from "../../hooks/useSocket";
 
 // ─────────────────────────────────────────
@@ -64,6 +64,29 @@ export function WarehouseInventoryHub() {
     branchService.getBranches().then(d => setBranches(d || [])).catch(() => { });
     supplierService.getSuppliers().then(d => setSuppliers(d || [])).catch(() => { });
   }, []);
+
+  useEffect(() => {
+    const openCreatePO = searchParams.get("openCreatePO");
+    const prefillStr = searchParams.get("prefill");
+    if (openCreatePO === "true") {
+      if (prefillStr) {
+        try {
+          const decoded = JSON.parse(decodeURIComponent(prefillStr));
+          setPrefillData(decoded);
+        } catch (e) {
+          console.error("Failed to parse prefill parameter", e);
+        }
+      }
+      setShowCreatePOModal(true);
+      
+      // Clear query parameters
+      setSearchParams(prev => {
+        prev.delete("openCreatePO");
+        prev.delete("prefill");
+        return prev;
+      }, { replace: true });
+    }
+  }, [searchParams]);
 
   const TABS = [
     {
@@ -787,21 +810,69 @@ function IncomingOrdersTab({
     (grn.grnCode || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleReceive = async (poId: string) => {
+  const [inspectionData, setInspectionData] = useState<Record<string, { batchNo: string, expDate: string, actualQty: number | string }>>({});
+  const [aiScanning, setAiScanning] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedPo && selectedPo.items) {
+      const initData: Record<string, any> = {};
+      selectedPo.items.forEach((it: any) => {
+        initData[it.medicineId || it.id] = {
+          batchNo: "",
+          expDate: "",
+          actualQty: "" // Empty so they have to input
+        };
+      });
+      setInspectionData(initData);
+    }
+  }, [selectedPo]);
+
+  const handleReceiveAndInspect = async (poId: string) => {
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/purchase-orders/${poId}/receive`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receivedBy: "Thủ Kho" }),
+      if (!selectedPo) return;
+      
+      const items = selectedPo.items.map((it: any) => {
+        const mId = it.medicineId || it.id;
+        const data = inspectionData[mId];
+        if (!data?.batchNo || !data?.expDate || data?.actualQty === "") {
+          throw new Error(`Vui lòng điền đầy đủ Lô, HSD và Số lượng thực tế cho sản phẩm ${it.medicineName || mId}.`);
+        }
+        return {
+          medicineId: mId,
+          expectedQty: it.quantity,
+          unitPrice: it.unitPrice,
+          batchNo: data.batchNo,
+          expDate: new Date(data.expDate).toISOString(),
+          actualQty: Number(data.actualQty)
+        };
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Không thể nhận hàng");
-      onMsg({ type: "success", text: "Đã xác nhận nhận hàng và nhập kho thành công!" });
+
+      // 1. Create GRN
+      const grnRes = await goodsReceiptService.createGoodsReceipt({
+        poId,
+        receivedBy: "Thủ Kho",
+        items
+      });
+      const grnId = grnRes.data._id;
+
+      // 2. Create Inspection Record
+      const recordRes = await goodsReceiptService.createInspectionRecord(grnId, "Thủ Kho");
+      const recordId = recordRes.data._id;
+
+      // 3. Verify items
+      for (const it of items) {
+         await goodsReceiptService.verifyInspectionItem(recordId, it.medicineId, it.actualQty);
+      }
+
+      // 4. Submit
+      await goodsReceiptService.submitInspectionReport(recordId, "Hoàn tất kiểm đếm thủ công");
+
+      onMsg({ type: "success", text: "Đã tạo GRN và gửi báo cáo kiểm đếm thành công!" });
       setSelectedPo(null);
       fetchData();
     } catch (e: any) {
-      onMsg({ type: "error", text: e.message });
+      onMsg({ type: "error", text: e.response?.data?.message || e.message || "Lỗi tạo GRN" });
     } finally { setActionLoading(false); }
   };
 
@@ -863,7 +934,7 @@ function IncomingOrdersTab({
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1.5">
                         {po.status === "SHIPPING" && (
-                          <button onClick={() => setSelectedPo(po)} title="Nhập kho"
+                          <button onClick={() => setSelectedPo(po)} title="Nhập kho & Kiểm đếm"
                             className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg">
                             <PackageCheck size={15} />
                           </button>
@@ -893,16 +964,33 @@ function IncomingOrdersTab({
                   <th className="px-4 py-3">Nhà Cung Cấp</th>
                   <th className="px-4 py-3 text-center">SP</th>
                   <th className="px-4 py-3 text-center">Trạng thái</th>
+                  <th className="px-4 py-3 text-right">Hành động</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredGrn.map((grn: any) => (
                   <tr key={grn._id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-bold text-slate-900 font-mono text-xs">{grn.grnCode}</td>
+                    <td className="px-4 py-3 font-bold text-slate-900 font-mono text-xs">{grn._id?.slice(-6).toUpperCase() || grn.grnCode}</td>
                     <td className="px-4 py-3 text-slate-600"><Calendar size={12} className="inline mr-1 text-slate-400" />{new Date(grn.createdAt).toLocaleDateString("vi-VN")}</td>
                     <td className="px-4 py-3 font-medium text-slate-800">{getSupplierName(grn.supplierId)}</td>
                     <td className="px-4 py-3 text-center font-bold">{grn.items?.length || 0}</td>
-                    <td className="px-4 py-3 text-center"><span className="inline-flex px-2.5 py-1 rounded-full border text-[11px] font-bold bg-emerald-50 text-emerald-700 border-emerald-200">Đã nhập kho ✓</span></td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex px-2.5 py-1 rounded-full border text-[11px] font-bold ${
+                        grn.status === 'INSPECTING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                        grn.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        'bg-slate-50 text-slate-500 border-slate-200'
+                      }`}>
+                        {grn.status === 'INSPECTING' ? 'Chờ kiểm đếm' : grn.status === 'COMPLETED' ? 'Đã nhập kho ✓' : grn.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {grn.status === 'INSPECTING' && (
+                        <button onClick={() => window.location.href = `/warehouse/inspection?grnId=${grn._id}`}
+                          className="px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg font-bold text-xs border border-blue-200">
+                          Mở kiểm đếm AI
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -925,30 +1013,71 @@ function IncomingOrdersTab({
                 </div>
                 <button onClick={() => setSelectedPo(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"><X size={18} /></button>
               </div>
-              <div className="p-5 space-y-3 overflow-y-auto flex-1">
+              <div className="p-5 space-y-4 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-3 text-sm bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <div><span className="text-slate-500 font-bold text-xs block">Nhà Cung Cấp</span><span className="font-semibold text-slate-800">{getSupplierName(selectedPo.supplierId)}</span></div>
                   <div><span className="text-slate-500 font-bold text-xs block">Tổng tiền</span><span className="font-black text-emerald-700 text-base">{selectedPo.totalAmount?.toLocaleString("vi-VN")}đ</span></div>
                 </div>
-                <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><Package size={14} className="text-emerald-600" />Danh sách hàng ({selectedPo.items?.length || 0})</h4>
-                <div className="space-y-2">
-                  {selectedPo.items?.map((it: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
-                      <span className="font-semibold text-slate-800 text-sm">{it.medicineName || it.medicineId}</span>
-                      <div className="text-right">
-                        <span className="font-bold text-emerald-700 text-sm block">×{it.quantity}</span>
-                        <span className="text-xs text-slate-400">{it.unitPrice?.toLocaleString("vi-VN")}đ/đv</span>
+                <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><Package size={14} className="text-emerald-600" />Sản phẩm kiểm đếm ({selectedPo.items?.length || 0})</h4>
+                <div className="space-y-3">
+                  {selectedPo.items?.map((it: any) => {
+                    const mId = it.medicineId || it.id;
+                    const isScanning = aiScanning === mId;
+                    return (
+                      <div key={mId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-bold text-slate-900 text-sm">{it.medicineName || mId}</span>
+                            <span className="text-xs text-slate-500 block">Số lượng chứng từ: <span className="font-bold text-emerald-700">{it.quantity}</span></span>
+                          </div>
+                          {isScanning ? (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-bold flex items-center gap-1 animate-pulse"><Scan size={12} /> Đang quét...</span>
+                          ) : (
+                            <button onClick={() => {
+                              setAiScanning(mId);
+                              setTimeout(() => {
+                                setInspectionData(prev => ({
+                                  ...prev,
+                                  [mId]: { ...prev[mId], actualQty: it.quantity } // Giả lập AI đếm đúng số lượng
+                                }));
+                                setAiScanning(null);
+                              }, 1500);
+                            }} className="px-2 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-xs font-bold border border-blue-200 flex items-center gap-1 transition-colors">
+                              <Camera size={12} /> Quét AI
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 mb-1 block">SỐ LÔ (BATCH NO.)</label>
+                            <input type="text" value={inspectionData[mId]?.batchNo || ""}
+                              onChange={e => setInspectionData(prev => ({ ...prev, [mId]: { ...prev[mId], batchNo: e.target.value } }))}
+                              className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500" placeholder="VD: B001" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 mb-1 block">HẠN SỬ DỤNG</label>
+                            <input type="date" value={inspectionData[mId]?.expDate || ""}
+                              onChange={e => setInspectionData(prev => ({ ...prev, [mId]: { ...prev[mId], expDate: e.target.value } }))}
+                              className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 mb-1 block">THỰC TẾ (ACTUAL QTY)</label>
+                            <input type="number" min={0} value={inspectionData[mId]?.actualQty ?? ""}
+                              onChange={e => setInspectionData(prev => ({ ...prev, [mId]: { ...prev[mId], actualQty: e.target.value } }))}
+                              className="w-full px-2 py-1.5 bg-white border border-emerald-300 rounded text-xs font-black text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-center" placeholder="Nhập số lượng..." />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
               {selectedPo.status === "SHIPPING" && (
                 <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
-                  <button onClick={() => handleReceive(selectedPo._id)} disabled={actionLoading}
-                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5">
-                    {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <PackageCheck size={14} />}
-                    Xác nhận Nhập kho
+                  <button onClick={() => handleReceiveAndInspect(selectedPo._id)} disabled={actionLoading}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5 shadow-sm disabled:opacity-50 transition-colors">
+                    {actionLoading ? <Loader2 size={16} className="animate-spin" /> : <ClipboardCheck size={16} />}
+                    Hoàn tất Nhập Kho & Gửi Báo Cáo
                   </button>
                 </div>
               )}

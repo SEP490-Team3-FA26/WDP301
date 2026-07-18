@@ -37,6 +37,16 @@ export class OrdersServiceController {
     }
   }
 
+  @MessagePattern('orders.my-orders')
+  async getMyOrders(@Payload() data: { userId: string; fullName?: string }) {
+    try {
+      return await this.ordersServiceService.getMyOrders(data.userId, data.fullName);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy lịch sử đơn hàng');
+    }
+  }
+
   @MessagePattern('vouchers.create')
   async createVoucher(@Payload() data: any) {
     try {

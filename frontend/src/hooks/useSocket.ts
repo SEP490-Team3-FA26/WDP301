@@ -3,104 +3,51 @@ import { io, Socket } from 'socket.io-client';
 
 const API_GATEWAY_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+// Global cache để dùng chung kết nối Socket, tránh mỗi component tạo 1 connection mới gây spam log backend
+const globalSockets: Record<string, Socket> = {};
+``
 export function useSocket(namespace: string = '') {
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
-  const reconnectAttempts = useRef(0);
-  const MAX_RECONNECT_ATTEMPTS = 5;
 
   useEffect(() => {
-    // Prevent multiple socket instances
-    if (socketRef.current?.connected) {
-      console.log('⚠️  Socket already connected, reusing instance');
-      return;
-    }
-
-    // Get JWT token from localStorage
     const token = localStorage.getItem('token');
-    
-    if (!token) {
-      console.error('❌ No JWT token found, cannot connect WebSocket');
-      setConnectionError('No authentication token');
-      return;
+
+    // Nếu chưa có kết nối cho namespace này thì mới tạo
+    if (!globalSockets[namespace]) {
+      globalSockets[namespace] = io(`${API_GATEWAY_URL}${namespace}`, {
+        transports: ['websocket'],
+        autoConnect: true,
+        reconnection: true,
+        auth: {
+          token: token || '',
+        },
+      });
+      // Tắt bớt log frontend để đỡ rác console
+      // globalSockets[namespace].on('connect', () => console.log(`✅ Socket connected to ${namespace || 'root'}`));
+      // globalSockets[namespace].on('disconnect', () => console.log(`❌ Socket disconnected from ${namespace || 'root'}`));
+      globalSockets[namespace].on('connect_error', (error) => {
+        // console.error('Socket connection error:', error.message);
+      });
     }
-    
-    console.log('🔌 Initializing WebSocket connection...');
-    
-    // Kết nối đến API Gateway với JWT auth
-    const socket = io(`${API_GATEWAY_URL}${namespace}`, {
-      transports: ['websocket', 'polling'], // Fallback to polling if websocket fails
-      autoConnect: true,
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-      timeout: 10000,
-      auth: {
-        token: token, // Send token in handshake
-      },
-    });
 
-    socket.on('connect', () => {
-      console.log(`✅ Socket connected to ${API_GATEWAY_URL}${namespace || ''}`);
-      console.log(`🆔 Socket ID: ${socket.id}`);
-      setIsConnected(true);
-      setConnectionError(null);
-      reconnectAttempts.current = 0;
-    });
 
-    socket.on('disconnect', (reason) => {
-      console.log(`❌ Socket disconnected: ${reason}`);
-      setIsConnected(false);
-      
-      if (reason === 'io server disconnect') {
-        // Server disconnected (token invalid, manual disconnect)
-        console.warn('⚠️  Server disconnected the socket. Token may be invalid. Clearing token.');
-        localStorage.removeItem('token');
-        setConnectionError('Disconnected by server');
-      }
-    });
-
-    socket.on('connect_error', (error) => {
-      reconnectAttempts.current++;
-      console.error(`❌ Socket connection error (attempt ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS}):`, error.message);
-      setConnectionError(error.message);
-      
-      if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
-        console.error('❌ Max reconnection attempts reached. Giving up.');
-        socket.disconnect();
-      }
-    });
-
-    socket.on('reconnect', (attemptNumber) => {
-      console.log(`🔄 Socket reconnected after ${attemptNumber} attempts`);
-      setConnectionError(null);
-    });
-
-    socket.on('reconnect_attempt', (attemptNumber) => {
-      console.log(`🔄 Attempting to reconnect... (${attemptNumber}/${MAX_RECONNECT_ATTEMPTS})`);
-    });
-
-    socket.on('reconnect_failed', () => {
-      console.error('❌ Reconnection failed after max attempts');
-      setConnectionError('Reconnection failed');
-    });
-
+    const socket = globalSockets[namespace];
     socketRef.current = socket;
+    setIsConnected(socket.connected);
 
+    const onConnect = () => setIsConnected(true);
+    const onDisconnect = () => setIsConnected(false);
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+
+    // Không gọi socket.disconnect() ở đây vì các component khác có thể đang dùng chung socket này
     return () => {
-      console.log('🧹 Cleaning up socket connection');
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('connect_error');
-      socket.off('reconnect');
-      socket.off('reconnect_attempt');
-      socket.off('reconnect_failed');
-      socket.disconnect();
-      socketRef.current = null;
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
     };
-  }, [namespace]); // Only re-run if namespace changes
+  }, [namespace]);
 
   const onEvent = (event: string, callback: (data: any) => void) => {
     if (socketRef.current) {
@@ -114,11 +61,5 @@ export function useSocket(namespace: string = '') {
     }
   };
 
-  return { 
-    isConnected, 
-    connectionError,
-    socket: socketRef.current, 
-    onEvent, 
-    offEvent 
-  };
+  return { isConnected, socket: socketRef.current, onEvent, offEvent };
 }

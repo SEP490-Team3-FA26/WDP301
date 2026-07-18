@@ -1,10 +1,13 @@
-import { Controller, Post, Get, Query, Param, Body, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Get, Query, Param, Body, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { AppWebsocketGateway } from '../websocket/websocket.gateway';
 import { NotificationService } from '../notification/notification.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @Controller('api/purchase-orders')
+@UseGuards(JwtAuthGuard)
 export class PurchaseOrderController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -26,6 +29,13 @@ export class PurchaseOrderController implements OnModuleInit {
 
 
   @Post('auto-route')
+  @AuditLogAction({
+    actionCode: 'PO_AUTO_ROUTE',
+    actionName: 'Tạo đơn đặt hàng NCC tự động',
+    module: 'Purchase',
+    eventType: 'CREATE',
+    entityType: 'PurchaseOrder',
+  })
   async createAutoRoutedPurchaseOrders(@Body() data: any) {
     const result = await sendKafkaMessage(this.inventoryClient, 'inventory.po.auto_route', data);
     
@@ -80,11 +90,25 @@ export class PurchaseOrderController implements OnModuleInit {
   }
 
   @Post('approve-pay')
+  @AuditLogAction({
+    actionCode: 'PO_APPROVE_PAY',
+    actionName: 'Phê duyệt và thanh toán đơn đặt hàng',
+    module: 'Purchase',
+    eventType: 'APPROVE',
+    entityType: 'PurchaseOrder',
+  })
   async approveAndPayPurchaseOrder(@Body() data: any) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.po.approve_pay', data);
   }
 
   @Post('reject-delivery')
+  @AuditLogAction({
+    actionCode: 'PO_REJECT_DELIVERY',
+    actionName: 'Từ chối nhận hàng đơn đặt hàng',
+    module: 'Purchase',
+    eventType: 'REJECT',
+    entityType: 'PurchaseOrder',
+  })
   async rejectPurchaseOrderDelivery(@Body() data: any) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.po.reject_delivery', data);
   }

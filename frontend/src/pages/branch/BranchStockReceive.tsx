@@ -4,7 +4,7 @@ import {
   X, AlertTriangle, Loader2, Eye, ClipboardList
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { stockTransferService } from "../../services/stockTransfer.service";
+import { stockTransferService } from "../../services/inventory/stockTransfer.service";
 
 export function BranchStockReceive() {
   const [transfers, setTransfers] = useState<any[]>([]);

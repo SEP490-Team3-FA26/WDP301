@@ -9,8 +9,10 @@ import { InventoryTransaction } from './schemas/inventory-transaction.schema';
 import { StockTransfer } from './schemas/stock-transfer.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
-import { firstValueFrom } from 'rxjs';
-import { subscribeToKafkaTopics } from '../../../api-gateway/src/common/kafka.helper';
+import { subscribeToKafkaTopics, sendKafkaMessage } from '../../../api-gateway/src/common/kafka.helper';
+import { QuotaService } from '../quota/quota.service';
+
+import { InspectionRecord } from './schemas/inspection-record.schema';
 
 @Injectable()
 export class PurchaseService {
@@ -25,6 +27,8 @@ export class PurchaseService {
     @InjectModel(StockTransfer.name) private readonly transferModel: Model<StockTransfer>,
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
+    @InjectModel(InspectionRecord.name) private readonly inspectionModel: Model<InspectionRecord>,
+    private readonly quotaService: QuotaService,
   ) { }
 
   async onModuleInit() {
@@ -56,23 +60,55 @@ export class PurchaseService {
       throw new RpcException({ message: 'Phiếu yêu cầu mua hàng phải có ít nhất 1 sản phẩm' });
     }
 
-    // Enrichment: lấy tên thuốc + đơn vị để denormalize
+    // Enrichment: lấy tên thuốc + đơn vị để denormalize và tính tổng chi phí ước tính
     const enrichedItems = [];
+    let totalEstimatedCost = 0;
+
     for (const item of data.items) {
       const medicine = await this.medicineModel.findById(item.medicineId).exec();
       if (!medicine) {
         throw new RpcException({ message: `Không tìm thấy thuốc có ID: ${item.medicineId}` });
       }
+      
+      const qty = item.requestedQuantity || item.quantity;
+      totalEstimatedCost += qty * (medicine.price || 0);
+
       enrichedItems.push({
         medicineId: item.medicineId,
         medicineName: medicine.name,
-        requestedQuantity: item.requestedQuantity || item.quantity,
+        requestedQuantity: qty,
         unit: medicine.unit || 'Hộp',
       });
     }
 
-    // Generate PR code: PR-YYYYMMDD-XXXX
+    // Kiểm tra ngân sách (Quota check)
     const today = new Date();
+    const currentCycle = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const branchId = data.branchId || 'BRANCH_HQ';
+    
+    if (branchId !== 'BRANCH_HQ') {
+      const quotas = await this.quotaService.findAll({ branchId, cycle: currentCycle });
+      if (!quotas || quotas.length === 0) {
+        throw new RpcException({ message: `Chi nhánh chưa được phân bổ hạn mức nhập hàng cho chu kỳ ${currentCycle}. Vui lòng liên hệ Quản trị viên.` });
+      }
+
+      const quota = quotas[0];
+      if (quota.status !== 'Active') {
+        throw new RpcException({ message: `Hạn mức nhập hàng của chi nhánh trong chu kỳ ${currentCycle} đang bị tạm khóa.` });
+      }
+
+      const remainingBudget = quota.totalBudget - (quota.usedAmount || 0);
+      if (totalEstimatedCost > remainingBudget) {
+        throw new RpcException({ 
+          message: `Vượt quá hạn mức ngân sách! Tổng giá trị yêu cầu là ${totalEstimatedCost.toLocaleString()}đ, nhưng ngân sách còn lại chỉ là ${remainingBudget.toLocaleString()}đ.` 
+        });
+      }
+
+      // Cập nhật số tiền đã sử dụng
+      await this.quotaService.update((quota as any)._id.toString(), { usedAmount: (quota.usedAmount || 0) + totalEstimatedCost });
+    }
+
+    // Generate PR code: PR-YYYYMMDD-XXXX
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
     const count = await this.prModel.countDocuments({
       createdAt: {
@@ -130,11 +166,38 @@ export class PurchaseService {
   }
 
   /**
-   * Cập nhật trạng thái PR (ví dụ: OUT_OF_STOCK)
+   * Cập nhật trạng thái PR (ví dụ: OUT_OF_STOCK, REJECTED)
    */
   async updatePurchaseRequisitionStatus(id: string, status: string) {
     const pr = await this.prModel.findById(id).exec();
     if (!pr) throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${id}` });
+    
+    // Nếu chuyển sang trạng thái REJECTED hoặc CANCELLED, hoàn lại ngân sách hạn mức
+    if ((status === 'REJECTED' || status === 'CANCELLED') && pr.status !== 'REJECTED' && pr.status !== 'CANCELLED') {
+      if (pr.branchId !== 'BRANCH_HQ') {
+        const prDate = new Date((pr as any).createdAt || new Date());
+        const cycle = `${prDate.getFullYear()}-${String(prDate.getMonth() + 1).padStart(2, '0')}`;
+        const quotas = await this.quotaService.findAll({ branchId: pr.branchId, cycle });
+        
+        if (quotas && quotas.length > 0) {
+          const quota = quotas[0];
+          
+          // Tính lại tổng giá trị PR để hoàn lại
+          let totalEstimatedCost = 0;
+          for (const item of pr.items) {
+            const medicine = await this.medicineModel.findById(item.medicineId).exec();
+            if (medicine) {
+              totalEstimatedCost += item.requestedQuantity * (medicine.price || 0);
+            }
+          }
+          
+          // Hoàn lại ngân sách
+          const newUsedAmount = Math.max(0, (quota.usedAmount || 0) - totalEstimatedCost);
+          await this.quotaService.update((quota as any)._id.toString(), { usedAmount: newUsedAmount });
+        }
+      }
+    }
+
     pr.status = status;
     await pr.save();
     return pr;
@@ -217,8 +280,10 @@ export class PurchaseService {
     for (const [supplierId, items] of supplierGroups.entries()) {
       let supplier;
       try {
-        supplier = await firstValueFrom(
-          this.supplierClient.send('supplier.get_by_id', { id: supplierId })
+        supplier = await sendKafkaMessage(
+          this.supplierClient,
+          'supplier.get_by_id',
+          { id: supplierId }
         );
       } catch (e) {
         throw new RpcException({ message: `Không thể thẩm định NCC: ${supplierId}` });
@@ -313,11 +378,13 @@ export class PurchaseService {
 
     if (paymentType === 'CREDIT') {
       try {
-        const checkResult = await firstValueFrom(
-          this.supplierClient.send('supplier.credit.check_limit', {
+        const checkResult = await sendKafkaMessage(
+          this.supplierClient,
+          'supplier.credit.check_limit',
+          {
             supplierId: po.supplierId,
             amount: po.totalAmount,
-          }),
+          }
         );
         if (!checkResult || !checkResult.allowed) {
           throw new RpcException({
@@ -413,7 +480,7 @@ export class PurchaseService {
    * Hỗ trợ: Partial Delivery (giao thiếu hàng), Near-expiry warning.
    */
   async createGoodsReceiptNote(data: any) {
-    this.logger.log(`Creating Goods Receipt Note for PO: ${data.poId}`);
+    this.logger.log(`Creating Goods Receipt Note (Receiving Document) for PO: ${data.poId}`);
 
     const po = await this.poModel.findById(data.poId).exec();
     if (!po) {
@@ -429,44 +496,135 @@ export class PurchaseService {
     }
 
     if (po.status !== 'SHIPPING' && po.status !== 'PARTIAL_RECEIVED') {
-      throw new RpcException({ message: `Đơn hàng đang ở trạng thái "${po.status}", chưa được phép nhập kho (yêu cầu SHIPPING hoặc PARTIAL_RECEIVED)` });
+      throw new RpcException({ message: `Đơn hàng đang ở trạng thái "${po.status}", chưa được phép tiếp nhận (yêu cầu SHIPPING hoặc PARTIAL_RECEIVED)` });
     }
 
-    // Kiểm tra và xử lý từng item
     let totalAmount = 0;
-    const warnings: string[] = [];
-    const transactionLogs: any[] = [];
+    const items = data.items.map((item: any) => {
+      totalAmount += item.quantity * item.unitPrice;
+      return {
+        medicineId: item.medicineId,
+        batchNo: item.batchNo,
+        expDate: new Date(item.expDate),
+        quantity: item.quantity,
+        actualQty: null,
+        status: 'PENDING',
+        unitPrice: item.unitPrice
+      };
+    });
 
-    for (const item of data.items) {
-      // Tìm item trong PO để đối chiếu
+    const grn = new this.grnModel({
+      poId: data.poId,
+      items,
+      totalAmount,
+      receivedBy: data.receivedBy || 'Thủ Kho',
+      status: 'INSPECTING',
+    });
+
+    await grn.save();
+
+    po.status = 'RECEIVING';
+    await po.save();
+
+    return {
+      success: true,
+      message: `Mở phiên tiếp nhận hàng thành công. Trạng thái phiếu: INSPECTING`,
+      data: grn,
+    };
+  }
+
+  async submitGoodsReceiptInspection(receiptId: string) {
+    this.logger.log(`Submitting inspection report for Receiving Document: ${receiptId}`);
+
+    const grn = await this.grnModel.findById(receiptId).exec();
+    if (!grn) {
+      throw new RpcException({ message: `Không tìm thấy tài liệu tiếp nhận: ${receiptId}` });
+    }
+
+    if (grn.status !== 'INSPECTING') {
+      throw new RpcException({ message: `Tài liệu tiếp nhận đang ở trạng thái "${grn.status}", không thể gửi báo cáo (yêu cầu INSPECTING)` });
+    }
+
+    // Verify all items are verified
+    const allVerified = grn.items.every(item => item.status === 'VERIFIED');
+    if (!allVerified) {
+      throw new RpcException({ message: 'Vui lòng hoàn tất kiểm nhận tất cả các mặt hàng trước khi gửi báo cáo' });
+    }
+
+    grn.status = 'PENDING_APPROVAL';
+    await grn.save();
+
+    return {
+      success: true,
+      message: 'Gửi báo cáo kiểm nhận thành công. Đang chờ Quản lý phê duyệt.',
+      data: grn,
+    };
+  }
+
+  async approveGoodsReceiptNote(receiptId: string, discrepancyReason?: string) {
+    this.logger.log(`Approving Goods Receipt Note: ${receiptId}`);
+
+    const grn = await this.grnModel.findById(receiptId).exec();
+    if (!grn) {
+      throw new RpcException({ message: `Không tìm thấy tài liệu tiếp nhận: ${receiptId}` });
+    }
+
+    if (grn.status === 'COMPLETED') {
+      throw new RpcException({ message: 'Tài liệu tiếp nhận này đã được phê duyệt hoàn tất từ trước', statusCode: 409 });
+    }
+
+    if (grn.status !== 'PENDING_APPROVAL') {
+      throw new RpcException({ message: `Tài liệu tiếp nhận đang ở trạng thái "${grn.status}", không thể phê duyệt (yêu cầu PENDING_APPROVAL)` });
+    }
+
+    // Defensive check: verify all items are verified
+    const allVerified = grn.items.every(item => item.status === 'VERIFIED');
+    if (!allVerified) {
+      throw new RpcException({ message: 'Tài liệu tiếp nhận chưa được kiểm nhận đầy đủ các dòng hàng' });
+    }
+
+    // Verify discrepancy reason if actualQty != expected quantity
+    let hasDiscrepancy = false;
+    for (const item of grn.items) {
+      if (item.actualQty !== item.quantity) {
+        hasDiscrepancy = true;
+        break;
+      }
+    }
+    if (hasDiscrepancy && (!discrepancyReason || !discrepancyReason.trim())) {
+      throw new RpcException({ message: 'Phát hiện chênh lệch số lượng kiểm nhận. Vui lòng nhập lý do chênh lệch trước khi phê duyệt.' });
+    }
+
+    // 1. Loop and apply physical inventory stock update (using actualQty!)
+    const po = await this.poModel.findById(grn.poId).exec();
+    if (!po) {
+      throw new RpcException({ message: `Không tìm thấy đơn hàng PO liên kết: ${grn.poId}` });
+    }
+
+    const transactionLogs: any[] = [];
+    const warnings: string[] = [];
+
+    for (const item of grn.items) {
       const poItem = po.items.find(i => i.medicineId === item.medicineId);
       if (!poItem) {
-        throw new RpcException({ message: `Sản phẩm ${item.medicineId} không có trong đơn đặt hàng` });
+        throw new RpcException({ message: `Sản phẩm ${item.medicineId} không có trong đơn đặt hàng PO` });
       }
 
-      // Tính remaining quantity (cho partial delivery)
-      const remainingQuantity = poItem.quantity - poItem.receivedQuantity;
-      if (item.quantity > remainingQuantity) {
-        throw new RpcException({
-          message: `Số lượng thực nhận (${item.quantity}) vượt quá số lượng còn lại chưa nhận (${remainingQuantity}) cho sản phẩm ${item.medicineId}`,
-        });
-      }
+      // Update receivedQuantity on PO item using actualQty
+      poItem.receivedQuantity = (poItem.receivedQuantity || 0) + (item.actualQty ?? 0);
 
-      // ⚠️ EDGE CASE: Kiểm tra hàng cận date (< 3 tháng)
+      // Warning check for short expiry
       const expDate = new Date(item.expDate);
       const threeMonthsFromNow = new Date();
       threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
-
       if (expDate <= threeMonthsFromNow) {
         const daysRemaining = Math.ceil((expDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
         warnings.push(
-          `⚠️ CẢNH BÁO CẬN DATE: Lô "${item.batchNo}" có hạn sử dụng ${expDate.toLocaleDateString('vi-VN')} (còn ${daysRemaining} ngày). Cần xem xét có tiếp nhận lô hàng này hay yêu cầu NCC đổi trả.`,
+          `⚠️ Lô "${item.batchNo}" cận hạn sử dụng (${expDate.toLocaleDateString('vi-VN')}, còn ${daysRemaining} ngày).`
         );
       }
 
-      totalAmount += item.quantity * item.unitPrice;
-
-      // Tìm và lấy stock trước khi thay đổi (cho transaction log)
+      // Find or create batch
       let batch = await this.batchModel.findOne({
         medicineId: item.medicineId,
         batchNo: item.batchNo,
@@ -474,10 +632,8 @@ export class PurchaseService {
       }).exec();
 
       const stockBefore = batch ? batch.stock : 0;
-
-      // Cập nhật hoặc tạo mới MedicineBatch
       if (batch) {
-        batch.stock += item.quantity;
+        batch.stock += (item.actualQty ?? 0);
         batch.status = batch.expDate < new Date() ? 'EXPIRED' : 'ACTIVE';
         await batch.save();
       } else {
@@ -486,72 +642,56 @@ export class PurchaseService {
           branchId: 'CENTRAL_WH',
           batchNo: item.batchNo,
           expDate: new Date(item.expDate),
-          stock: item.quantity,
+          stock: (item.actualQty ?? 0),
           status: new Date(item.expDate) < new Date() ? 'EXPIRED' : 'ACTIVE',
         });
         await batch.save();
       }
 
-      // Cập nhật tồn kho tổng của thuốc
-      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: item.quantity } }).exec();
+      // Cập nhật tồn kho tổng của thuốc (dựa trên số lượng thực nhận actualQty)
+      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: (item.actualQty ?? 0) } }).exec();
 
-      // Cập nhật receivedQuantity trên PO item
-      poItem.receivedQuantity += item.quantity;
-
-      // Chuẩn bị transaction log
+      // Prepare transaction log
       const medicine = await this.medicineModel.findById(item.medicineId).exec();
       transactionLogs.push({
         type: 'GRN_IMPORT',
         medicineId: item.medicineId,
         medicineName: medicine ? medicine.name : 'Unknown',
         batchNo: item.batchNo,
-        quantityChange: item.quantity, // Dương = nhập kho
+        quantityChange: item.actualQty ?? 0,
         stockBefore,
-        stockAfter: stockBefore + item.quantity,
+        stockAfter: stockBefore + (item.actualQty ?? 0),
         referenceType: 'GRN',
-        performedBy: data.receivedBy || 'Thủ Kho',
-        notes: `Nhập kho từ PO ${po._id.toString().substring(18).toUpperCase()}`,
+        referenceId: grn._id.toString(),
+        performedBy: grn.receivedBy || 'Quản Lý',
+        notes: `Nhập kho thực tế từ PO ${po._id.toString().substring(18).toUpperCase()}`,
       });
     }
 
-    // Tạo Phiếu Nhập Kho (GRN)
-    const grn = new this.grnModel({
-      poId: data.poId,
-      items: data.items,
-      totalAmount,
-      receivedBy: data.receivedBy || 'Thủ Kho',
-      status: 'COMPLETED',
-    });
-
-    await grn.save();
-
-    // Ghi nhận công nợ NCC nếu PO là CREDIT
+    // 2. Record supplier credit if CREDIT
     if (po.paymentType === 'CREDIT') {
       try {
-        await firstValueFrom(
-          this.supplierClient.send('supplier.credit.record_grn', {
+        await sendKafkaMessage(
+          this.supplierClient,
+          'supplier.credit.record_grn',
+          {
             supplierId: po.supplierId,
             grnId: grn._id.toString(),
-            amount: totalAmount,
-            performedBy: data.receivedBy || 'Thủ Kho',
-          }),
+            amount: grn.totalAmount,
+            performedBy: grn.receivedBy || 'Quản Lý',
+          }
         );
       } catch (err) {
-        this.logger.error(`Error recording GRN payable: ${err.message}`, err.stack);
-        throw new RpcException({
-          message: `Không thể ghi nhận công nợ NCC: ${err.message || err}`,
-          statusCode: 500,
-        });
+        this.logger.error(`Error recording GRN credit: ${err.message}`);
       }
     }
 
-    // Cập nhật referenceId cho transaction logs rồi lưu
+    // 3. Save transaction logs
     for (const log of transactionLogs) {
-      log.referenceId = grn._id.toString();
       await new this.txnModel(log).save();
     }
 
-    // Xác định trạng thái PO mới: COMPLETED hay PARTIAL_RECEIVED
+    // 4. Update PO Status
     const allFullyReceived = po.items.every(item => item.receivedQuantity >= item.quantity);
     if (allFullyReceived) {
       po.status = 'COMPLETED';
@@ -560,12 +700,112 @@ export class PurchaseService {
     }
     await po.save();
 
+    // 5. Update GRN status
+    grn.status = 'COMPLETED';
+    if (discrepancyReason) {
+      grn.discrepancyReason = discrepancyReason;
+    }
+    await grn.save();
+
     return {
       success: true,
-      message: `Tạo phiếu nhập kho thành công. Tồn kho đã được cập nhật. Trạng thái PO: ${po.status}`,
+      message: `Duyệt nhập kho thành công. Trạng thái phiếu: COMPLETED. Trạng thái PO: ${po.status}`,
       data: grn,
       poStatus: po.status,
       warnings: warnings.length > 0 ? warnings : undefined,
+    };
+  }
+
+  async rejectGoodsReceiptNote(receiptId: string, action: string, reason: string) {
+    this.logger.log(`Rejecting Goods Receipt Note ${receiptId} with action ${action}. Reason: ${reason}`);
+
+    const grn = await this.grnModel.findById(receiptId).exec();
+    if (!grn) {
+      throw new RpcException({ message: `Không tìm thấy tài liệu tiếp nhận: ${receiptId}` });
+    }
+
+    if (grn.status !== 'PENDING_APPROVAL') {
+      throw new RpcException({ message: `Tài liệu tiếp nhận đang ở trạng thái "${grn.status}", không thể từ chối (yêu cầu PENDING_APPROVAL)` });
+    }
+
+    if (action === 'reinspect') {
+      grn.status = 'INSPECTING';
+      // Reset items verification status so they can check again on mobile
+      for (const item of grn.items) {
+        item.status = 'PENDING';
+        item.actualQty = undefined;
+      }
+      await grn.save();
+      return {
+        success: true,
+        message: 'Đã yêu cầu kiểm đếm lại. Trạng thái phiếu tiếp nhận chuyển về INSPECTING.',
+        data: grn,
+      };
+    } else if (action === 'cancel') {
+      grn.status = 'CANCELLED';
+      await grn.save();
+
+      // Revert parent PO status:
+      const po = await this.poModel.findById(grn.poId).exec();
+      if (po) {
+        // If there is any COMPLETED GRN linked to this PO, revert to PARTIAL_RECEIVED. Otherwise, revert to SHIPPING.
+        const otherCompletedGrns = await this.grnModel.findOne({
+          poId: grn.poId,
+          status: 'COMPLETED',
+        }).exec();
+
+        if (otherCompletedGrns) {
+          po.status = 'PARTIAL_RECEIVED';
+        } else {
+          po.status = 'SHIPPING';
+        }
+        await po.save();
+      }
+
+      return {
+        success: true,
+        message: 'Đã hủy bỏ phiên tiếp nhận hàng. Trạng thái phiếu tiếp nhận chuyển về CANCELLED.',
+        data: grn,
+      };
+    } else {
+      throw new RpcException({ message: `Hành động từ chối "${action}" không hợp lệ. Chỉ chấp nhận reinspect hoặc cancel.` });
+    }
+  }
+
+  async updateGoodsReceiptNote(id: string, data: any) {
+    this.logger.log(`Updating Goods Receipt Note (Receiving Document) ${id} in DRAFT/INSPECTING state`);
+    const grn = await this.grnModel.findById(id).exec();
+    if (!grn) {
+      throw new RpcException({ message: `Không tìm thấy tài liệu tiếp nhận: ${id}` });
+    }
+    if (grn.status !== 'DRAFT' && grn.status !== 'INSPECTING') {
+      throw new RpcException({ message: 'Chỉ được phép chỉnh sửa tài liệu tiếp nhận khi ở trạng thái DRAFT hoặc INSPECTING' });
+    }
+    
+    // Update items
+    if (data.items) {
+      for (const item of data.items) {
+        const grnItem = grn.items.find(i => i.medicineId === item.medicineId);
+        if (grnItem) {
+          if (item.batchNo !== undefined) grnItem.batchNo = item.batchNo;
+          if (item.expDate !== undefined) grnItem.expDate = new Date(item.expDate);
+          if (item.quantity !== undefined) grnItem.quantity = item.quantity;
+        }
+      }
+    }
+    
+    // Recalculate totalAmount
+    let totalAmount = 0;
+    for (const item of grn.items) {
+      totalAmount += item.quantity * item.unitPrice;
+    }
+    grn.totalAmount = totalAmount;
+    
+    await grn.save();
+    return {
+      success: true,
+      message: 'Cập nhật tài liệu tiếp nhận thành công',
+      data: grn
     };
   }
 
@@ -598,6 +838,7 @@ export class PurchaseService {
     if (query.type) filter.type = query.type;
     if (query.medicineId) filter.medicineId = query.medicineId;
     if (query.referenceType) filter.referenceType = query.referenceType;
+    if (query.batchNo) filter.batchNo = query.batchNo;
 
     const limit = query.limit ? Number(query.limit) : 50;
     const page = query.page ? Number(query.page) : 1;
@@ -609,6 +850,95 @@ export class PurchaseService {
     ]);
 
     return { data, total, page, limit };
+  }
+
+  async traceLot(batchNo: string) {
+    this.logger.log(`Tracing lot: ${batchNo}`);
+    
+    // 1. Tìm các lô hàng thực tế ở các chi nhánh
+    const batches = await this.batchModel.find({ batchNo }).exec();
+    
+    // Lấy tất cả giao dịch liên quan đến lô này
+    const txns = await this.txnModel.find({ batchNo }).sort({ createdAt: 1 }).exec();
+    
+    if (batches.length === 0 && txns.length === 0) {
+      throw new RpcException({ message: `Không tìm thấy thông tin cho lô thuốc: ${batchNo}`, statusCode: 404 });
+    }
+
+    // Lấy medicineId từ lô hoặc từ txn
+    const medicineId = batches.length > 0 ? batches[0].medicineId : txns[0]?.medicineId;
+    const medicine = medicineId ? await this.medicineModel.findById(medicineId).exec() : null;
+
+    // 2. Tìm thông tin nguồn gốc từ giao dịch GRN_IMPORT
+    const importTxn = txns.find(t => t.type === 'GRN_IMPORT');
+    let origin = null;
+
+    if (importTxn && importTxn.referenceId) {
+      try {
+        const grn = await this.grnModel.findById(importTxn.referenceId).exec();
+        if (grn) {
+          const po = await this.poModel.findById(grn.poId).exec();
+          let supplierName = 'Nhà cung cấp không xác định';
+          if (po && po.supplierId) {
+            try {
+              const supplier = await firstValueFrom(
+                this.supplierClient.send('supplier.get_by_id', { id: po.supplierId }),
+              );
+              if (supplier) {
+                supplierName = supplier.name || supplier.companyName || supplierName;
+              }
+            } catch (err) {
+              this.logger.error(`Error fetching supplier for trace: ${err.message}`);
+            }
+          }
+          
+          const grnItem = grn.items.find(item => item.medicineId === medicineId && item.batchNo === batchNo);
+
+          origin = {
+            grnId: grn._id.toString(),
+            poId: grn.poId,
+            importDate: grn.createdAt,
+            supplierId: po ? po.supplierId : null,
+            supplierName,
+            importQty: grnItem ? grnItem.actualQty : importTxn.quantityChange,
+            importPrice: grnItem ? grnItem.unitPrice : 0,
+            receivedBy: grn.receivedBy || 'Thủ kho',
+          };
+        }
+      } catch (err) {
+        this.logger.error(`Error tracing origin for batch ${batchNo}: ${err.message}`);
+      }
+    }
+
+    return {
+      batchNo,
+      medicine: medicine ? {
+        _id: medicine._id.toString(),
+        name: medicine.name,
+        sku: (medicine as any).sku || 'N/A',
+        unit: medicine.unit || 'Hộp',
+        category: medicine.category || 'Chưa phân loại',
+      } : null,
+      batches: batches.map(b => ({
+        branchId: b.branchId,
+        stock: b.stock,
+        expDate: b.expDate,
+        status: b.status,
+      })),
+      origin,
+      timeline: txns.map(t => ({
+        _id: t._id.toString(),
+        type: t.type,
+        quantityChange: t.quantityChange,
+        stockBefore: t.stockBefore,
+        stockAfter: t.stockAfter,
+        referenceId: t.referenceId,
+        referenceType: t.referenceType,
+        performedBy: t.performedBy,
+        notes: t.notes,
+        createdAt: t.createdAt,
+      })),
+    };
   }
 
   // ===========================================================================================
@@ -1090,5 +1420,179 @@ export class PurchaseService {
     } finally {
       session.endSession();
     }
+  }
+
+  // ===========================================================================================
+  // BƯỚC 3, 4, 5, 6: NHẬP KHO & KIỂM ĐẾM BẰNG AI
+  // ===========================================================================================
+
+
+
+  async createInspectionRecord(grnId: string, inspectedBy: string) {
+    const grn = await this.grnModel.findById(grnId).exec();
+    if (!grn) throw new RpcException({ message: 'GRN không tồn tại' });
+    
+    if (grn.status !== 'INSPECTING') {
+      throw new RpcException({ message: `GRN đang ở trạng thái ${grn.status}, không thể mở phiên kiểm đếm` });
+    }
+
+    const items = [];
+    for (const item of grn.items) {
+      const med = await this.medicineModel.findById(item.medicineId).exec();
+      // Giả lập AI đếm ngẫu nhiên lệch +- 10%
+      const variance = Math.floor(item.quantity * 0.1);
+      const aiCount = item.quantity + (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * variance);
+      
+      let label = 'MATCH';
+      if (aiCount === item.quantity) label = 'MATCH';
+      else if (Math.abs(aiCount - item.quantity) <= 2) label = 'WARNING';
+      else label = 'MISMATCH';
+
+      items.push({
+        medicineId: item.medicineId,
+        medicineName: med ? med.name : 'Unknown',
+        expectedQty: item.quantity,
+        aiCountedQty: aiCount,
+        actualQty: 0, // Chờ user nhập tay
+        label: label,
+        images: []
+      });
+    }
+
+    const record = new this.inspectionModel({
+      grnId,
+      items,
+      status: 'PENDING_VERIFICATION',
+      inspectedBy
+    });
+    await record.save();
+
+    return {
+      success: true,
+      message: 'Đã mở phiên kiểm đếm AI',
+      data: record
+    };
+  }
+
+  async verifyInspectionItem(recordId: string, itemId: string, actualQty: number) {
+    const record = await this.inspectionModel.findById(recordId).exec();
+    if (!record) throw new RpcException({ message: 'Không tìm thấy phiên kiểm đếm' });
+
+    const item = record.items.find(i => (i as any)._id.toString() === itemId);
+    if (!item) throw new RpcException({ message: 'Item không tồn tại' });
+
+    item.actualQty = actualQty;
+    // Tự động xác định lại label
+    if (actualQty === item.expectedQty) item.label = 'MATCH';
+    else item.label = 'MISMATCH';
+
+    // Cập nhật actualQty vào GRN item
+    const grn = await this.grnModel.findById(record.grnId).exec();
+    if (grn) {
+      const grnItem = grn.items.find(i => i.medicineId === item.medicineId);
+      if (grnItem) {
+        grnItem.actualQty = actualQty;
+        grnItem.status = 'VERIFIED';
+      }
+      await grn.save();
+    }
+
+    await record.save();
+    return { success: true, message: 'Xác nhận số lượng thành công', data: record };
+  }
+
+  async submitInspectionReport(recordId: string) {
+    const record = await this.inspectionModel.findById(recordId).exec();
+    if (!record) throw new RpcException({ message: 'Không tìm thấy phiên kiểm đếm' });
+    
+    record.status = 'WAITING';
+    await record.save();
+
+    return { success: true, message: 'Đã nộp báo cáo chờ duyệt', data: record };
+  }
+
+  async approveGoodsReceipt(recordId: string, approvedBy: string) {
+    const session = await this.grnModel.db.startSession();
+    session.startTransaction();
+    
+    try {
+      const record = await this.inspectionModel.findById(recordId).session(session).exec();
+      if (!record) throw new RpcException({ message: 'Không tìm thấy phiên kiểm đếm' });
+      if (record.status !== 'WAITING') throw new RpcException({ message: `Báo cáo đang ở trạng thái ${record.status}` });
+
+      const grn = await this.grnModel.findById(record.grnId).session(session).exec();
+      if (!grn) throw new RpcException({ message: 'GRN không tồn tại' });
+
+      // Nhập kho cho từng item với actualQty
+      for (const item of grn.items) {
+        if (item.actualQty > 0) {
+          // Lưu vào MedicineBatch
+          let batch = await this.batchModel.findOne({ medicineId: item.medicineId, batchNo: item.batchNo }).session(session).exec();
+          let stockBefore = 0;
+          if (batch) {
+            stockBefore = batch.stock;
+            batch.stock += item.actualQty;
+            batch.expDate = item.expDate;
+            await batch.save({ session });
+          } else {
+            batch = new this.batchModel({
+              medicineId: item.medicineId,
+              branchId: 'CENTRAL_WH',
+              batchNo: item.batchNo,
+              expDate: item.expDate,
+              stock: item.actualQty,
+              status: 'ACTIVE'
+            });
+            await batch.save({ session });
+          }
+
+          // Cập nhật tồn kho tổng
+          await this.medicineModel.updateOne(
+            { _id: item.medicineId },
+            { $inc: { stock: item.actualQty } }
+          ).session(session).exec();
+
+          // Lưu Transaction
+          await new this.txnModel({
+            type: 'IMPORT',
+            medicineId: item.medicineId,
+            medicineName: 'Nhập kho',
+            batchNo: item.batchNo,
+            quantityChange: item.actualQty,
+            stockBefore,
+            stockAfter: stockBefore + item.actualQty,
+            referenceId: grn._id.toString(),
+            referenceType: 'GRN',
+            performedBy: approvedBy,
+            notes: 'Nhập kho từ PO đã kiểm duyệt'
+          }).save({ session });
+        }
+      }
+
+      grn.status = 'COMPLETED';
+      await grn.save({ session });
+
+      record.status = 'APPROVE';
+      record.approvedBy = approvedBy;
+      await record.save({ session });
+
+      const po = await this.poModel.findById(grn.poId).session(session).exec();
+      if (po) {
+        po.status = 'COMPLETED';
+        await po.save({ session });
+      }
+
+      await session.commitTransaction();
+      return { success: true, message: 'Duyệt thành công và đã nhập kho', data: grn };
+    } catch (error) {
+      await session.abortTransaction();
+      throw new RpcException({ message: error.message || 'Lỗi duyệt nhập kho' });
+    } finally {
+      session.endSession();
+    }
+  }
+
+  async listInspectionRecords() {
+    return await this.inspectionModel.find().sort({ createdAt: -1 }).exec();
   }
 }

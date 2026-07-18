@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ShoppingCart, BrainCircuit, HeartPulse, Menu, X, LogOut, ShieldAlert, User, MapPin, ClipboardList, ChevronDown } from "lucide-react";
-import api from "../services/api";
+import api from "../services/core/api";
 
 export function CustomerLayout() {
   const location = useLocation();
@@ -77,7 +77,7 @@ export function CustomerLayout() {
       {/* Premium Sticky Navigation Bar */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          
+
           {/* Logo */}
           <Link to="/customer/shop" className="flex items-center gap-2.5 group">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#0d6efd] to-sky-400 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-all">
@@ -97,11 +97,10 @@ export function CustomerLayout() {
                 <Link
                   key={item.href}
                   to={item.href}
-                  className={`px-4.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${
-                    isActive
-                      ? "bg-[#f2f3ff] text-[#0d6efd] font-black"
-                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
-                  }`}
+                  className={`px-4.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${isActive
+                    ? "bg-[#f2f3ff] text-[#0d6efd] font-black"
+                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                    }`}
                 >
                   {item.icon}
                   {item.name}
@@ -221,11 +220,10 @@ export function CustomerLayout() {
                   key={item.href}
                   to={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`w-full px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-3 transition-all ${
-                    isActive
-                      ? "bg-[#f2f3ff] text-[#0d6efd]"
-                      : "text-slate-600 hover:bg-slate-50"
-                  }`}
+                  className={`w-full px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-3 transition-all ${isActive
+                    ? "bg-[#f2f3ff] text-[#0d6efd]"
+                    : "text-slate-600 hover:bg-slate-50"
+                    }`}
                 >
                   {item.icon}
                   {item.name}
@@ -234,15 +232,15 @@ export function CustomerLayout() {
             })}
             {hasToken ? (
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
+                <Link to="/customer/profile" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
                     KH
                   </div>
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-slate-800">Khách Hàng</span>
-                    <span className="text-[10px] text-slate-400">Thành viên thân thiết</span>
+                    <span className="text-[10px] text-blue-500 font-medium">Hồ sơ & Lịch sử</span>
                   </div>
-                </div>
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="px-4 py-2 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-100 transition-colors flex items-center gap-1.5 cursor-pointer"

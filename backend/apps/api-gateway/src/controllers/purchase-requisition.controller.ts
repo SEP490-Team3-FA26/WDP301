@@ -1,10 +1,13 @@
-import { Controller, Post, Get, Patch, Query, Param, Body, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Query, Param, Body, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { AppWebsocketGateway } from '../websocket/websocket.gateway';
 import { NotificationService } from '../notification/notification.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @Controller('api/purchase-requisitions')
+@UseGuards(JwtAuthGuard)
 export class PurchaseRequisitionController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -24,19 +27,25 @@ export class PurchaseRequisitionController implements OnModuleInit {
 
   /**
    * BƯỚC 1: Chi nhánh tạo yêu cầu mua hàng (PR)
-   * Branch tạo PR → Thông báo cho Warehouse (để gom đơn)
    */
   @Post()
+  @AuditLogAction({
+    actionCode: 'PR_CREATE',
+    actionName: 'Tạo yêu cầu mua hàng',
+    module: 'Purchase',
+    eventType: 'CREATE',
+    entityType: 'PurchaseRequisition',
+  })
   async createPurchaseRequisition(@Body() data: any) {
     const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.create', data);
-    
+
     console.log('📋 PR Created - Full Result:', JSON.stringify(result, null, 2));
-    
-    // Emit notification to warehouse room (NOT admin)
+
+    // Emit notification to admin room
     if (result && this.websocketGateway.server) {
       // Handle nested response structure (result.data or result directly)
       const prData = result.data || result;
-      
+
       const notificationPayload = {
         type: 'NEW_PR',
         prId: prData._id || prData.id,
@@ -74,7 +83,7 @@ export class PurchaseRequisitionController implements OnModuleInit {
       
       console.log('✅ Notification emitted to warehouse room');
     }
-    
+
     return result;
   }
 
@@ -97,21 +106,26 @@ export class PurchaseRequisitionController implements OnModuleInit {
 
 
   @Post('process-urgent')
+  @AuditLogAction({
+    actionCode: 'PR_PROCESS_URGENT',
+    actionName: 'Xử lý yêu cầu mua hàng khẩn cấp',
+    module: 'Purchase',
+    eventType: 'APPROVE',
+    entityType: 'PurchaseRequisition',
+  })
   async processUrgentPurchaseRequisitions(@Body() data: any) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.pr.process_urgent', data);
   }
 
   @Patch(':id/status')
-  async updatePurchaseRequisitionStatus(@Param('id') id: string, @Body() data: { status: string; rejectionReason?: string; approvedBy?: string }) {
-    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.update_status', { id, status: data.status, rejectionReason: data.rejectionReason, approvedBy: data.approvedBy });
-    
-    // Handle nested response
-    const prData = result.data || result;
-    
+  async updatePurchaseRequisitionStatus(@Param('id') id: string, @Body() data: { status: string, rejectionReason?: string, approvedBy?: string }) {
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.update_status', { id, status: data.status });
+
     // Broadcast real-time event to all connected frontend clients
     if (this.websocketGateway.server) {
       this.websocketGateway.server.emit('pr_updated', { id, status: data.status });
       
+      const prData = result.data || result;
       // Emit targeted notifications based on status
       if (data.status === 'APPROVED' && prData.branchId) {
         const notificationPayload = {
@@ -169,7 +183,7 @@ export class PurchaseRequisitionController implements OnModuleInit {
         }).catch(err => console.error('Failed to persist PR_REJECTED notification:', err));
       }
     }
-    
+
     return result;
   }
 }

@@ -3,11 +3,11 @@ import {
   ShoppingCart, Minus, Plus, SearchIcon, Sparkles, XCircle, AlertTriangle, ShieldAlert,
   Banknote, QrCode, Printer, CheckCircle2, Mic, Square, Check
 } from "lucide-react";
-import { medicineService } from "../../../services/medicine.service";
-import { orderService } from "../../../services/order.service";
-import { prescriptionService } from "../../../services/prescription.service";
-import { voucherService } from "../../../services/voucher.service";
-import api from "../../../services/api";
+import { medicineService } from "../../../services/inventory/medicine.service";
+import { orderService } from "../../../services/sales/order.service";
+import { prescriptionService } from "../../../services/sales/prescription.service";
+import { voucherService } from "../../../services/sales/voucher.service";
+import api from "../../../services/core/api";
 import { useSocket } from "../../../hooks/useSocket";
 
 // Helper to decode JWT token to extract branchId and user info
@@ -331,7 +331,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
     setLoading(true);
     try {
       const { branchId } = getBranchInfoFromToken();
-      const data = await medicineService.getMedicines({ limit: 10, search: query, branchId: branchId || undefined });
+      const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: query });
       setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);
@@ -414,7 +414,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
         type: "RETAIL",
         branchId: currentBranchId || undefined,
         items: cart.map(it => ({
-          medicineId: it.id,
+          medicineId: it.id || it._id,
           quantity: it.quantity
         })),
         paymentMethod,
@@ -474,8 +474,8 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const earnedPoints = Math.round(total / 100) * (loyaltyInfo ? loyaltyInfo.multiplier || 1.0 : 1.0);
 
   // Cảnh báo tương tác thuốc trong giỏ hàng lẻ
-  const hasCiprofloxacin = cart.some(it => it.name.toLowerCase().includes("ciprofloxacin") || it.active_ingredient.toLowerCase().includes("ciprofloxacin"));
-  const hasWarfarin = cart.some(it => it.name.toLowerCase().includes("warfarin") || it.active_ingredient.toLowerCase().includes("warfarin"));
+  const hasCiprofloxacin = cart.some(it => it.name?.toLowerCase().includes("ciprofloxacin") || it.active_ingredient?.toLowerCase().includes("ciprofloxacin"));
+  const hasWarfarin = cart.some(it => it.name?.toLowerCase().includes("warfarin") || it.active_ingredient?.toLowerCase().includes("warfarin"));
   const hasInteraction = hasCiprofloxacin && hasWarfarin;
 
   return (

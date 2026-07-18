@@ -20,7 +20,7 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { medicineService } from "../../services/medicine.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 import { useSocket } from "../../hooks/useSocket";
 
 export function DashboardHome() {
@@ -122,10 +122,10 @@ export function DashboardHome() {
             { title: "Hạn sử dụng lô", value: "...", icon: <Clock size={20} />, trend: "Đang tải...", trendUp: false },
           ],
           actions: [
-            { id: "UC-13", name: "Tạo Phiếu Nhập kho", icon: <Package size={24} />, color: "bg-blue-50 text-blue-600 border-blue-200" },
-            { id: "UC-17", name: "Xuất kho nội bộ", icon: <ArrowRightLeft size={24} />, color: "bg-amber-50 text-amber-600 border-amber-200" },
-            { id: "UC-23", name: "Lot Tracking / Truy xuất", icon: <History size={24} />, color: "bg-indigo-50 text-indigo-600 border-indigo-200" },
-            { id: "UC-38", name: "Cảnh báo Min Stock (AI)", icon: <Sparkles size={24} />, color: "bg-rose-50 text-rose-600 border-rose-200" },
+            { id: "UC-13", name: "Tạo Phiếu Nhập kho", icon: <Package size={24} />, color: "bg-blue-50 text-blue-600 border-blue-200", link: "/warehouse/inventory/import" },
+            { id: "UC-17", name: "Xuất kho nội bộ", icon: <ArrowRightLeft size={24} />, color: "bg-amber-50 text-amber-600 border-amber-200", link: "/warehouse/inventory/export" },
+            { id: "UC-23", name: "Lot Tracking / Truy xuất", icon: <History size={24} />, color: "bg-indigo-50 text-indigo-600 border-indigo-200", link: "/warehouse/lot-tracking" },
+            { id: "UC-38", name: "Cảnh báo Min Stock (AI)", icon: <Sparkles size={24} />, color: "bg-rose-50 text-rose-600 border-rose-200", link: "/warehouse/ai-forecast" },
           ]
         };
       case "head_branch":
@@ -143,7 +143,7 @@ export function DashboardHome() {
             { id: "UC-58", name: "Quản lý Role & Phân quyền", icon: <ShieldCheck size={24} />, color: "bg-slate-100 text-slate-700 border-slate-300", link: "#" },
             { id: "UC-26", name: "So sánh hiệu suất chuỗi", icon: <Building2 size={24} />, color: "bg-blue-50 text-blue-600 border-blue-200", link: "#" },
             { id: "UC-28", name: "Đồng bộ DM Toàn chuỗi", icon: <RotateCcw size={24} />, color: "bg-indigo-50 text-indigo-600 border-indigo-200", link: "/admin/price-management" },
-            { id: "UC-34", name: "Dự báo Nhu cầu (AI)", icon: <Sparkles size={24} />, color: "bg-emerald-50 text-emerald-600 border-emerald-200", link: "#" },
+            { id: "UC-34", name: "Dự báo Nhu cầu (AI)", icon: <Sparkles size={24} />, color: "bg-emerald-50 text-emerald-600 border-emerald-200", link: "/admin/ai-forecast" },
             { id: "UC-48", name: "Cấu hình Global Price", icon: <DollarSign size={24} />, color: "bg-amber-50 text-amber-600 border-amber-200" },
             { id: "UC-59", name: "Audit Logs Toàn hệ thống", icon: <History size={24} />, color: "bg-slate-100 text-slate-700 border-slate-300" },
           ]

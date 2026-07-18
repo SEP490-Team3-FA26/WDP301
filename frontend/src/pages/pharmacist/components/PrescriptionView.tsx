@@ -4,9 +4,9 @@ import {
   ShoppingCart, Minus, Plus, Banknote, CreditCard, Sparkles, Printer, SearchIcon, Check,
   ShieldAlert
 } from "lucide-react";
-import { medicineService } from "../../../services/medicine.service";
-import { prescriptionService } from "../../../services/prescription.service";
-import { orderService } from "../../../services/order.service";
+import { medicineService } from "../../../services/inventory/medicine.service";
+import { prescriptionService } from "../../../services/sales/prescription.service";
+import { orderService } from "../../../services/sales/order.service";
 
 // Helper to decode JWT token to extract branchId and user info
 function getBranchInfoFromToken() {
@@ -157,7 +157,7 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
   const searchMedicines = async (query: string) => {
     try {
       const { branchId } = getBranchInfoFromToken();
-      const data = await medicineService.getMedicines({ limit: 10, search: query, _t: Date.now(), branchId: branchId || undefined });
+      const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: query, _t: Date.now() });
       setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);

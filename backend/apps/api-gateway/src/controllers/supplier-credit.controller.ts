@@ -1,8 +1,11 @@
-import { Controller, Get, Post, Put, Body, Param, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @Controller()
+@UseGuards(JwtAuthGuard)
 export class SupplierCreditController implements OnModuleInit {
   constructor(
     @Inject('SUPPLIER_SERVICE') private readonly supplierClient: ClientKafka,
@@ -42,6 +45,13 @@ export class SupplierCreditController implements OnModuleInit {
   }
 
   @Put('api/suppliers/:id/credit-limit')
+  @AuditLogAction({
+    actionCode: 'SUPPLIER_CREDIT_LIMIT_UPDATE',
+    actionName: 'Cập nhật hạn mức công nợ NCC',
+    module: 'Supplier',
+    eventType: 'UPDATE',
+    entityType: 'SupplierCredit',
+  })
   async updateCreditLimit(
     @Param('id') id: string,
     @Body() data: { creditLimit?: number; paymentTermDays?: number },
@@ -53,6 +63,13 @@ export class SupplierCreditController implements OnModuleInit {
   }
 
   @Post('api/suppliers/:id/payment')
+  @AuditLogAction({
+    actionCode: 'SUPPLIER_PAYMENT_RECORD',
+    actionName: 'Ghi nhận thanh toán công nợ NCC',
+    module: 'Supplier',
+    eventType: 'CREATE',
+    entityType: 'SupplierCreditTransaction',
+  })
   async recordPayment(
     @Param('id') id: string,
     @Body() data: { amount: number; paymentMethod: string; notes?: string; performedBy?: string },

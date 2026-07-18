@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, Plus, Edit2, Ban, ShieldCheck, Mail, Lock, User as UserIcon, Building2, CheckCircle2, AlertTriangle, X } from "lucide-react";
-import { employeeService, Employee } from "../../services/employee.service";
-import { branchService } from "../../services/branch.service";
+import { employeeService, Employee } from "../../services/admin/employee.service";
+import { branchService } from "../../services/admin/branch.service";
 
 export function Employees() {
   const [searchTerm, setSearchTerm] = useState("");

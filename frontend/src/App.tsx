@@ -25,6 +25,8 @@ import { DashboardHome } from "./components/common/Dashboard";
 import { Profile } from "./components/common/Profile";
 import { Settings } from "./components/common/Settings";
 import { AIInsights } from "./components/common/AIInsights";
+import { AIForecast } from "./components/common/AIForecast";
+import { LotTracking } from "./components/common/LotTracking";
 
 // Customer Pages
 import { CustomerShop } from "./pages/customer/CustomerShop";
@@ -52,6 +54,8 @@ import { VoucherManagement } from "./pages/admin/VoucherManagement";
 import { HQApproval } from "./pages/admin/HQApproval";
 import { PriceManagement } from "./pages/admin/PriceManagement";
 import { SupplierCreditManagement } from "./pages/admin/SupplierCreditManagement";
+import { AuditLogs } from "./pages/admin/AuditLogs";
+import { QuotaManagement } from "./pages/admin/QuotaManagement";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
@@ -114,9 +118,13 @@ export default function App() {
             <Route path="vouchers" element={<VoucherManagement />} />
             <Route path="approvals" element={<HQApproval />} />
             <Route path="finance" element={<Finance />} />
+            <Route path="quotas" element={<QuotaManagement />} />
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="ai-insights" element={<AIInsights />} />
+            <Route path="ai-forecast" element={<AIForecast />} />
+            <Route path="lot-tracking" element={<LotTracking />} />
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
 
@@ -141,7 +149,10 @@ export default function App() {
             <Route path="inventory/import" element={<WarehouseInventoryHub />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
             <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
+            <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="ai-insights" element={<AIInsights />} />
+            <Route path="ai-forecast" element={<AIForecast />} />
+            <Route path="lot-tracking" element={<LotTracking />} />
             <Route path="profile" element={<Profile />} />
 
             <Route path="master-data/products" element={<Products />} />
@@ -162,6 +173,7 @@ export default function App() {
             <Route path="finance" element={<Finance />} />
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="lot-tracking" element={<LotTracking />} />
             <Route path="profile" element={<Profile />} />
           </Route>
         </Route>
@@ -171,6 +183,7 @@ export default function App() {
           <Route path="/pharmacist" element={<PharmacistLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="sales" element={<Sales />} />
+            <Route path="lot-tracking" element={<LotTracking />} />
             <Route path="profile" element={<Profile />} />
           </Route>
         </Route>

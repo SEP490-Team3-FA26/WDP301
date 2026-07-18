@@ -70,6 +70,9 @@ export class Order extends Document {
   @Prop({ type: Number, default: 0 })
   earnedPoints?: number;
 
+  @Prop({ type: String })
+  userId?: string;
+
   @Prop({ type: String, default: 'BR-001' })
   branchId?: string;
 }

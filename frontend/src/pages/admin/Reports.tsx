@@ -3,10 +3,11 @@ import { Plus, BarChart3, FileText } from "lucide-react";
 import { SalesAnalyticsDashboard } from "../../components/reports/SalesAnalyticsDashboard";
 import { ReportHistoryTable } from "../../components/reports/ReportHistoryTable";
 import { ReportCreateModal } from "../../components/reports/ReportCreateModal";
+import { Tabs } from "../../components/ui/Tabs";
 
 export function Reports() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"analytics" | "reports">("analytics");
+  const [activeTab, setActiveTab] = useState<"analytics" | "reports">("reports");
   
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,7 +40,7 @@ export function Reports() {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const { reportService } = await import("../../services/report.service");
+      const { reportService } = await import("../../services/report/report.service");
       const data = await reportService.getHistory();
       setReports(data);
     } catch (error) {
@@ -76,30 +77,14 @@ export function Reports() {
 
       {/* Tabs Menu (Admin only) */}
       {isAdmin && (
-        <div className="flex border-b border-slate-200">
-          <button
-            onClick={() => setActiveTab("analytics")}
-            className={`px-5 py-3 font-bold text-sm flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "analytics"
-                ? "border-[#0057cd] text-[#0057cd]"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <BarChart3 size={18} />
-            Phân tích bán hàng (BI)
-          </button>
-          <button
-            onClick={() => setActiveTab("reports")}
-            className={`px-5 py-3 font-bold text-sm flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "reports"
-                ? "border-[#0057cd] text-[#0057cd]"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <FileText size={18} />
-            Lịch sử & Xuất báo cáo
-          </button>
-        </div>
+        <Tabs<"analytics" | "reports">
+          tabs={[
+            { id: "analytics", label: "Phân tích bán hàng (BI)", icon: <BarChart3 size={18} /> },
+            { id: "reports", label: "Lịch sử & Xuất báo cáo", icon: <FileText size={18} /> }
+          ]}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
       )}
 
       {/* Analytics Dashboard */}
