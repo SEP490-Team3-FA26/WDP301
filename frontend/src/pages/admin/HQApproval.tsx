@@ -360,7 +360,7 @@ export function HQApproval() {
                 ))}
               </tbody>
             </table>
-          )}
+          ) : null}
         </div>
       </div>
 
