@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @ApiTags('💊 Medicines')
 @Controller('api/medicines')
@@ -27,6 +28,7 @@ export class MedicineController implements OnModuleInit {
       'inventory.medicine.dropdown_list',
       'inventory.medicine.get_alternatives',
       'inventory.medicine.update_price',
+      'inventory.medicine.branch_list',
     ]);
   }
 
@@ -75,6 +77,14 @@ export class MedicineController implements OnModuleInit {
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Cập nhật trạng thái / tồn kho của thuốc' })
+  @UseGuards(JwtAuthGuard)
+  @AuditLogAction({
+    actionCode: 'MEDICINE_STATUS_UPDATE',
+    actionName: 'Cập nhật trạng thái thuốc',
+    module: 'Inventory',
+    eventType: 'UPDATE',
+    entityType: 'Medicine',
+  })
   async updateMedicineStatus(
     @Param('id') id: string,
     @Body('status') status: string,
@@ -85,6 +95,14 @@ export class MedicineController implements OnModuleInit {
 
   @Patch(':id/price-tiers')
   @ApiOperation({ summary: 'Cập nhật bảng giá sỉ bậc thang của thuốc' })
+  @UseGuards(JwtAuthGuard)
+  @AuditLogAction({
+    actionCode: 'MEDICINE_PRICE_TIERS_UPDATE',
+    actionName: 'Cập nhật giá sỉ thuốc',
+    module: 'Inventory',
+    eventType: 'UPDATE',
+    entityType: 'Medicine',
+  })
   async updateMedicinePriceTiers(
     @Param('id') id: string,
     @Body('priceTiers') priceTiers: { minQuantity: number; price: number }[]
@@ -151,6 +169,58 @@ export class MedicineController implements OnModuleInit {
       indication,
       brandOrigin,
       branchId,
+    });
+  }
+
+  @Get('branch/:branchId')
+  @ApiOperation({ summary: 'Lấy danh sách thuốc và tồn kho riêng của chi nhánh' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'category', required: false, type: String })
+  @ApiQuery({ name: 'classification', required: false, type: String })
+  @ApiQuery({ name: 'targetGroup', required: false, type: String })
+  @ApiQuery({ name: 'minPrice', required: false, type: Number })
+  @ApiQuery({ name: 'maxPrice', required: false, type: Number })
+  @ApiQuery({ name: 'flavour', required: false, type: String })
+  @ApiQuery({ name: 'country', required: false, type: String })
+  @ApiQuery({ name: 'brand', required: false, type: String })
+  @ApiQuery({ name: 'indication', required: false, type: String })
+  @ApiQuery({ name: 'branchOrigin', required: false, type: String })
+  @ApiQuery({ name: 'branchStockOnly', required: false, type: Boolean })
+  async getBranchMedicines(
+    @Param('branchId') branchId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Query('search') search = '',
+    @Query('category') category = '',
+    @Query('classification') classification = '',
+    @Query('targetGroup') targetGroup = '',
+    @Query('minPrice') minPrice?: number,
+    @Query('maxPrice') maxPrice?: number,
+    @Query('flavour') flavour = '',
+    @Query('country') country = '',
+    @Query('brand') brand = '',
+    @Query('indication') indication = '',
+    @Query('brandOrigin') brandOrigin = '',
+    @Query('branchStockOnly') branchStockOnly?: boolean,
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.branch_list', {
+      branchId,
+      branchStockOnly,
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      category,
+      classification,
+      targetGroup,
+      minPrice: minPrice ? Number(minPrice) : undefined,
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      flavour,
+      country,
+      brand,
+      indication,
+      brandOrigin,
     });
   }
 

@@ -4,9 +4,9 @@ import {
   Building2, DollarSign, Layers, AlertCircle, RefreshCw, Save
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { branchService } from "../../services/branch.service";
-import { medicineService } from "../../services/medicine.service";
-import { pricingService } from "../../services/pricing.service";
+import { branchService } from "../../services/admin/branch.service";
+import { medicineService } from "../../services/inventory/medicine.service";
+import { pricingService } from "../../services/inventory/pricing.service";
 
 interface WholesaleTier {
   minQuantity: number;

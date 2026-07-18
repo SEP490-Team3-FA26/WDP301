@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Trash2, Search, ShieldAlert, ShieldCheck, AlertTriangle, Info, Bot, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { medicineService } from "../../services/medicine.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 
 interface InteractionResult {
   has_interactions: boolean;

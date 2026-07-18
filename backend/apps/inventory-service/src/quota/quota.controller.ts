@@ -1,29 +1,51 @@
-import { Controller } from '@nestjs/common';
-import { MessagePattern, EventPattern, Payload } from '@nestjs/microservices';
+import { Controller, Inject, OnModuleInit } from '@nestjs/common';
+import { MessagePattern, EventPattern, Payload, ClientKafka } from '@nestjs/microservices';
 import { QuotaService } from './quota.service';
+import { subscribeToKafkaTopics } from '../../../api-gateway/src/common/kafka.helper';
 
 @Controller()
-export class QuotaController {
-  constructor(private readonly quotaService: QuotaService) {}
+export class QuotaController implements OnModuleInit {
+  constructor(
+    private readonly quotaService: QuotaService,
+    @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
+  ) {}
+
+  async onModuleInit() {
+    await subscribeToKafkaTopics(this.userClient, ['user.branch.list']);
+  }
+
+
 
   @EventPattern('quota.event.create')
-  async handleQuotaCreate(@Payload() data: string) {
-    const dto = JSON.parse(data);
-    await this.quotaService.create(dto);
-    console.log('✅ [Microservice] Đã tạo thành công Quota mới!');
+  async handleQuotaCreate(@Payload() data: any) {
+    try {
+      const dto = typeof data === 'string' ? JSON.parse(data) : data;
+      await this.quotaService.create(dto);
+      console.log('✅ [Microservice] Đã tạo thành công Quota mới!');
+    } catch (error: any) {
+      console.error(`❌ [Microservice] Lỗi khi tạo Quota: ${error.message}`);
+    }
   }
 
   @EventPattern('quota.event.update')
-  async handleQuotaUpdate(@Payload() payload: string) {
-    const { id, data } = JSON.parse(payload);
-    await this.quotaService.update(id, data);
-    console.log(`✅ [Microservice] Đã cập nhật thành công Quota ${id}!`);
+  async handleQuotaUpdate(@Payload() payload: any) {
+    try {
+      const { id, data } = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      await this.quotaService.update(id, data);
+      console.log(`✅ [Microservice] Đã cập nhật thành công Quota ${id}!`);
+    } catch (error: any) {
+      console.error(`❌ [Microservice] Lỗi khi cập nhật Quota ${payload?.id || 'unknown'}: ${error.message}`);
+    }
   }
 
   @EventPattern('quota.event.delete')
   async handleQuotaDelete(@Payload() id: string) {
-    await this.quotaService.delete(id);
-    console.log(`✅ [Microservice] Đã xóa thành công Quota ${id}!`);
+    try {
+      await this.quotaService.delete(id);
+      console.log(`✅ [Microservice] Đã xóa thành công Quota ${id}!`);
+    } catch (error: any) {
+      console.error(`❌ [Microservice] Lỗi khi xóa Quota ${id}: ${error.message}`);
+    }
   }
 
   @MessagePattern('quota.get.by.id')
@@ -31,9 +53,21 @@ export class QuotaController {
     return this.quotaService.findById(id);
   }
 
+  @MessagePattern('quota.get.by.branch')
+  async getQuotaByBranch(@Payload() branchId: string) {
+    return this.quotaService.findByBranch(branchId);
+  }
+
+  @MessagePattern('quota.get.summary')
+  async getQuotaSummary(@Payload() queryPayload: any) {
+    const query = typeof queryPayload === 'string' ? JSON.parse(queryPayload) : (queryPayload || {});
+    return this.quotaService.getSummary(query);
+  }
+
   @MessagePattern('quota.get.all')
-  async getAllQuotas(@Payload() queryPayload: string) {
-    const query = queryPayload ? JSON.parse(queryPayload) : {};
+  async getAllQuotas(@Payload() queryPayload: any) {
+    const query = typeof queryPayload === 'string' ? JSON.parse(queryPayload) : (queryPayload || {});
     return this.quotaService.findAll(query);
   }
 }
+

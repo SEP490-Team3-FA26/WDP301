@@ -20,7 +20,7 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { medicineService } from "../../services/medicine.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 import { useSocket } from "../../hooks/useSocket";
 
 export function DashboardHome() {

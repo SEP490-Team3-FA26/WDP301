@@ -21,7 +21,7 @@ import {
    Legend,
    ResponsiveContainer
 } from "recharts";
-import api from "../../services/api";
+import api from "../../services/core/api";
 
 export function Finance() {
    const [selectedBranch, setSelectedBranch] = useState("all");

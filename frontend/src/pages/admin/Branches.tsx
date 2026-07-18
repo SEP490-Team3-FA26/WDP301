@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Search, MapPin, Users, Package, AlertTriangle, Clock, X, ChevronRight, Activity, RotateCcw, Building2, Bell, CheckCircle2 } from "lucide-react";
-import { branchService } from "../../services/branch.service";
+import { branchService } from "../../services/admin/branch.service";
 
 interface Branch {
    _id?: string;

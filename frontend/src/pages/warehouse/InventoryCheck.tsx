@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Search, CheckCircle, Clock, AlertTriangle, ChevronRight, X, Trash2, ShieldAlert, FileText, ArrowRightLeft, User, MessageSquare } from "lucide-react";
-import { inventoryCheckService, InventoryCheckItem } from "../../services/inventoryCheck.service";
-import { medicineService } from "../../services/medicine.service";
+import { inventoryCheckService, InventoryCheckItem } from "../../services/inventory/inventoryCheck.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 
 export function InventoryCheck() {
   const [checks, setChecks] = useState<any[]>([]);

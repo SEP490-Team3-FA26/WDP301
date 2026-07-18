@@ -25,6 +25,11 @@ export default defineConfig(() => {
           target: process.env.DOCKER ? 'http://backend:4000' : 'http://localhost:4000',
           changeOrigin: true,
         },
+        '/socket.io': {
+          target: process.env.DOCKER ? 'http://backend:4000' : 'http://localhost:4000',
+          changeOrigin: true,
+          ws: true,
+        },
       },
     },
   };

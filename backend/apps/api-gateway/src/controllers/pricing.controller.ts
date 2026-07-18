@@ -1,10 +1,13 @@
-import { Controller, Get, Put, Post, Delete, Param, Body, Query, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Param, Body, Query, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @ApiTags('💰 Pricing')
 @Controller('api/pricing')
+@UseGuards(JwtAuthGuard)
 export class PricingGatewayController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -54,6 +57,13 @@ export class PricingGatewayController implements OnModuleInit {
 
   @Post('copy')
   @ApiOperation({ summary: 'Sao chép bảng giá từ chi nhánh này sang chi nhánh khác' })
+  @AuditLogAction({
+    actionCode: 'PRICING_COPY',
+    actionName: 'Sao chép bảng giá chi nhánh',
+    module: 'Inventory',
+    eventType: 'UPDATE',
+    entityType: 'BranchPriceList',
+  })
   async copyPriceList(@Body() data: { fromBranchId: string; toBranchId: string; updatedBy?: string }) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.pricing.copy', data);
   }
@@ -110,6 +120,13 @@ export class PricingGatewayController implements OnModuleInit {
 
   @Put(':branchId/:medicineId')
   @ApiOperation({ summary: 'Tạo/cập nhật giá 1 thuốc tại 1 chi nhánh' })
+  @AuditLogAction({
+    actionCode: 'PRICING_UPSERT',
+    actionName: 'Cập nhật giá thuốc chi nhánh',
+    module: 'Inventory',
+    eventType: 'UPDATE',
+    entityType: 'BranchPriceList',
+  })
   async upsertPrice(
     @Param('branchId') branchId: string,
     @Param('medicineId') medicineId: string,
@@ -124,6 +141,13 @@ export class PricingGatewayController implements OnModuleInit {
 
   @Post(':branchId/bulk')
   @ApiOperation({ summary: 'Import hàng loạt giá cho chi nhánh' })
+  @AuditLogAction({
+    actionCode: 'PRICING_BULK_UPSERT',
+    actionName: 'Nhập hàng loạt giá chi nhánh',
+    module: 'Inventory',
+    eventType: 'UPDATE',
+    entityType: 'BranchPriceList',
+  })
   async bulkUpsertPrices(
     @Param('branchId') branchId: string,
     @Body() data: any,
@@ -136,6 +160,13 @@ export class PricingGatewayController implements OnModuleInit {
 
   @Delete(':branchId/:medicineId')
   @ApiOperation({ summary: 'Xóa override giá (chi nhánh dùng giá mặc định)' })
+  @AuditLogAction({
+    actionCode: 'PRICING_DELETE',
+    actionName: 'Xóa giá ghi đè chi nhánh',
+    module: 'Inventory',
+    eventType: 'DELETE',
+    entityType: 'BranchPriceList',
+  })
   async deletePrice(
     @Param('branchId') branchId: string,
     @Param('medicineId') medicineId: string,

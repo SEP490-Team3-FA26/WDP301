@@ -4,8 +4,8 @@ import {
   ShieldCheck, Calendar, Package, Eye, ArrowRight, DollarSign, Building2, CreditCard
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
-import { goodsReceiptService } from "../../services/goodsReceipt.service";
+import { purchaseRequisitionService } from "../../services/purchase/purchaseRequisition.service";
+import api from "../../services/core/api";
 
 /**
  * Admin phê duyệt & thanh toán các Đơn Đặt Hàng (PO) đã được tự động tách theo NCC.
@@ -17,7 +17,7 @@ export function HQApproval() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [tab, setTab] = useState<"URGENT" | "PENDING_APPROVAL" | "SHIPPING" | "RECEIVING" | "CANCELLED" | "GRN_APPROVAL">("URGENT");
+  const [tab, setTab] = useState<"URGENT" | "PENDING_APPROVAL" | "SHIPPING" | "CANCELLED">("URGENT");
   const [selectedPos, setSelectedPos] = useState<string[]>([]);
   const [selectedPrs, setSelectedPrs] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
@@ -26,50 +26,31 @@ export function HQApproval() {
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
 
-  const [inspectionList, setInspectionList] = useState<any[]>([]);
-  const [selectedInspections, setSelectedInspections] = useState<string[]>([]);
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
-
-      const [resPo, resSuppliers, resPr, resInspections] = await Promise.all([
-        fetch(`/api/purchase-orders?status=${tab === "URGENT" ? "PENDING_APPROVAL" : tab}`, { signal: controller.signal }),
-        fetch(`/api/suppliers`, { signal: controller.signal }),
-        fetch(`/api/purchase-requisitions?status=URGENT_PENDING`, { signal: controller.signal }),
-        tab === "GRN_APPROVAL" ? goodsReceiptService.getInspectionRecords().catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
+      const [resPo, resSuppliers, resPr] = await Promise.all([
+        api.get(`/api/purchase-orders?status=${tab === "URGENT" ? "PENDING_APPROVAL" : tab}`),
+        api.get(`/api/suppliers`),
+        api.get(`/api/purchase-requisitions?status=URGENT_PENDING`)
       ]);
-      clearTimeout(timeoutId);
 
-      if (resSuppliers.ok) setSuppliers(await resSuppliers.json());
+      setSuppliers(Array.isArray(resSuppliers.data) ? resSuppliers.data : []);
 
-      if (resPr.ok) {
-        const data = await resPr.json();
-        setUrgentPrs(data || []);
-        // Nếu không có đơn hỏa tốc nào và đang ở tab URGENT, tự chuyển về PENDING_APPROVAL
-        if ((!data || data.length === 0) && tab === "URGENT") {
-          setTab("PENDING_APPROVAL");
-        }
+      const prData = resPr.data;
+      setUrgentPrs(prData || []);
+      // Nếu không có đơn hỏa tốc nào và đang ở tab URGENT, tự chuyển về PENDING_APPROVAL
+      if ((!prData || prData.length === 0) && tab === "URGENT") {
+        setTab("PENDING_APPROVAL");
       }
 
-      if (resPo.ok) {
-        let data = await resPo.json();
-        if (data && data.value) data = data.value;
-        if (!Array.isArray(data)) data = [];
-        setPoList(data);
-      }
-
-      if (tab === "GRN_APPROVAL" && resInspections && resInspections.data) {
-        setInspectionList(resInspections.data);
-      } else {
-        setInspectionList([]);
-      }
+      let poData = resPo.data;
+      if (poData && poData.value) poData = poData.value;
+      if (!Array.isArray(poData)) poData = [];
+      setPoList(poData);
     } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        setMsg({ type: "error", text: "Tải dữ liệu quá lâu (timeout). Vui lòng thử lại." });
-      }
+      console.error("Failed to fetch HQ approval data", err);
+      setMsg({ type: "error", text: "Lỗi tải dữ liệu. Vui lòng thử lại." });
     } finally { setLoading(false); }
   };
 
@@ -86,26 +67,17 @@ export function HQApproval() {
 
       for (const currentPoId of targetPos) {
         try {
-          const res = await fetch("/api/purchase-orders/approve-pay", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              poId: currentPoId,
-              action,
-              rejectionReason: action === "REJECT" ? rejectReason : undefined,
-              paymentType: action === "APPROVE" ? paymentType : undefined,
-            }),
+          await api.post("/api/purchase-orders/approve-pay", {
+            poId: currentPoId,
+            action,
+            rejectionReason: action === "REJECT" ? rejectReason : undefined,
+            paymentType: action === "APPROVE" ? paymentType : undefined,
           });
-          if (res.ok) {
-            successCount++;
-          } else {
-            errorCount++;
-            const errData = await res.json();
-            lastErrorMessage = errData.message || "Lỗi xử lý đơn.";
-          }
+          successCount++;
         } catch (e: any) {
           errorCount++;
-          lastErrorMessage = e.message || "Lỗi kết nối.";
+          const errorResponse = e?.response?.data;
+          lastErrorMessage = errorResponse?.message || e.message || "Lỗi kết nối.";
         }
       }
 
@@ -135,12 +107,8 @@ export function HQApproval() {
 
       for (const prId of selectedPrs) {
         try {
-          const res = await fetch("/api/purchase-requisitions/process-urgent", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prId, action }),
-          });
-          if (res.ok) successCount++;
-          else errorCount++;
+          await api.post("/api/purchase-requisitions/process-urgent", { prId, action });
+          successCount++;
         } catch { errorCount++; }
       }
 
@@ -155,20 +123,6 @@ export function HQApproval() {
     finally { setActionLoading(false); }
   };
 
-  const handleApproveGRN = async (recordId: string) => {
-    setActionLoading(true);
-    setMsg(null);
-    try {
-      await goodsReceiptService.approveGoodsReceipt(recordId, "Admin HQ");
-      setMsg({ type: "success", text: "Đã duyệt Nhập Kho và cập nhật tồn kho thành công!" });
-      fetchData();
-    } catch (e: any) {
-      setMsg({ type: "error", text: e.response?.data?.message || e.message || "Lỗi duyệt GRN" });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const toggleSelectPo = (id: string) => setSelectedPos(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const toggleSelectPr = (id: string) => setSelectedPrs(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -176,12 +130,11 @@ export function HQApproval() {
     const styles: Record<string, string> = {
       PENDING_APPROVAL: "bg-amber-50 text-amber-700 border-amber-200",
       SHIPPING: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      RECEIVING: "bg-blue-50 text-blue-700 border-blue-200",
       CANCELLED: "bg-rose-50 text-rose-700 border-rose-200",
       RETURNED: "bg-rose-50 text-rose-700 border-rose-200",
-      COMPLETED: "bg-indigo-50 text-indigo-700 border-indigo-200",
+      COMPLETED: "bg-blue-50 text-blue-700 border-blue-200",
     };
-    const labels: Record<string, string> = { PENDING_APPROVAL: "Chờ thanh toán", SHIPPING: "Đã thanh toán ✓", RECEIVING: "Đang nhập kho", CANCELLED: "Đã hủy ✗", RETURNED: "Hàng trả lại", COMPLETED: "Hoàn thành" };
+    const labels: Record<string, string> = { PENDING_APPROVAL: "Chờ thanh toán", SHIPPING: "Đã thanh toán ✓", CANCELLED: "Đã hủy ✗", RETURNED: "Hàng trả lại", COMPLETED: "Hoàn thành" };
     return <span className={`inline-flex px-2.5 py-1 rounded-full border text-[11px] font-bold ${styles[s] || "bg-slate-50 text-slate-500 border-slate-200"}`}>{labels[s] || s}</span>;
   };
 
@@ -241,10 +194,9 @@ export function HQApproval() {
           ...(urgentPrs.length > 0 ? [{ key: "URGENT" as const, label: `🔥 Yêu cầu Hỏa tốc (${urgentPrs.length})` }] : []),
           { key: "PENDING_APPROVAL" as const, label: "Chờ thanh toán PO" },
           { key: "SHIPPING" as const, label: "PO Đang giao" },
-          { key: "RECEIVING" as const, label: "Kho đang nhận" },
           { key: "CANCELLED" as const, label: "Đã hủy" },
         ]).map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as any)}
+          <button key={t.key} onClick={() => setTab(t.key)}
             className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all ${
               tab === t.key 
                 ? t.key === "URGENT" ? "border-rose-600 text-rose-700 bg-rose-50" : "border-violet-600 text-violet-700" 
@@ -400,35 +352,7 @@ export function HQApproval() {
                 ))}
               </tbody>
             </table>
-          ) : tab === "GRN_APPROVAL" ? (
-            <table className="w-full text-sm text-left">
-              <thead className="text-[11px] text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3">Mã Phiên KIỂM</th>
-                  <th className="px-4 py-3">Mã GRN</th>
-                  <th className="px-4 py-3">Ngày gửi</th>
-                  <th className="px-4 py-3 text-center">Trạng thái</th>
-                  <th className="px-4 py-3 text-right">Hành động</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {inspectionList.filter(i => i.status === 'WAITING').map((inspection: any) => (
-                  <tr key={inspection._id} className="hover:bg-slate-50 transition-colors cursor-pointer">
-                    <td className="px-4 py-3 font-bold text-slate-900 font-mono text-xs">{inspection._id.slice(-6).toUpperCase()}</td>
-                    <td className="px-4 py-3 font-bold text-slate-600 font-mono text-xs">{inspection.grnId.slice(-6).toUpperCase()}</td>
-                    <td className="px-4 py-3 text-slate-600"><Calendar size={13} className="inline mr-1 text-slate-400" />{new Date(inspection.createdAt).toLocaleDateString("vi-VN")}</td>
-                    <td className="px-4 py-3 text-center"><span className="inline-flex px-2 py-1 rounded bg-amber-100 text-amber-700 text-[10px] font-bold">CHỜ DUYỆT HQ</span></td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={(e) => { e.stopPropagation(); handleApproveGRN(inspection._id); }} disabled={actionLoading}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs flex items-center gap-1.5 disabled:opacity-50 ml-auto">
-                        {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Duyệt & Nhập Kho
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : null}
+          )}
         </div>
       </div>
 

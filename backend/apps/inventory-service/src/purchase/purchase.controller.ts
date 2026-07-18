@@ -161,6 +161,46 @@ export class PurchaseController {
     }
   }
 
+  @MessagePattern('inventory.grn.submit_inspection')
+  async submitGoodsReceiptInspection(@Payload() data: { id: string }) {
+    try {
+      return await this.purchaseService.submitGoodsReceiptInspection(data.id);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi gửi báo cáo kiểm nhận');
+    }
+  }
+
+  @MessagePattern('inventory.grn.approve')
+  async approveGoodsReceiptNote(@Payload() data: { id: string; discrepancyReason?: string }) {
+    try {
+      return await this.purchaseService.approveGoodsReceiptNote(data.id, data.discrepancyReason);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi phê duyệt nhập kho');
+    }
+  }
+
+  @MessagePattern('inventory.grn.reject')
+  async rejectGoodsReceiptNote(@Payload() data: { id: string; action: string; reason: string }) {
+    try {
+      return await this.purchaseService.rejectGoodsReceiptNote(data.id, data.action, data.reason);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi từ chối phiếu tiếp nhận');
+    }
+  }
+
+  @MessagePattern('inventory.grn.update')
+  async updateGoodsReceiptNote(@Payload() data: any) {
+    try {
+      return await this.purchaseService.updateGoodsReceiptNote(data.id, data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật tài liệu tiếp nhận');
+    }
+  }
+
   // ===========================================================================================
   // INVENTORY TRANSACTIONS (Nhật ký biến động kho)
   // ===========================================================================================
@@ -248,14 +288,7 @@ export class PurchaseController {
   // INSPECTION & GRN ENDPOINTS
   // ===========================================================================================
 
-  @MessagePattern('inventory.grn.create')
-  async createGoodsReceiptNote(@Payload() data: { poId: string; items: any[]; receivedBy: string }) {
-    try {
-      return await this.purchaseService.createGoodsReceiptNote(data);
-    } catch (error) {
-      throw new RpcException(error.message || 'Lỗi tạo phiếu GRN');
-    }
-  }
+
 
   @MessagePattern('inventory.inspection.create')
   async createInspectionRecord(@Payload() data: { grnId: string; inspectedBy: string }) {
@@ -284,14 +317,7 @@ export class PurchaseController {
     }
   }
 
-  @MessagePattern('inventory.grn.approve')
-  async approveGoodsReceipt(@Payload() data: { recordId: string; approvedBy: string }) {
-    try {
-      return await this.purchaseService.approveGoodsReceipt(data.recordId, data.approvedBy);
-    } catch (error) {
-      throw new RpcException(error.message || 'Lỗi duyệt báo cáo nhập kho');
-    }
-  }
+
 
   @MessagePattern('inventory.inspection.list')
   async listInspectionRecords() {

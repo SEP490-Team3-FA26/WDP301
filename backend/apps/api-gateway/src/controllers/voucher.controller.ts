@@ -3,6 +3,7 @@ import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @ApiTags('🎟️ Vouchers')
 @Controller('api/vouchers')
@@ -24,6 +25,13 @@ export class VoucherController implements OnModuleInit {
   }
 
   @Post()
+  @AuditLogAction({
+    actionCode: 'VOUCHER_CREATE',
+    actionName: 'Tạo Voucher khuyến mãi',
+    module: 'Voucher',
+    eventType: 'CREATE',
+    entityType: 'Voucher',
+  })
   async createVoucher(@Body() data: any) {
     return await sendKafkaMessage(this.orderClient, 'vouchers.create', data);
   }
@@ -34,11 +42,25 @@ export class VoucherController implements OnModuleInit {
   }
 
   @Put(':id')
+  @AuditLogAction({
+    actionCode: 'VOUCHER_UPDATE',
+    actionName: 'Cập nhật Voucher khuyến mãi',
+    module: 'Voucher',
+    eventType: 'UPDATE',
+    entityType: 'Voucher',
+  })
   async updateVoucher(@Param('id') id: string, @Body() payload: any) {
     return await sendKafkaMessage(this.orderClient, 'vouchers.update', { id, payload });
   }
 
   @Delete(':id')
+  @AuditLogAction({
+    actionCode: 'VOUCHER_DELETE',
+    actionName: 'Xóa Voucher khuyến mãi',
+    module: 'Voucher',
+    eventType: 'DELETE',
+    entityType: 'Voucher',
+  })
   async deleteVoucher(@Param('id') id: string) {
     return await sendKafkaMessage(this.orderClient, 'vouchers.delete', { id });
   }

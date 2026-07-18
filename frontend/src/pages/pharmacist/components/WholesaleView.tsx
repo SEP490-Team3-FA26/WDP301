@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import {
   SearchIcon, XCircle, ShoppingCart, Minus, Plus, Building, Banknote, CreditCard, QrCode, FileText, Check, Printer
 } from "lucide-react";
-import { medicineService } from "../../../services/medicine.service";
-import { orderService } from "../../../services/order.service";
+import { medicineService } from "../../../services/inventory/medicine.service";
+import { orderService } from "../../../services/sales/order.service";
 
 // Helper to decode JWT token to extract branchId and user info
 function getBranchInfoFromToken() {
@@ -67,7 +67,7 @@ export default function WholesaleView() {
   const searchMedicines = async (query: string) => {
     try {
       const { branchId } = getBranchInfoFromToken();
-      const data = await medicineService.getMedicines({ limit: 10, search: query, _t: Date.now(), branchId: branchId || undefined });
+      const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: query, _t: Date.now() });
       setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);

@@ -1,6 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
 import '../services/api_service.dart';
+
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -14,6 +19,22 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
   
   // Track expanded medicine IDs for batch dropdowns
   final Set<String> _expandedMedIds = {};
+
+  // Goods Receipt sessions loaded dynamically from DB
+  final List<Map<String, dynamic>> _goodsReceipts = [];
+
+  Map<String, dynamic>? _selectedReceipt;
+  Map<String, dynamic>? _selectedItem;
+  final TextEditingController _actualQtyController = TextEditingController();
+  String? _selectedImagePath;
+  
+  int _currentInspectionIndex = 0;
+  bool _isAiAnalyzing = false;
+  bool _isSavingCount = false;
+  bool _isCheckAnimationActive = false;
+  bool _hasRealServerConnection = true;
+  Timer? _healthCheckTimer;
+  int _aiErrorCountForCurrentItem = 0;
 
   // DB Pagination State
   final List<Map<String, dynamic>> _medicines = [];
@@ -54,7 +75,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+
     
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
@@ -63,6 +85,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
     });
 
     _loadMedicines(reset: true);
+    _loadGoodsReceipts();
+    _startHealthCheck();
   }
 
   @override
@@ -70,8 +94,106 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
     _tabController.dispose();
     _scrollController.dispose();
     _debounceTimer?.cancel();
+    _healthCheckTimer?.cancel();
     super.dispose();
   }
+
+  void _startHealthCheck() {
+    _healthCheckTimer = Timer.periodic(const Duration(seconds: 8), (timer) async {
+      try {
+        final response = await http.get(Uri.parse('${ApiService.baseUrl}/api/medicines?limit=1')).timeout(
+          const Duration(seconds: 2),
+        );
+        final isConnected = response.statusCode == 200;
+        if (isConnected != _hasRealServerConnection) {
+          setState(() {
+            _hasRealServerConnection = isConnected;
+          });
+        }
+      } catch (_) {
+        if (_hasRealServerConnection) {
+          setState(() {
+            _hasRealServerConnection = false;
+          });
+        }
+      }
+    });
+  }
+
+  // Load goods receipts note list dynamically from database
+  Future<void> _loadGoodsReceipts() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final List<dynamic> dbReceipts = await ApiService.getGoodsReceipts();
+      final List<Map<String, dynamic>> mapped = [];
+      for (var gr in dbReceipts) {
+        final String grStatus = gr['status']?.toString() ?? 'DRAFT';
+        if (grStatus != 'DRAFT' && grStatus != 'INSPECTING' && grStatus != 'PENDING_APPROVAL' && grStatus != 'COMPLETED') {
+          continue; // Only show relevant sessions to the keeper
+        }
+
+        final items = gr['items'] as List? ?? [];
+        final List<Map<String, dynamic>> mappedItems = [];
+        for (var item in items) {
+          final medId = item['medicineId']?.toString() ?? '';
+          String name = 'Thuốc chưa rõ';
+          String unit = 'Hộp';
+          
+          // Try to find name in already loaded medicines list
+          final med = _medicines.firstWhere((m) => m['id'] == medId, orElse: () => {});
+          if (med.isNotEmpty) {
+            name = med['name'] ?? name;
+            unit = med['unit'] ?? unit;
+          } else {
+            // Fetch dynamically from DB
+            final dbMed = await ApiService.getMedicineById(medId);
+            if (dbMed != null) {
+              name = dbMed['name'] ?? name;
+              unit = dbMed['unit'] ?? unit;
+            }
+          }
+
+          mappedItems.add({
+            'id': item['_id']?.toString() ?? '',
+            'medicineId': medId,
+            'name': name,
+            'expectedQty': item['quantity'] ?? 0,
+            'unit': unit,
+            'status': item['status'] == 'VERIFIED' ? 'CHECKED' : 'PENDING',
+            'aiCount': item['actualQty'],
+            'actualQty': item['actualQty'],
+            'recordId': null,
+            'image': null,
+          });
+        }
+
+        mapped.add({
+          'id': gr['_id']?.toString() ?? '',
+          'poId': gr['poId']?.toString() ?? 'PO-Unknown',
+          'supplier': gr['supplier']?.toString() ?? 'Đối tác Dược phẩm',
+          'status': grStatus,
+          'date': gr['createdAt'] != null
+              ? gr['createdAt'].toString().substring(0, 10)
+              : '27/06/2026',
+          'items': mappedItems,
+        });
+      }
+      
+      setState(() {
+        _goodsReceipts.clear();
+        _goodsReceipts.addAll(mapped);
+      });
+    } catch (e) {
+      debugPrint("Error loading goods receipts: $e");
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
 
   // Load medicines from DB with pagination
   Future<void> _loadMedicines({bool reset = false}) async {
@@ -326,6 +448,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
           indicatorWeight: 3.5,
           tabs: const [
             Tab(text: 'Tồn Kho'),
+            Tab(text: 'Kiểm Nhận AI'),
             Tab(text: 'Báo Cáo Hết Hạn'),
           ],
         ),
@@ -334,9 +457,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         controller: _tabController,
         children: [
           _buildInventoryTab(),
+          _buildGrnInspectionTab(),
           _buildExpirationReportTab(),
         ],
       ),
+
     );
   }
 
@@ -641,12 +766,1280 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
     );
   }
 
+  Widget _buildGrnInspectionTab() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF00838F)),
+      );
+    }
+
+    if (_selectedReceipt == null) {
+      // 1. Render Receipt List
+      final pendingReceipts = _goodsReceipts.where((gr) => gr['status'] == 'DRAFT' || gr['status'] == 'INSPECTING').toList();
+      final completedReceipts = _goodsReceipts.where((gr) => gr['status'] == 'PENDING_APPROVAL' || gr['status'] == 'COMPLETED').toList();
+
+      return RefreshIndicator(
+        onRefresh: _loadGoodsReceipts,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Phiếu Nhập Hàng Chờ Kiểm Nhận (GRN)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E293B)),
+              ),
+              const SizedBox(height: 12),
+              if (pendingReceipts.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(24.0),
+                    child: Text('Không có phiếu nhập hàng nào chờ xử lý.', textAlign: TextAlign.center),
+                  ),
+                )
+              else
+                ...pendingReceipts.map((gr) => _buildReceiptCard(gr)),
+              const SizedBox(height: 24),
+              const Text(
+                'Lịch Sử Phiếu Đã Duyệt Nhập Kho',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              if (completedReceipts.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12.0),
+                  child: Text('Chưa duyệt phiếu nào trong phiên này.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                )
+              else
+                ...completedReceipts.map((gr) => _buildReceiptCard(gr)),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // 2. Render Worksheet for selected Receipt
+      return _buildInspectionWorksheet();
+    }
+  }
+
+  Widget _buildReceiptCard(Map<String, dynamic> gr) {
+    final String status = gr['status']?.toString() ?? 'DRAFT';
+    final isCompleted = status == 'COMPLETED';
+    final isPendingApproval = status == 'PENDING_APPROVAL';
+    final items = gr['items'] as List;
+    final checkedCount = items.where((i) => i['status'] == 'CHECKED').length;
+
+    String statusLabel = 'CHỜ KIỂM';
+    Color badgeColor = Colors.amber.shade50;
+    Color textColor = Colors.amber.shade900;
+    Color borderColor = Colors.grey.shade200;
+
+    if (status == 'COMPLETED') {
+      statusLabel = 'ĐÃ NHẬP KHO';
+      badgeColor = Colors.green.shade50;
+      textColor = Colors.green.shade700;
+      borderColor = Colors.green.shade100;
+    } else if (status == 'PENDING_APPROVAL') {
+      statusLabel = 'CHỜ DUYỆT';
+      badgeColor = Colors.blue.shade50;
+      textColor = Colors.blue.shade700;
+      borderColor = Colors.blue.shade100;
+    } else if (status == 'CANCELLED') {
+      statusLabel = 'ĐÃ HỦY';
+      badgeColor = Colors.red.shade50;
+      textColor = Colors.red.shade700;
+      borderColor = Colors.red.shade100;
+    } else if (status == 'INSPECTING') {
+      statusLabel = 'ĐANG KIỂM';
+      badgeColor = Colors.orange.shade50;
+      textColor = Colors.orange.shade800;
+      borderColor = Colors.orange.shade200;
+    } else if (status == 'DRAFT') {
+      statusLabel = 'NHÁP';
+      badgeColor = Colors.grey.shade100;
+      textColor = Colors.grey.shade700;
+      borderColor = Colors.grey.shade200;
+    }
+
+    return Card(
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: borderColor),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                'Phiếu: ${gr['id']}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                statusLabel,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            Text('Nhà cung cấp: ${gr['supplier']}', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+            const SizedBox(height: 4),
+            Text('Đơn đặt hàng: ${gr['poId']}  •  Ngày: ${gr['date']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  isCompleted ? Icons.check_circle_outline : (isPendingApproval ? Icons.hourglass_top : Icons.checklist_rounded), 
+                  size: 14, 
+                  color: isCompleted ? Colors.green : (isPendingApproval ? Colors.blue : Colors.orange)
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  isCompleted 
+                      ? 'Đã nhập tồn kho đầy đủ'
+                      : (isPendingApproval 
+                          ? 'Đã gửi báo cáo kiểm nhận'
+                          : 'Tiến độ kiểm: $checkedCount/${items.length} dòng hàng'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isCompleted ? Colors.green : (isPendingApproval ? Colors.blue : Colors.orange),
+                  ),
+                ),
+              ],
+            )
+          ],
+        ),
+        trailing: (status == 'DRAFT' || status == 'INSPECTING') 
+            ? const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey)
+            : null,
+        onTap: (status == 'DRAFT' || status == 'INSPECTING') ? () {
+          setState(() {
+            _selectedReceipt = gr;
+            _selectedItem = null;
+            _selectedImagePath = null;
+            _actualQtyController.clear();
+          });
+        } : () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isPendingApproval 
+                  ? 'Phiếu đang chờ quản lý phê duyệt. Không thể chỉnh sửa!' 
+                  : 'Phiếu đã hoàn tất nhập kho!'),
+              backgroundColor: Colors.blueGrey,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildInspectionWorksheet() {
+    final gr = _selectedReceipt!;
+    final items = gr['items'] as List;
+    final isCompleted = gr['status'] == 'COMPLETED';
+
+    final int verifiedCount = items.where((i) => i['status'] == 'CHECKED').length;
+    final int skippedCount = items.where((i) => i['status'] == 'SKIPPED').length;
+    final int pendingCount = items.where((i) => i['status'] == 'PENDING').length;
+    final int totalCount = items.length;
+    final double progress = totalCount > 0 ? verifiedCount / totalCount : 0.0;
+
+    final hasPendingOrSkipped = pendingCount > 0 || skippedCount > 0;
+
+    if (_selectedItem == null) {
+      // 1. Receipt Summary / Checklist View
+      return Stack(
+        children: [
+          Column(
+            children: [
+              // Receipt Header Info
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: Colors.white,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Color(0xFF00838F)),
+                      onPressed: () {
+                        setState(() {
+                          _selectedReceipt = null;
+                          _selectedItem = null;
+                          _selectedImagePath = null;
+                        });
+                      },
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Bảng Kiểm Nhận: ${gr['id']}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E293B)),
+                          ),
+                          Text(
+                            'NCC: ${gr['supplier']}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (hasPendingOrSkipped && !isCompleted)
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          final idx = items.indexWhere((i) => i['status'] == 'PENDING' || i['status'] == 'SKIPPED');
+                          if (idx != -1) {
+                            setState(() {
+                              _selectedItem = items[idx];
+                              _currentInspectionIndex = idx;
+                              _selectedImagePath = null;
+                              _actualQtyController.clear();
+                              _aiErrorCountForCurrentItem = 0;
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.play_arrow, size: 14),
+                        label: Text(
+                          verifiedCount > 0 ? 'TIẾP TỤC' : 'BẮT ĐẦU KIỂM',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00838F),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      )
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+
+              // Progress Bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: Colors.white,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
+                        minHeight: 6,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '$verifiedCount Đã xác nhận ✔',
+                          style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                        Text(
+                          '$skippedCount Bỏ qua ⏭',
+                          style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                        Text(
+                          '$pendingCount Chưa kiểm ○',
+                          style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+
+              // Offline Warning Bar
+              if (!_hasRealServerConnection)
+                Container(
+                  color: Colors.red.shade600,
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.wifi_off, color: Colors.white, size: 14),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Mất kết nối máy chủ. Tạm thời chuyển sang chế độ đếm thủ công.',
+                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Items List
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Danh Sách SKU Đơn Nhập Khẩu',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      ...items.map((item) {
+                        final status = item['status']?.toString() ?? 'PENDING';
+                        final isChecked = status == 'CHECKED';
+                        final isSkipped = status == 'SKIPPED';
+                        final isSelected = _selectedItem != null && _selectedItem!['id'] == item['id'];
+
+                        Color cardBorderColor = Colors.grey.shade200;
+                        Icon trailingIcon = const Icon(Icons.radio_button_off, color: Colors.grey);
+                        Widget subtitleWidget = Text('Yêu cầu nhận: ${item['expectedQty']} ${item['unit']}');
+
+                        if (isChecked) {
+                          final expectedQty = item['expectedQty'] as int;
+                          final actualQty = item['actualQty'] as int? ?? expectedQty;
+                          final bool isMismatched = expectedQty != actualQty;
+                          cardBorderColor = Colors.green.shade200;
+                          trailingIcon = isMismatched 
+                              ? const Icon(Icons.warning, color: Colors.orange) 
+                              : const Icon(Icons.check_circle, color: Colors.green);
+                          subtitleWidget = Text(
+                            'Đã Kiểm: Thực nhận $actualQty / Dự kiến $expectedQty ${item['unit']}',
+                            style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold),
+                          );
+                        } else if (isSkipped) {
+                          cardBorderColor = Colors.orange.shade200;
+                          trailingIcon = const Icon(Icons.redo_rounded, color: Colors.orange);
+                          subtitleWidget = Text(
+                            'Đã bỏ qua ⏭ (Dự kiến: ${item['expectedQty']} ${item['unit']})',
+                            style: TextStyle(color: Colors.orange.shade700, fontWeight: FontWeight.bold),
+                          );
+                        }
+
+                        return Card(
+                          color: isSelected ? Colors.cyan.shade50.withValues(alpha: 0.5) : Colors.white,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: cardBorderColor, width: 1.0),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            title: Text(
+                              item['name'],
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            subtitle: subtitleWidget,
+                            trailing: trailingIcon,
+                            onTap: isCompleted
+                                ? null
+                                : () {
+                                    final idx = items.indexOf(item);
+                                    setState(() {
+                                      _selectedItem = item;
+                                      _currentInspectionIndex = idx;
+                                      _selectedImagePath = null;
+                                      _actualQtyController.clear();
+                                      _aiErrorCountForCurrentItem = 0;
+                                      if (isChecked) {
+                                        _actualQtyController.text = item['actualQty'].toString();
+                                      }
+                                    });
+                                  },
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 16),
+
+                      // Submit button
+                      if (!isCompleted)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                          child: ElevatedButton.icon(
+                            onPressed: (pendingCount == 0 && skippedCount == 0) ? _submitInspectionReport : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00838F),
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: Colors.grey.shade300,
+                              disabledForegroundColor: Colors.grey.shade500,
+                              padding: const EdgeInsets.all(16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              elevation: (pendingCount == 0 && skippedCount == 0) ? 4 : 0,
+                            ),
+                            icon: const Icon(Icons.send_rounded),
+                            label: const Text(
+                              'GỬI BÁO CÁO KIỂM NHẬN',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1.1),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    } else {
+      // 2. Render Carousel Inspection View
+      final item = _selectedItem!;
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          _goToWorksheet();
+        },
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                // Carousel Header
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: Colors.white,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Color(0xFF00838F)),
+                        onPressed: _goToWorksheet,
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${item['name']} (${_currentInspectionIndex + 1} / ${items.length})',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        item['status'] == 'CHECKED' ? '✔ ĐÃ KIỂM' : (item['status'] == 'SKIPPED' ? '⏭ ĐÃ BỎ QUA' : '○ CHƯA KIỂM'),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: item['status'] == 'CHECKED' ? Colors.green : (item['status'] == 'SKIPPED' ? Colors.orange : Colors.grey),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+
+                // Carousel Navigation Bar
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  color: Colors.grey.shade50,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton.icon(
+                        onPressed: _currentInspectionIndex > 0 ? _goToPrev : null,
+                        icon: const Icon(Icons.chevron_left, size: 16),
+                        label: const Text('Trước đó', style: TextStyle(fontSize: 11)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF00838F),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _skipCurrentItem,
+                        icon: const Icon(Icons.redo_rounded, size: 14),
+                        label: const Text('Bỏ qua', style: TextStyle(fontSize: 11)),
+                        style: TextButton.styleFrom(foregroundColor: Colors.orange.shade700),
+                      ),
+                      TextButton.icon(
+                        onPressed: _goToWorksheet,
+                        icon: const Icon(Icons.list_alt_rounded, size: 14),
+                        label: const Text('Danh sách', style: TextStyle(fontSize: 11)),
+                        style: TextButton.styleFrom(foregroundColor: Colors.blueGrey),
+                      ),
+                      TextButton.icon(
+                        onPressed: _currentInspectionIndex < items.length - 1 ? _goToNext : null,
+                        icon: const Icon(Icons.chevron_right, size: 16),
+                        label: const Text('Tiếp theo', style: TextStyle(fontSize: 11)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF00838F),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+
+                // Offline Warning Bar
+                if (!_hasRealServerConnection)
+                  Container(
+                    color: Colors.red.shade600,
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.wifi_off, color: Colors.white, size: 14),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Mất kết nối máy chủ. Tạm thời chuyển sang chế độ đếm thủ công.',
+                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Card content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
+                    child: _buildItemInspectionWorksheetCard(),
+                  ),
+                ),
+              ],
+            ),
+            if (_isCheckAnimationActive)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black38,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                      ),
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green, size: 64),
+                          SizedBox(height: 12),
+                          Text(
+                            'Đã xác nhận ✔',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.green),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Widget _buildItemInspectionWorksheetCard() {
+    final item = _selectedItem!;
+    final bool hasImage = _selectedImagePath != null || item['image'] != null;
+    final bool hasAIResult = item['aiCount'] != null;
+    final int expectedQty = item['expectedQty'] as int;
+    final int? aiCount = item['aiCount'] as int?;
+
+    // Determine Discrepancy details
+    double pctDiff = 0.0;
+    String discrepancyStatus = 'MATCH';
+    if (aiCount != null) {
+      final int diff = aiCount - expectedQty;
+      pctDiff = (diff.abs() / expectedQty);
+      if (diff == 0) {
+        discrepancyStatus = 'MATCH';
+      } else if (pctDiff <= 0.02) {
+        discrepancyStatus = 'WARNING';
+      } else {
+        discrepancyStatus = 'MISMATCH';
+      }
+    }
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.camera_alt, color: Color(0xFF00838F)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Kiểm Nhận: ${item['name']}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+
+            // Image Preview
+            Container(
+              height: 180,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: _selectedImagePath != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.file(
+                        File(_selectedImagePath!),
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : (item['image'] != null && item['image'].toString().isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            item['image'].toString().startsWith('http')
+                                ? item['image']
+                                : 'http://10.0.2.2:8000${item['image']}',
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Center(child: Icon(Icons.broken_image, size: 48)),
+                          ),
+                        )
+                      : const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.photo_library_outlined, size: 48, color: Colors.grey),
+                              SizedBox(height: 8),
+                              Text('Chưa chụp ảnh minh chứng', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            ],
+                          ),
+                        )),
+            ),
+            const SizedBox(height: 12),
+
+            // Capture buttons
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pickImage(ImageSource.camera),
+                    icon: const Icon(Icons.add_a_photo_outlined, size: 16),
+                    label: const Text('Máy Ảnh', style: TextStyle(fontSize: 11)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF00838F),
+                      side: const BorderSide(color: Color(0xFF00838F)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pickImage(ImageSource.gallery),
+                    icon: const Icon(Icons.image_search_outlined, size: 16),
+                    label: const Text('Thư Viện', style: TextStyle(fontSize: 11)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF00838F),
+                      side: const BorderSide(color: Color(0xFF00838F)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            // Sim capture helper
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: OutlinedButton.icon(
+                onPressed: _mockCaptureSamplePhoto,
+                icon: const Icon(Icons.science, size: 16),
+                label: const Text('Tải ảnh test mẫu (Giả Lập)', style: TextStyle(fontSize: 11)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.purple,
+                  side: const BorderSide(color: Colors.purple),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // AI Count action button
+            if (hasImage && !hasAIResult && !_isAiAnalyzing)
+              ElevatedButton.icon(
+                onPressed: _runAIInspection,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00838F),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.all(12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.rocket_launch, size: 18),
+                label: const Text('BẮT ĐẦU PHÂN TÍCH AI (AI COUNT)', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+
+            if (_isAiAnalyzing)
+              Column(
+                children: [
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: CircularProgressIndicator(color: Color(0xFF00838F)),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _aiErrorCountForCurrentItem == 0 ? 'Uploading...' : 'Analyzing...',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+
+            // AI error Recovery UI
+            if (!hasAIResult && !_isAiAnalyzing && _aiErrorCountForCurrentItem > 0)
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Không thể nhận diện hình ảnh qua AI! (Số lần thử: $_aiErrorCountForCurrentItem)',
+                      style: TextStyle(color: Colors.red.shade900, fontWeight: FontWeight.bold, fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _runAIInspection,
+                            icon: const Icon(Icons.refresh, size: 14),
+                            label: const Text('Thử lại AI', style: TextStyle(fontSize: 11)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red.shade600,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ),
+                        if (_aiErrorCountForCurrentItem >= 2) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _manualCountBypass,
+                              icon: const Icon(Icons.edit, size: 14),
+                              label: const Text('Nhập thủ công', style: TextStyle(fontSize: 11)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange.shade700,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+            // AI results & verify fields
+            if (hasAIResult && !_isAiAnalyzing) ...[
+              const Divider(height: 24),
+              // Match Status Bar
+              _buildDiscrepancyBar(discrepancyStatus, aiCount!, expectedQty),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    item['aiCount'] = null;
+                    item['recordId'] = null;
+                    item['image'] = null;
+                    _selectedImagePath = null;
+                    _actualQtyController.clear();
+                  });
+                },
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Quét lại ảnh khác (Làm mới)', style: TextStyle(fontSize: 11)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  side: BorderSide(color: Colors.red.shade300),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Manual verification counts
+              const Text(
+                'Thủ kho xác nhận số lượng thực tế:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B)),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _actualQtyController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        hintText: 'Nhập số đếm thực tế...',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _isSavingCount ? null : _confirmActualCount,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade600,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade300,
+                      disabledForegroundColor: Colors.grey.shade500,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text(
+                      _isSavingCount ? 'ĐANG LƯU...' : 'XÁC NHẬN',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  )
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscrepancyBar(String status, int aiCount, int expectedQty) {
+    MaterialColor color = Colors.green;
+    String message = 'Khớp hoàn toàn (0)';
+    IconData icon = Icons.check_circle;
+
+    final diff = aiCount - expectedQty;
+    if (status == 'MATCH') {
+      color = Colors.green;
+      message = 'SỐ LƯỢNG KHỚP HOÀN TOÀN: AI đếm $aiCount / Hóa đơn $expectedQty';
+      icon = Icons.check_circle;
+    } else if (status == 'WARNING') {
+      color = Colors.orange;
+      message = 'CẢNH BÁO CHÊNH LỆCH NHẸ (Thừa/thiếu ${diff.abs()} hộp, sai lệch <= 2%). AI đếm: $aiCount';
+      icon = Icons.warning_amber_rounded;
+    } else {
+      color = Colors.red;
+      message = 'SAI LỆCH LỚN (Thừa/thiếu ${diff.abs()} hộp, vượt quá 2% sai số). AI đếm: $aiCount';
+      icon = Icons.error_outline;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: color.shade900, fontWeight: FontWeight.bold, fontSize: 12, height: 1.3),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  // Image Picker picker implementation
+  final ImagePicker _picker = ImagePicker();
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImagePath = pickedFile.path;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error picking image: $e");
+    }
+  }
+
+  // Mock a mock sample photo for testing in emulators where file picker/camera might fail
+  Future<void> _mockCaptureSamplePhoto() async {
+    // Generate a simple mock text file or just pretend we have a picture to invoke testing
+    // To be compatible with http MultipartFile, we write a small mock png/jpg file in the app data directory
+    try {
+      final tempDir = Directory.systemTemp;
+      final mockFile = File('${tempDir.path}/mock_medicine_cluster.jpg');
+      
+      // Write some mock pixel bytes representing a JPEG
+      await mockFile.writeAsBytes(List.generate(100, (index) => index));
+      setState(() {
+        _selectedImagePath = mockFile.path;
+      });
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã tải ảnh giả lập thành công! Hãy nhấn Bắt đầu phân tích AI để test.'),
+          backgroundColor: Colors.purple,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      debugPrint("Mock photo capture failed: $e");
+    }
+  }
+
+  // AI run_workflow query
+  Future<void> _runAIInspection() async {
+    if (_selectedReceipt == null || _selectedItem == null || _selectedImagePath == null) return;
+    setState(() {
+      _isAiAnalyzing = true;
+    });
+    try {
+      final result = await ApiService.inspectReceiptItemAI(
+        receiptId: _selectedReceipt!['id'],
+        receiptItemId: _selectedItem!['id'],
+        filePath: _selectedImagePath!,
+      );
+      
+      setState(() {
+        _isAiAnalyzing = false;
+        _aiErrorCountForCurrentItem = 0;
+        _selectedItem!['aiCount'] = result['aiCount'];
+        _selectedItem!['recordId'] = result['inspectionRecordId'];
+        _selectedItem!['image'] = result['evidenceImage'];
+        _actualQtyController.text = result['aiCount'].toString();
+      });
+    } catch (e) {
+      setState(() {
+        _isAiAnalyzing = false;
+        _aiErrorCountForCurrentItem++;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi phân tích AI: $e. Thử lại hoặc chọn đếm thủ công.', style: const TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmActualCount() async {
+    if (_selectedItem == null || _selectedItem!['recordId'] == null) return;
+    final int? actualQty = int.tryParse(_actualQtyController.text);
+    if (actualQty == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập số lượng thực tế hợp lệ!'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    
+    setState(() {
+      _isSavingCount = true; 
+    });
+    
+    final recordId = _selectedItem!['recordId']?.toString() ?? '';
+    bool success = true;
+    
+    // Check if mock
+    if (!recordId.startsWith('MOCK-REC-')) {
+      success = await ApiService.verifyReceiptItemCount(
+        inspectionRecordId: recordId,
+        actualQty: actualQty,
+        userId: 'TK-092', 
+      );
+    }
+    
+    if (success) {
+      HapticFeedback.lightImpact();
+      
+      setState(() {
+        _isSavingCount = false;
+        _selectedItem!['actualQty'] = actualQty;
+        _selectedItem!['status'] = 'CHECKED';
+        _isCheckAnimationActive = true;
+      });
+      
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      if (mounted) {
+        setState(() {
+          _isCheckAnimationActive = false;
+          _selectedImagePath = null;
+          _actualQtyController.clear();
+          
+          // Auto advance slide transition
+          final items = _selectedReceipt!['items'] as List;
+          int nextIdx = -1;
+          for (int i = _currentInspectionIndex + 1; i < items.length; i++) {
+            if (items[i]['status'] == 'PENDING' || items[i]['status'] == 'SKIPPED') {
+              nextIdx = i;
+              break;
+            }
+          }
+          if (nextIdx == -1) {
+            for (int i = 0; i < _currentInspectionIndex; i++) {
+              if (items[i]['status'] == 'PENDING' || items[i]['status'] == 'SKIPPED') {
+                nextIdx = i;
+                break;
+              }
+            }
+          }
+          
+          if (nextIdx != -1) {
+            _currentInspectionIndex = nextIdx;
+            _selectedItem = items[nextIdx];
+            _aiErrorCountForCurrentItem = 0;
+            final isChecked = _selectedItem!['status'] == 'CHECKED';
+            if (isChecked) {
+              _actualQtyController.text = _selectedItem!['actualQty'].toString();
+            }
+          } else {
+            _selectedItem = null;
+          }
+        });
+      }
+    } else {
+      setState(() {
+        _isSavingCount = false;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Xác nhận số lượng thất bại! Vui lòng thử lại.'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // submit goods receipt inspection report to manager
+  Future<void> _submitInspectionReport() async {
+    if (_selectedReceipt == null) return;
+    
+    final pendingItems = _selectedReceipt!['items'].where((i) => i['status'] == 'PENDING').toList();
+    final skippedItems = _selectedReceipt!['items'].where((i) => i['status'] == 'SKIPPED').toList();
+    
+    if (pendingItems.isNotEmpty || skippedItems.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể gửi báo cáo! Vui lòng hoàn tất kiểm đếm hoặc quyết định số lượng cho tất cả sản phẩm (không để trạng thái Bỏ qua) trước khi gửi.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Gửi báo cáo kiểm nhận'),
+        content: const Text('Báo cáo kiểm nhận sẽ được gửi lên Quản lý. Bạn không thể chỉnh sửa trừ khi Quản lý yêu cầu kiểm lại (Re-inspect).'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy bỏ'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xác nhận gửi'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() {
+      _isLoading = true; 
+    });
+
+    final success = await ApiService.submitInspection(_selectedReceipt!['id']);
+    
+    if (success) {
+      setState(() {
+        _isLoading = false;
+      });
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã gửi báo cáo kiểm nhận thành công cho phiếu ${_selectedReceipt!['id']}! Vui lòng chờ quản lý phê duyệt nhập tồn.'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      
+      setState(() {
+        _selectedReceipt = null;
+        _selectedItem = null;
+        _selectedImagePath = null;
+      });
+      _loadGoodsReceipts(); // Refresh list to remove the submitted receipt
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gửi báo cáo kiểm nhận thất bại! Vui lòng thử lại.'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _manualCountBypass() {
+    setState(() {
+      _selectedItem!['aiCount'] = _selectedItem!['expectedQty'];
+      _selectedItem!['recordId'] = 'MOCK-REC-${DateTime.now().millisecondsSinceEpoch}';
+      _selectedItem!['image'] = '';
+      _actualQtyController.text = _selectedItem!['expectedQty'].toString();
+      _aiErrorCountForCurrentItem = 0;
+      _isAiAnalyzing = false;
+    });
+  }
+
+  bool _hasUnsavedChanges(Map<String, dynamic> item) {
+    final hasImage = _selectedImagePath != null || item['image'] != null;
+    final hasAIResult = item['aiCount'] != null;
+    final isChecked = item['status'] == 'CHECKED';
+    return hasImage && hasAIResult && !isChecked;
+  }
+
+  Future<bool> _promptUnsavedChanges() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Thay đổi chưa lưu'),
+        content: const Text('Bạn có thay đổi chưa xác nhận cho dòng hàng này. Bạn có chắc chắn muốn rời đi và hủy bỏ kết quả quét hiện tại?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Tiếp tục kiểm'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Hủy bỏ'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  void _goToPrev() async {
+    if (_hasUnsavedChanges(_selectedItem!)) {
+      final discard = await _promptUnsavedChanges();
+      if (!discard) return;
+    }
+    setState(() {
+      _currentInspectionIndex--;
+      _selectedItem = _selectedReceipt!['items'][_currentInspectionIndex];
+      _selectedImagePath = null;
+      _actualQtyController.clear();
+      _aiErrorCountForCurrentItem = 0;
+      final isChecked = _selectedItem!['status'] == 'CHECKED';
+      if (isChecked) {
+        _actualQtyController.text = _selectedItem!['actualQty'].toString();
+      }
+    });
+  }
+
+  void _goToNext() async {
+    if (_hasUnsavedChanges(_selectedItem!)) {
+      final discard = await _promptUnsavedChanges();
+      if (!discard) return;
+    }
+    setState(() {
+      _currentInspectionIndex++;
+      _selectedItem = _selectedReceipt!['items'][_currentInspectionIndex];
+      _selectedImagePath = null;
+      _actualQtyController.clear();
+      _aiErrorCountForCurrentItem = 0;
+      final isChecked = _selectedItem!['status'] == 'CHECKED';
+      if (isChecked) {
+        _actualQtyController.text = _selectedItem!['actualQty'].toString();
+      }
+    });
+  }
+
+  void _skipCurrentItem() {
+    setState(() {
+      _selectedItem!['status'] = 'SKIPPED';
+      // Auto advance
+      final items = _selectedReceipt!['items'] as List;
+      if (_currentInspectionIndex < items.length - 1) {
+        _currentInspectionIndex++;
+        _selectedItem = items[_currentInspectionIndex];
+        _selectedImagePath = null;
+        _actualQtyController.clear();
+        _aiErrorCountForCurrentItem = 0;
+        final isChecked = _selectedItem!['status'] == 'CHECKED';
+        if (isChecked) {
+          _actualQtyController.text = _selectedItem!['actualQty'].toString();
+        }
+      } else {
+        // Last SKU reached, return to checklist
+        _selectedItem = null;
+        _selectedImagePath = null;
+      }
+    });
+  }
+
+  void _goToWorksheet() async {
+    if (_selectedItem != null && _hasUnsavedChanges(_selectedItem!)) {
+      final discard = await _promptUnsavedChanges();
+      if (!discard) return;
+    }
+    setState(() {
+      _selectedItem = null;
+      _selectedImagePath = null;
+    });
+  }
+
   Widget _buildSimpleStatCard({
     required String title,
     required String value,
     required IconData icon,
     required Color color,
   }) {
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
