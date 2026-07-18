@@ -4,6 +4,7 @@ import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AuditLogAction } from '../decorators/audit-log.decorator';
 import { AppWebsocketGateway } from '../websocket/websocket.gateway';
+import { NotificationService } from '../notification/notification.service';
 
 @Controller('api/goods-receipts')
 @UseGuards(JwtAuthGuard)
@@ -11,6 +12,7 @@ export class GoodsReceiptController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
     private readonly websocketGateway: AppWebsocketGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async onModuleInit() {
@@ -56,6 +58,9 @@ export class GoodsReceiptController implements OnModuleInit {
       this.websocketGateway.server.to('admin').emit('grn_completed_notification', notificationPayload);
       this.websocketGateway.server.to('warehouse').emit('grn_completed_notification', notificationPayload);
       
+      // Persist to DB - target rooms: admin + warehouse + branch (if applicable)
+      const targetRooms = ['admin', 'warehouse'];
+      
       // Also notify the branch that requested (if linked to PR)
       if (grnData.linkedPrId || data.branchId) {
         const branchId = data.branchId || grnData.branchId;
@@ -65,8 +70,20 @@ export class GoodsReceiptController implements OnModuleInit {
             message: `Hàng đã nhập kho: ${grnData.items?.length || 0} loại thuốc`,
           };
           this.websocketGateway.server.to(`branch-${branchId}`).emit('grn_completed_notification', branchNotification);
+          targetRooms.push(`branch-${branchId}`);
         }
       }
+      
+      this.notificationService.create({
+        type: 'GRN_COMPLETED',
+        targetRooms,
+        message: notificationPayload.message,
+        grnId: notificationPayload.grnId,
+        poId: notificationPayload.poId,
+        itemsCount: notificationPayload.itemsCount,
+        totalAmount: notificationPayload.totalAmount,
+        receivedBy: notificationPayload.receivedBy,
+      }).catch(err => console.error('Failed to persist GRN_COMPLETED notification:', err));
     }
     
     return result;

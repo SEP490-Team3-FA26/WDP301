@@ -4,6 +4,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ClientsModule, Transport, ClientKafka } from '@nestjs/microservices';
+import { MongooseModule } from '@nestjs/mongoose';
 
 import { SupplierController } from './controllers/supplier.controller';
 import { PurchaseRequisitionController } from './controllers/purchase-requisition.controller';
@@ -33,6 +34,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { S3StorageService } from './storage/s3-storage.service';
 import { ReportService } from './services/report.service';
 import { WebsocketModule } from './websocket/websocket.module';
+import { NotificationModule } from './notification/notification.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
 import { RedactionService } from './services/redaction.service';
@@ -46,6 +48,15 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
   imports: [
     // Đọc biến môi trường toàn cục
     ConfigModule.forRoot({ isGlobal: true }),
+
+    // MongoDB connection for notifications persistence
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => ({
+        uri: config.get<string>('MONGODB_URI'),
+      }),
+      inject: [ConfigService],
+    }),
 
     // Redis Cache (Cache-Aside Strategy)
     CacheModule.register({
@@ -147,6 +158,7 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
       },
     ]),
     WebsocketModule,
+    NotificationModule,
   ],
   controllers: [
     SupplierController,
