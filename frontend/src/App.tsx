@@ -183,6 +183,7 @@ export default function App() {
           <Route path="/pharmacist" element={<PharmacistLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="sales" element={<Sales />} />
+            <Route path="reports" element={<Reports />} />
             <Route path="lot-tracking" element={<LotTracking />} />
             <Route path="profile" element={<Profile />} />
           </Route>

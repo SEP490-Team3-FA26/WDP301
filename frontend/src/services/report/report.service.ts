@@ -20,5 +20,35 @@ export const reportService = {
       console.error("Lỗi khi lấy lịch sử báo cáo:", error);
       return [];
     }
+  },
+  getDashboardSummary: async (branchId?: string) => {
+    try {
+      const url = branchId && branchId !== 'all' ? `/api/reports/dashboard/summary?branchId=${branchId}` : `/api/reports/dashboard/summary`;
+      const res = await api.get(url);
+      return res.data;
+    } catch (error) {
+      console.error("Lỗi khi lấy dữ liệu summary dashboard:", error);
+      return null;
+    }
+  },
+  getSeasonalAnalysis: async (branchId?: string) => {
+    try {
+      const url = branchId && branchId !== 'all' ? `/api/reports/seasonal-analysis?branchId=${branchId}` : `/api/reports/seasonal-analysis`;
+      const res = await api.get(url);
+      return res.data;
+    } catch (error) {
+      console.error("Lỗi khi lấy phân tích xu hướng mùa/dịch bệnh:", error);
+      return null;
+    }
+  },
+  evictSeasonalAnalysis: async (branchId?: string) => {
+    try {
+      const url = branchId && branchId !== 'all' ? `/api/reports/seasonal-analysis/evict?branchId=${branchId}` : `/api/reports/seasonal-analysis/evict`;
+      const res = await api.post(url);
+      return res.data;
+    } catch (error) {
+      console.error("Lỗi khi xóa cache phân tích xu hướng:", error);
+      return null;
+    }
   }
 };

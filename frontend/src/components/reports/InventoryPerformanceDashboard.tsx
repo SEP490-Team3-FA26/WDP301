@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Package, TrendingUp, TrendingDown, RefreshCw, CalendarDays, Search, Building } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../services/core/api';
 
 export function InventoryPerformanceDashboard() {
   const [loading, setLoading] = useState(false);

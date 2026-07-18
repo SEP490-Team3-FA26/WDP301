@@ -20,6 +20,23 @@ export function BranchRequisition() {
   const [showCreate, setShowCreate] = useState(false);
   const [detailPr, setDetailPr] = useState<any>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [prefillData, setPrefillData] = useState<any[]>([]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const prefillStr = params.get("prefill");
+    if (prefillStr) {
+      try {
+        const decoded = JSON.parse(decodeURIComponent(prefillStr));
+        setPrefillData(decoded);
+        setShowCreate(true);
+        // Clear query parameters to prevent re-opening on reload
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } catch (e) {
+        console.error("Failed to parse prefill parameter", e);
+      }
+    }
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -156,7 +173,14 @@ export function BranchRequisition() {
 
       {/* Create Modal */}
       <AnimatePresence>
-        {showCreate && <CreatePRModal medicines={medicines} onClose={() => setShowCreate(false)} onSuccess={(msg: string) => { setShowCreate(false); setSuccessMsg(msg); fetchData(); }} />}
+        {showCreate && (
+          <CreatePRModal 
+            medicines={medicines} 
+            prefillPrItems={prefillData}
+            onClose={() => { setShowCreate(false); setPrefillData([]); }} 
+            onSuccess={(msg: string) => { setShowCreate(false); setPrefillData([]); setSuccessMsg(msg); fetchData(); }} 
+          />
+        )}
       </AnimatePresence>
 
       {/* Detail Modal */}

@@ -49,7 +49,7 @@ export function SalesAnalyticsDashboard() {
     setLoadingAnalytics(true);
     try {
       const dateStr = `${selectedMonth}-01`;
-      const res = await api.get(`/api/reports/revenue?period=month&date=${dateStr}&branchId=${selectedBranch}`);
+      const res = await api.get(`/api/reports/revenue/analytics?period=month&date=${dateStr}&branchId=${selectedBranch}`);
       if (res.data && res.data.success) {
         setAnalyticsData(res.data.data);
       }

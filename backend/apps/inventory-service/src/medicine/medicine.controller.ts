@@ -80,9 +80,9 @@ export class MedicineController {
   }
 
   @MessagePattern('inventory.medicine.stats')
-  async getInventoryStats() {
+  async getInventoryStats(@Payload() data?: { branchId?: string }) {
     try {
-      return await this.medicineService.getInventoryStats();
+      return await this.medicineService.getInventoryStats(data?.branchId);
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy thống kê tồn kho');
