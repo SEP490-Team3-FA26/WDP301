@@ -24,6 +24,18 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
   String _searchQuery = '';
   Timer? _debounceTimer;
 
+  // Lot Tracking State
+  final TextEditingController _batchNoController = TextEditingController();
+  bool _isTracing = false;
+  Map<String, dynamic>? _traceResult;
+  String? _traceError;
+  
+  // AI Forecast State
+  int _forecastPeriod = 30;
+  bool _isForecasting = false;
+  Map<String, dynamic>? _forecastResult;
+  String? _forecastError;
+
   final List<Map<String, dynamic>> _expiredBatches = [
     {
       'medicineName': 'Panadol Extra',
@@ -54,7 +66,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
@@ -63,12 +75,14 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
     });
 
     _loadMedicines(reset: true);
+    _runForecast(_forecastPeriod);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _scrollController.dispose();
+    _batchNoController.dispose();
     _debounceTimer?.cancel();
     super.dispose();
   }
@@ -324,9 +338,12 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
           unselectedLabelColor: Colors.white60,
           indicatorColor: Colors.white,
           indicatorWeight: 3.5,
+          isScrollable: true,
           tabs: const [
             Tab(text: 'Tồn Kho'),
-            Tab(text: 'Báo Cáo Hết Hạn'),
+            Tab(text: 'Hết Hạn'),
+            Tab(text: 'Truy Xuất Lô'),
+            Tab(text: 'Dự Báo AI'),
           ],
         ),
       ),
@@ -335,6 +352,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         children: [
           _buildInventoryTab(),
           _buildExpirationReportTab(),
+          _buildLotTrackingTab(),
+          _buildAIForecastTab(),
         ],
       ),
     );
@@ -673,4 +692,522 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
       ),
     );
   }
+
+  Future<void> _runTrace(String batchNo) async {
+    if (batchNo.trim().isEmpty) return;
+    setState(() {
+      _isTracing = true;
+      _traceResult = null;
+      _traceError = null;
+    });
+
+    try {
+      final res = await ApiService.traceLot(batchNo.trim());
+      setState(() {
+        _traceResult = res;
+      });
+    } catch (e) {
+      setState(() {
+        _traceError = 'Không thể truy xuất thông tin lô thuốc này.';
+      });
+    } finally {
+      setState(() {
+        _isTracing = false;
+      });
+    }
+  }
+
+  Future<void> _runForecast(int periodDays) async {
+    setState(() {
+      _isForecasting = true;
+      _forecastResult = null;
+      _forecastError = null;
+    });
+
+    try {
+      final res = await ApiService.getAIForecast(periodDays);
+      setState(() {
+        _forecastResult = res;
+      });
+    } catch (e) {
+      setState(() {
+        _forecastError = 'Lỗi khi tải dự báo nhu cầu nhập hàng.';
+      });
+    } finally {
+      setState(() {
+        _isForecasting = false;
+      });
+    }
+  }
+
+  Widget _buildLotTrackingTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Truy xuất mã lô thuốc', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _batchNoController,
+                          decoration: InputDecoration(
+                            hintText: 'Nhập mã lô thuốc (VD: INIT-BATCH)...',
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          ),
+                          onSubmitted: (val) => _runTrace(val),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () => _runTrace(_batchNoController.text),
+                        icon: _isTracing 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.search, color: Colors.white),
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFF00838F),
+                          padding: const EdgeInsets.all(12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text('Mẫu:', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                      ...['INIT-BATCH', 'LOT-2026-A', 'LOT-2026-B'].map((lot) => GestureDetector(
+                        onTap: () {
+                          _batchNoController.text = lot;
+                          _runTrace(lot);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.cyan.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.cyan.shade200)),
+                          child: Text(lot, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF006064))),
+                        ),
+                      )),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_isTracing)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 40.0),
+                child: CircularProgressIndicator(color: Color(0xFF00838F)),
+              ),
+            )
+          else if (_traceError != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40.0),
+                child: Text(_traceError!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              ),
+            )
+          else if (_traceResult != null) ...[
+            _buildTraceInfoCard(),
+            const SizedBox(height: 16),
+            _buildTraceOriginCard(),
+            const SizedBox(height: 16),
+            const Text('Hành Trình Lưu Uyển (Timeline)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B))),
+            const SizedBox(height: 12),
+            _buildTraceTimeline(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTraceInfoCard() {
+    final med = _traceResult!['medicine'] ?? {};
+    final batches = _traceResult!['batches'] as List? ?? [];
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(8)),
+              child: const Text('Thông tin dược phẩm', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.indigo)),
+            ),
+            const SizedBox(height: 12),
+            Text(med['name'] ?? 'Thuốc không tên', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B))),
+            const SizedBox(height: 8),
+            _buildDetailRow('Mã lô hàng', _traceResult!['batchNo'] ?? ''),
+            _buildDetailRow('Phân nhóm', med['category'] ?? 'N/A'),
+            _buildDetailRow('Đơn vị tính', med['unit'] ?? 'Hộp'),
+            _buildDetailRow('Mã SKU', med['sku'] ?? 'N/A'),
+            const Divider(height: 24),
+            const Text('Tồn kho thực tế các chi nhánh', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+            const SizedBox(height: 8),
+            ...batches.map((b) {
+              final isCentral = b['branchId'] == 'CENTRAL_WH';
+              final isActive = b['status'] == 'ACTIVE';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.between,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(isCentral ? 'Kho Tổng Trung Tâm' : 'Chi nhánh ${b['branchId']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        const SizedBox(height: 2),
+                        Text('Hạn dùng: ${b['expDate'].toString().substring(0, 10)}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                    Text('${b['stock']} ${med['unit'] ?? 'Hộp'}', style: TextStyle(fontWeight: FontWeight.bold, color: isActive ? Colors.indigo : Colors.red)),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTraceOriginCard() {
+    final origin = _traceResult!['origin'];
+    if (origin == null) return const SizedBox.shrink();
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: Colors.emerald.shade50, borderRadius: BorderRadius.circular(8)),
+              child: const Text('Nguồn gốc nhập hàng', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.emerald)),
+            ),
+            const SizedBox(height: 12),
+            _buildDetailRow('Nhà cung cấp', origin['supplierName'] ?? 'Không rõ'),
+            _buildDetailRow('Ngày nhập kho', origin['importDate'].toString().substring(0, 10)),
+            _buildDetailRow('Số lượng nhập', '${origin['importQty']}'),
+            _buildDetailRow('Đơn giá nhập', '${origin['importPrice']} ₫'),
+            _buildDetailRow('Thủ kho nhận', origin['receivedBy'] ?? '—'),
+            const Divider(height: 20),
+            Text('Mã phiếu nhập (GRN): ${origin['grnId'].toString().substring(18).toUpperCase()}', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
+            Text('Mã đơn hàng (PO): ${origin['poId'].toString().substring(18).toUpperCase()}', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTraceTimeline() {
+    final timeline = _traceResult!['timeline'] as List? ?? [];
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: timeline.length,
+      itemBuilder: (context, idx) {
+        final item = timeline[idx];
+        final isPositive = item['quantityChange'] > 0;
+        IconData icon = Icons.remove_circle;
+        Color color = Colors.blue;
+        String title = item['type'];
+        if (item['type'] == 'GRN_IMPORT') {
+          icon = Icons.add_circle;
+          color = Colors.emerald;
+          title = 'Nhập kho hàng loạt';
+        } else if (item['type'] == 'SALE_EXPORT') {
+          icon = Icons.shopping_basket;
+          color = Colors.indigo;
+          title = 'Bán hàng cho khách';
+        } else if (item['type'] == 'TRANSFER') {
+          icon = Icons.swap_horiz;
+          color = Colors.amber;
+          title = 'Chuyển kho nội bộ';
+        } else if (item['type'] == 'DISPOSE') {
+          icon = Icons.delete_forever;
+          color = Colors.red;
+          title = 'Tiêu hủy thuốc';
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              children: [
+                Icon(icon, color: color, size: 24),
+                if (idx < timeline.length - 1)
+                  Container(width: 2, height: 60, color: Colors.grey.shade300),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.between,
+                      children: [
+                        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text(
+                          isPositive ? '+${item['quantityChange']}' : '${item['quantityChange']}',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: isPositive ? Colors.green : Colors.red),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(item['notes'] ?? '', style: TextStyle(color: Colors.grey.shade650, fontSize: 11)),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.between,
+                      children: [
+                        Text('Tồn: ${item['stockBefore']} -> ${item['stockAfter']}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text('Bởi: ${item['performedBy']}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAIForecastTab() {
+    return RefreshIndicator(
+      onRefresh: () => _runForecast(_forecastPeriod),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Phân tích nhu cầu kỳ tới:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                DropdownButton<int>(
+                  value: _forecastPeriod,
+                  items: const [
+                    DropdownMenuItem(value: 7, child: Text('7 ngày')),
+                    DropdownMenuItem(value: 30, child: Text('30 ngày')),
+                    DropdownMenuItem(value: 90, child: Text('90 ngày')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _forecastPeriod = val;
+                      });
+                      _runForecast(val);
+                    }
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_isForecasting)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 60.0),
+                  child: Column(
+                    children: [
+                      CircularProgressIndicator(color: Color(0xFF00838F)),
+                      SizedBox(height: 12),
+                      Text('AI đang chạy mô hình dự báo...', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              )
+            else if (_forecastError != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40.0),
+                  child: Text(_forecastError!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                ),
+              )
+            else if (_forecastResult != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF311B92), Color(0xFF00838F)]),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: Colors.deepPurple.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.auto_awesome, color: Colors.yellow, size: 18),
+                        SizedBox(width: 8),
+                        Text('TÓM TẮT DỰ BÁO AI (INSIGHTS)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.0)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _forecastResult!['summary'] ?? '',
+                      style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text('Đề xuất kế hoạch nhập kho', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B))),
+              const SizedBox(height: 12),
+              _buildForecastRecommendations(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForecastRecommendations() {
+    final recs = _forecastResult!['recommendations'] as List? ?? [];
+    if (recs.isEmpty) {
+      return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text('Không có đề xuất bổ sung nào.')));
+    }
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: recs.length,
+      itemBuilder: (context, idx) {
+        final r = recs[idx];
+        final urgency = r['urgency'] ?? 'LOW';
+        Color color = Colors.blue;
+        if (urgency == 'HIGH') {
+          color = Colors.red;
+        } else if (urgency == 'MEDIUM') {
+          color = Colors.orange;
+        }
+        
+        return Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.between,
+                  children: [
+                    Expanded(
+                      child: Text(r['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B))),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Text(
+                        urgency == 'HIGH' ? 'Khẩn cấp' : urgency == 'MEDIUM' ? 'Cần nhập' : 'Thường',
+                        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(r['category'] ?? '', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                const Divider(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.between,
+                  children: [
+                    _buildMiniStat('Tồn kho', '${r['currentStock']}'),
+                    _buildMiniStat('Bán/ngày', '${r['averageDailySales']}'),
+                    _buildMiniStat('Đang về', '${r['expectedIncoming']}'),
+                    _buildMiniStat('Khuyến nghị', '${r['suggestedOrderQty']}', highlight: r['suggestedOrderQty'] > 0),
+                  ],
+                ),
+                if (r['reason'] != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(10)),
+                    child: Text(
+                      r['reason'],
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700, height: 1.4),
+                    ),
+                  ),
+                ],
+                if (r['suggestedOrderQty'] > 0) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Đã gửi yêu cầu PR cho ${r['name']} (${r['suggestedOrderQty']} ${r['unit']}) lên Admin!', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              backgroundColor: const Color(0xFF00838F),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00838F),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        ),
+                        icon: const Icon(Icons.add_shopping_cart, size: 14),
+                        label: const Text('Lập PR nhanh', style: TextStyle(fontSize: 11)),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMiniStat(String label, String value, {bool highlight = false}) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey)),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: highlight ? const Color(0xFF00838F) : const Color(0xFF1E293B),
+          ),
+        ),
+      ],
+    );
+  }
+}
 }

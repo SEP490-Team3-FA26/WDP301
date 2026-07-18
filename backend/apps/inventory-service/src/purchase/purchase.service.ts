@@ -601,6 +601,7 @@ export class PurchaseService {
     if (query.type) filter.type = query.type;
     if (query.medicineId) filter.medicineId = query.medicineId;
     if (query.referenceType) filter.referenceType = query.referenceType;
+    if (query.batchNo) filter.batchNo = query.batchNo;
 
     const limit = query.limit ? Number(query.limit) : 50;
     const page = query.page ? Number(query.page) : 1;
@@ -612,6 +613,95 @@ export class PurchaseService {
     ]);
 
     return { data, total, page, limit };
+  }
+
+  async traceLot(batchNo: string) {
+    this.logger.log(`Tracing lot: ${batchNo}`);
+    
+    // 1. Tìm các lô hàng thực tế ở các chi nhánh
+    const batches = await this.batchModel.find({ batchNo }).exec();
+    
+    // Lấy tất cả giao dịch liên quan đến lô này
+    const txns = await this.txnModel.find({ batchNo }).sort({ createdAt: 1 }).exec();
+    
+    if (batches.length === 0 && txns.length === 0) {
+      throw new RpcException({ message: `Không tìm thấy thông tin cho lô thuốc: ${batchNo}`, statusCode: 404 });
+    }
+
+    // Lấy medicineId từ lô hoặc từ txn
+    const medicineId = batches.length > 0 ? batches[0].medicineId : txns[0]?.medicineId;
+    const medicine = medicineId ? await this.medicineModel.findById(medicineId).exec() : null;
+
+    // 2. Tìm thông tin nguồn gốc từ giao dịch GRN_IMPORT
+    const importTxn = txns.find(t => t.type === 'GRN_IMPORT');
+    let origin = null;
+
+    if (importTxn && importTxn.referenceId) {
+      try {
+        const grn = await this.grnModel.findById(importTxn.referenceId).exec();
+        if (grn) {
+          const po = await this.poModel.findById(grn.poId).exec();
+          let supplierName = 'Nhà cung cấp không xác định';
+          if (po && po.supplierId) {
+            try {
+              const supplier = await firstValueFrom(
+                this.supplierClient.send('supplier.get_by_id', { id: po.supplierId }),
+              );
+              if (supplier) {
+                supplierName = supplier.name || supplier.companyName || supplierName;
+              }
+            } catch (err) {
+              this.logger.error(`Error fetching supplier for trace: ${err.message}`);
+            }
+          }
+          
+          const grnItem = grn.items.find(item => item.medicineId === medicineId && item.batchNo === batchNo);
+
+          origin = {
+            grnId: grn._id.toString(),
+            poId: grn.poId,
+            importDate: grn.createdAt,
+            supplierId: po ? po.supplierId : null,
+            supplierName,
+            importQty: grnItem ? grnItem.actualQty : importTxn.quantityChange,
+            importPrice: grnItem ? grnItem.unitPrice : 0,
+            receivedBy: grn.receivedBy || 'Thủ kho',
+          };
+        }
+      } catch (err) {
+        this.logger.error(`Error tracing origin for batch ${batchNo}: ${err.message}`);
+      }
+    }
+
+    return {
+      batchNo,
+      medicine: medicine ? {
+        _id: medicine._id.toString(),
+        name: medicine.name,
+        sku: (medicine as any).sku || 'N/A',
+        unit: medicine.unit || 'Hộp',
+        category: medicine.category || 'Chưa phân loại',
+      } : null,
+      batches: batches.map(b => ({
+        branchId: b.branchId,
+        stock: b.stock,
+        expDate: b.expDate,
+        status: b.status,
+      })),
+      origin,
+      timeline: txns.map(t => ({
+        _id: t._id.toString(),
+        type: t.type,
+        quantityChange: t.quantityChange,
+        stockBefore: t.stockBefore,
+        stockAfter: t.stockAfter,
+        referenceId: t.referenceId,
+        referenceType: t.referenceType,
+        performedBy: t.performedBy,
+        notes: t.notes,
+        createdAt: t.createdAt,
+      })),
+    };
   }
 
   // ===========================================================================================

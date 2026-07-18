@@ -248,3 +248,17 @@ async def check_interactions(req: InteractionRequest):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+class ForecastRequest(BaseModel):
+    dataset: list
+    periodDays: int = 30
+
+@router.post("/api/ai/forecast")
+async def generate_forecast_endpoint(req: ForecastRequest):
+    try:
+        from services.llm_service import generate_demand_forecast
+        result = await generate_demand_forecast(req.dataset, req.periodDays)
+        return result
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

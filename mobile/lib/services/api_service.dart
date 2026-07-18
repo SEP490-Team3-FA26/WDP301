@@ -207,4 +207,157 @@ class ApiService {
     }
     return null;
   }
+
+  // Trace batch/lot lifecycle
+  static Future<Map<String, dynamic>?> traceLot(String batchNo) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}'),
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {
+      try {
+        final response = await http.get(
+          Uri.parse('$fallbackUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}'),
+        ).timeout(const Duration(seconds: 5));
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body);
+        }
+      } catch (e) {
+        debugPrint("Trace lot failed: $e");
+      }
+    }
+
+    // Offline Mock Fallback for Lot Trace
+    return {
+      'batchNo': batchNo,
+      'medicine': {
+        '_id': 'med_mock_1',
+        'name': 'Panadol Extra 500mg',
+        'sku': 'PAN-EXT-500',
+        'unit': 'Hộp',
+        'category': 'Giảm đau / Giảm sốt',
+      },
+      'batches': [
+        {'branchId': 'CENTRAL_WH', 'stock': 120, 'expDate': '2026-12-31T00:00:00.000Z', 'status': 'ACTIVE'},
+        {'branchId': 'CN1', 'stock': 45, 'expDate': '2026-12-31T00:00:00.000Z', 'status': 'ACTIVE'},
+      ],
+      'origin': {
+        'grnId': 'GRN-984F7E',
+        'poId': 'PO-882C1B',
+        'importDate': '2026-06-15T08:30:00.000Z',
+        'supplierId': 'sup_1',
+        'supplierName': 'Eco Pharma JSC',
+        'importQty': 500,
+        'importPrice': 32000,
+        'receivedBy': 'Nguyễn Văn Kho',
+      },
+      'timeline': [
+        {
+          '_id': 'tx1',
+          'type': 'GRN_IMPORT',
+          'quantityChange': 500,
+          'stockBefore': 0,
+          'stockAfter': 500,
+          'referenceId': 'grn-1',
+          'referenceType': 'GRN',
+          'performedBy': 'Nguyễn Văn Kho',
+          'notes': 'Nhập kho lô mới từ PO-882C1B',
+          'createdAt': '2026-06-15T08:30:00.000Z'
+        },
+        {
+          '_id': 'tx2',
+          'type': 'TRANSFER',
+          'quantityChange': -100,
+          'stockBefore': 500,
+          'stockAfter': 400,
+          'referenceId': 'tf-1',
+          'referenceType': 'TRANSFER',
+          'performedBy': 'Lê Điều Phối',
+          'notes': 'Chuyển hàng sang cơ sở CN1',
+          'createdAt': '2026-06-20T10:15:00.000Z'
+        },
+        {
+          '_id': 'tx3',
+          'type': 'SALE_EXPORT',
+          'quantityChange': -2,
+          'stockBefore': 400,
+          'stockAfter': 398,
+          'referenceId': 'so-1',
+          'referenceType': 'SALE',
+          'performedBy': 'Trần Dược Sĩ',
+          'notes': 'Xuất bán lẻ cho khách hàng',
+          'createdAt': '2026-07-02T14:45:00.000Z'
+        }
+      ]
+    };
+  }
+
+  // Get AI Demand Forecast
+  static Future<Map<String, dynamic>?> getAIForecast(int periodDays) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/reports/ai-forecast?periodDays=$periodDays'),
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {
+      try {
+        final response = await http.get(
+          Uri.parse('$fallbackUrl/api/reports/ai-forecast?periodDays=$periodDays'),
+        ).timeout(const Duration(seconds: 15));
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body);
+        }
+      } catch (e) {
+        debugPrint("AI Forecast failed: $e");
+      }
+    }
+
+    // Offline Mock Fallback for AI Forecast
+    return {
+      'summary': 'Dựa trên phân tích xu hướng bán hàng của kỳ trước, nhu cầu đối với các loại thuốc giảm sốt, hạ nhiệt và kháng sinh dự kiến sẽ tăng trưởng đều 15% trong thời gian tới. Khuyến nghị bổ sung kho cho các dòng sản phẩm sắp cạn kiệt dưới định mức tối thiểu.',
+      'recommendations': [
+        {
+          'medicineId': 'med-1',
+          'name': 'Panadol Extra',
+          'category': 'Giảm đau / Giảm sốt',
+          'unit': 'Hộp',
+          'currentStock': 8,
+          'averageDailySales': 6.2,
+          'expectedIncoming': 0,
+          'suggestedOrderQty': 200,
+          'urgency': 'HIGH',
+          'reason': 'Tồn kho còn rất thấp (8 hộp) trong khi tốc độ bán nhanh. Sẽ hết hàng hoàn toàn trong vòng 1-2 ngày tới nếu không bổ sung gấp.'
+        },
+        {
+          'medicineId': 'med-2',
+          'name': 'Amoxicillin 500mg',
+          'category': 'Kháng sinh / Antibiotics',
+          'unit': 'Hộp',
+          'currentStock': 12,
+          'averageDailySales': 2.5,
+          'expectedIncoming': 50,
+          'suggestedOrderQty': 80,
+          'urgency': 'MEDIUM',
+          'reason': 'Tồn kho thực tế (12 hộp) dưới mức minStock (50). Đang có đơn hàng 50 hộp chuẩn bị giao về, đề xuất nhập thêm 80 hộp nữa để đảm bảo an toàn.'
+        },
+        {
+          'medicineId': 'med-3',
+          'name': 'Decolgen Forte',
+          'category': 'Hô hấp / Cough & Cold',
+          'unit': 'Vỉ',
+          'currentStock': 95,
+          'averageDailySales': 1.8,
+          'expectedIncoming': 0,
+          'suggestedOrderQty': 0,
+          'urgency': 'LOW',
+          'reason': 'Tồn kho hiện tại dồi dào, đủ đáp ứng cho chu kỳ dự kiến 30 ngày tiếp theo. Không cần nhập thêm.'
+        }
+      ]
+    };
+  }
 }

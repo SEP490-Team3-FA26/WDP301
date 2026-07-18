@@ -174,6 +174,16 @@ export class PurchaseController {
     }
   }
 
+  @MessagePattern('inventory.transactions.trace')
+  async traceLot(@Payload() data: { batchNo: string }) {
+    try {
+      return await this.purchaseService.traceLot(data.batchNo);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi truy xuất nguồn gốc lô thuốc');
+    }
+  }
+
   @MessagePattern('inventory.reports.import_export')
   async getImportExportReport(@Payload() query: { startDate?: string; endDate?: string }) {
     try {
