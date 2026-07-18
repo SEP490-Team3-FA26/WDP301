@@ -252,7 +252,7 @@ export function SalesAnalyticsDashboard() {
                     return (
                       <div 
                         key={index} 
-                        className="flex flex-col items-center flex-1 group relative cursor-pointer"
+                        className="flex flex-col items-center justify-end h-full flex-1 group relative cursor-pointer"
                       >
                         <div 
                           style={{ height: `${Math.max(heightPercent, 2)}%` }}
