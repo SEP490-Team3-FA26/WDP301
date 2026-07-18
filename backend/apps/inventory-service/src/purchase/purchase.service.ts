@@ -10,6 +10,7 @@ import { StockTransfer } from './schemas/stock-transfer.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
 import { subscribeToKafkaTopics, sendKafkaMessage } from '../../../api-gateway/src/common/kafka.helper';
+import { QuotaService } from '../quota/quota.service';
 
 import { InspectionRecord } from './schemas/inspection-record.schema';
 
@@ -27,6 +28,7 @@ export class PurchaseService {
     @InjectModel(Medicine.name) private readonly medicineModel: Model<Medicine>,
     @InjectModel(MedicineBatch.name) private readonly batchModel: Model<MedicineBatch>,
     @InjectModel(InspectionRecord.name) private readonly inspectionModel: Model<InspectionRecord>,
+    private readonly quotaService: QuotaService,
   ) { }
 
   async onModuleInit() {
@@ -58,23 +60,55 @@ export class PurchaseService {
       throw new RpcException({ message: 'Phiếu yêu cầu mua hàng phải có ít nhất 1 sản phẩm' });
     }
 
-    // Enrichment: lấy tên thuốc + đơn vị để denormalize
+    // Enrichment: lấy tên thuốc + đơn vị để denormalize và tính tổng chi phí ước tính
     const enrichedItems = [];
+    let totalEstimatedCost = 0;
+
     for (const item of data.items) {
       const medicine = await this.medicineModel.findById(item.medicineId).exec();
       if (!medicine) {
         throw new RpcException({ message: `Không tìm thấy thuốc có ID: ${item.medicineId}` });
       }
+      
+      const qty = item.requestedQuantity || item.quantity;
+      totalEstimatedCost += qty * (medicine.price || 0);
+
       enrichedItems.push({
         medicineId: item.medicineId,
         medicineName: medicine.name,
-        requestedQuantity: item.requestedQuantity || item.quantity,
+        requestedQuantity: qty,
         unit: medicine.unit || 'Hộp',
       });
     }
 
-    // Generate PR code: PR-YYYYMMDD-XXXX
+    // Kiểm tra ngân sách (Quota check)
     const today = new Date();
+    const currentCycle = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const branchId = data.branchId || 'BRANCH_HQ';
+    
+    if (branchId !== 'BRANCH_HQ') {
+      const quotas = await this.quotaService.findAll({ branchId, cycle: currentCycle });
+      if (!quotas || quotas.length === 0) {
+        throw new RpcException({ message: `Chi nhánh chưa được phân bổ hạn mức nhập hàng cho chu kỳ ${currentCycle}. Vui lòng liên hệ Quản trị viên.` });
+      }
+
+      const quota = quotas[0];
+      if (quota.status !== 'Active') {
+        throw new RpcException({ message: `Hạn mức nhập hàng của chi nhánh trong chu kỳ ${currentCycle} đang bị tạm khóa.` });
+      }
+
+      const remainingBudget = quota.totalBudget - (quota.usedAmount || 0);
+      if (totalEstimatedCost > remainingBudget) {
+        throw new RpcException({ 
+          message: `Vượt quá hạn mức ngân sách! Tổng giá trị yêu cầu là ${totalEstimatedCost.toLocaleString()}đ, nhưng ngân sách còn lại chỉ là ${remainingBudget.toLocaleString()}đ.` 
+        });
+      }
+
+      // Cập nhật số tiền đã sử dụng
+      await this.quotaService.update((quota as any)._id.toString(), { usedAmount: (quota.usedAmount || 0) + totalEstimatedCost });
+    }
+
+    // Generate PR code: PR-YYYYMMDD-XXXX
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
     const count = await this.prModel.countDocuments({
       createdAt: {
@@ -132,11 +166,38 @@ export class PurchaseService {
   }
 
   /**
-   * Cập nhật trạng thái PR (ví dụ: OUT_OF_STOCK)
+   * Cập nhật trạng thái PR (ví dụ: OUT_OF_STOCK, REJECTED)
    */
   async updatePurchaseRequisitionStatus(id: string, status: string) {
     const pr = await this.prModel.findById(id).exec();
     if (!pr) throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${id}` });
+    
+    // Nếu chuyển sang trạng thái REJECTED hoặc CANCELLED, hoàn lại ngân sách hạn mức
+    if ((status === 'REJECTED' || status === 'CANCELLED') && pr.status !== 'REJECTED' && pr.status !== 'CANCELLED') {
+      if (pr.branchId !== 'BRANCH_HQ') {
+        const prDate = new Date((pr as any).createdAt || new Date());
+        const cycle = `${prDate.getFullYear()}-${String(prDate.getMonth() + 1).padStart(2, '0')}`;
+        const quotas = await this.quotaService.findAll({ branchId: pr.branchId, cycle });
+        
+        if (quotas && quotas.length > 0) {
+          const quota = quotas[0];
+          
+          // Tính lại tổng giá trị PR để hoàn lại
+          let totalEstimatedCost = 0;
+          for (const item of pr.items) {
+            const medicine = await this.medicineModel.findById(item.medicineId).exec();
+            if (medicine) {
+              totalEstimatedCost += item.requestedQuantity * (medicine.price || 0);
+            }
+          }
+          
+          // Hoàn lại ngân sách
+          const newUsedAmount = Math.max(0, (quota.usedAmount || 0) - totalEstimatedCost);
+          await this.quotaService.update((quota as any)._id.toString(), { usedAmount: newUsedAmount });
+        }
+      }
+    }
+
     pr.status = status;
     await pr.save();
     return pr;
@@ -1275,48 +1336,7 @@ export class PurchaseService {
   // BƯỚC 3, 4, 5, 6: NHẬP KHO & KIỂM ĐẾM BẰNG AI
   // ===========================================================================================
 
-  async createGoodsReceiptNote(data: { poId: string; items: any[]; receivedBy: string }) {
-    this.logger.log(`Creating Goods Receipt Note for PO: ${data.poId}`);
-    
-    const po = await this.poModel.findById(data.poId).exec();
-    if (!po) throw new RpcException({ message: `Không tìm thấy Đơn đặt hàng: ${data.poId}` });
-    
-    if (po.status === 'COMPLETED' || po.status === 'RECEIVING') {
-      throw new RpcException({ message: `PO đã ở trạng thái ${po.status}` });
-    }
 
-    let totalAmount = 0;
-    const grnItems = data.items.map(it => {
-      totalAmount += it.expectedQty * it.unitPrice;
-      return {
-        medicineId: it.medicineId,
-        batchNo: it.batchNo,
-        expDate: new Date(it.expDate),
-        expectedQty: it.expectedQty,
-        actualQty: 0,
-        unitPrice: it.unitPrice,
-        status: 'PENDING'
-      };
-    });
-
-    const grn = new this.grnModel({
-      poId: data.poId,
-      items: grnItems,
-      totalAmount,
-      status: 'INSPECTING',
-      receivedBy: data.receivedBy,
-    });
-    await grn.save();
-
-    po.status = 'RECEIVING';
-    await po.save();
-
-    return {
-      success: true,
-      message: 'Tạo phiếu tiếp nhận hàng thành công, đang chờ kiểm đếm',
-      data: grn
-    };
-  }
 
   async createInspectionRecord(grnId: string, inspectedBy: string) {
     const grn = await this.grnModel.findById(grnId).exec();
@@ -1330,18 +1350,18 @@ export class PurchaseService {
     for (const item of grn.items) {
       const med = await this.medicineModel.findById(item.medicineId).exec();
       // Giả lập AI đếm ngẫu nhiên lệch +- 10%
-      const variance = Math.floor(item.expectedQty * 0.1);
-      const aiCount = item.expectedQty + (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * variance);
+      const variance = Math.floor(item.quantity * 0.1);
+      const aiCount = item.quantity + (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * variance);
       
       let label = 'MATCH';
-      if (aiCount === item.expectedQty) label = 'MATCH';
-      else if (Math.abs(aiCount - item.expectedQty) <= 2) label = 'WARNING';
+      if (aiCount === item.quantity) label = 'MATCH';
+      else if (Math.abs(aiCount - item.quantity) <= 2) label = 'WARNING';
       else label = 'MISMATCH';
 
       items.push({
         medicineId: item.medicineId,
         medicineName: med ? med.name : 'Unknown',
-        expectedQty: item.expectedQty,
+        expectedQty: item.quantity,
         aiCountedQty: aiCount,
         actualQty: 0, // Chờ user nhập tay
         label: label,

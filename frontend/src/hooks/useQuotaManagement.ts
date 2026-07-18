@@ -15,6 +15,16 @@ export function useQuotaManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Toast States
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setTimeout(() => setToastMsg(""), 3000);
+  };
+
   // Filter States
   const [filterBranch, setFilterBranch] = useState("");
   const [filterCycle, setFilterCycle] = useState("");
@@ -114,6 +124,13 @@ export function useQuotaManagement() {
     if (!formCycle) return setFormError("Vui lòng nhập chu kỳ (YYYY-MM)!");
     if (!formBudget || Number(formBudget) <= 0) return setFormError("Vui lòng nhập ngân sách hợp lệ (> 0)!");
 
+    if (editingQuota) {
+      const usedAmount = editingQuota.usedAmount || 0;
+      if (Number(formBudget) < usedAmount) {
+        return setFormError(`Tổng hạn mức mới không thể nhỏ hơn số tiền đã sử dụng (${usedAmount.toLocaleString()}đ)!`);
+      }
+    }
+
     const selectedBranch = branches.find(b => b.branchCode === formBranchId);
     const branchName = selectedBranch ? selectedBranch.name : "";
 
@@ -130,10 +147,10 @@ export function useQuotaManagement() {
       setFormSubmitting(true);
       if (editingQuota && editingQuota._id) {
         await quotaService.updateQuota(editingQuota._id, payload);
-        alert("Yêu cầu cập nhật hạn mức đã được gửi thành công!");
+        showToast("Yêu cầu cập nhật hạn mức đã được gửi thành công!", "success");
       } else {
         await quotaService.createQuota(payload);
-        alert("Yêu cầu phân bổ hạn mức đã được gửi thành công!");
+        showToast("Yêu cầu phân bổ hạn mức đã được gửi thành công!", "success");
       }
       setIsModalOpen(false);
       // Đợi Kafka xử lý và tải lại sau 1s
@@ -151,12 +168,12 @@ export function useQuotaManagement() {
     if (!window.confirm("Bạn có chắc chắn muốn xóa hạn mức phân bổ này?")) return;
     try {
       await quotaService.deleteQuota(id);
-      alert("Yêu cầu xóa đã được tiếp nhận!");
+      showToast("Yêu cầu xóa đã được tiếp nhận!", "success");
       setTimeout(() => {
         loadQuotaDataApi();
       }, 1000);
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Lỗi khi xóa hạn mức");
+      showToast(err.response?.data?.message || err.message || "Lỗi khi xóa hạn mức", "error");
     }
   };
 
@@ -196,6 +213,8 @@ export function useQuotaManagement() {
     openEditModal,
     handleSubmit,
     handleDelete,
-    filteredQuotas
+    filteredQuotas,
+    toastMsg,
+    toastType
   };
 }

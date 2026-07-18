@@ -31,7 +31,9 @@ export function QuotaManagement() {
     openEditModal,
     handleSubmit,
     handleDelete,
-    filteredQuotas
+    filteredQuotas,
+    toastMsg,
+    toastType
   } = useQuotaManagement();
 
   return (
@@ -114,6 +116,20 @@ export function QuotaManagement() {
           setIsModalOpen={setIsModalOpen}
           handleSubmit={handleSubmit}
         />
+      )}
+      
+      {/* Custom Toast */}
+      {toastMsg && (
+        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl font-bold flex items-center gap-3 z-50 text-white ${toastType === 'success' ? 'bg-emerald-500' : 'bg-rose-500'} animate-bounce`}>
+          {toastType === 'success' ? (
+            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <AlertTriangle className="w-6 h-6 text-white" />
+          )}
+          {toastMsg}
+        </div>
       )}
     </div>
   );

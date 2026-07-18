@@ -1,12 +1,9 @@
 import { Controller, Post, Patch, Get, Param, Body, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
-<<<<<<< HEAD
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AuditLogAction } from '../decorators/audit-log.decorator';
-=======
 import { AppWebsocketGateway } from '../websocket/websocket.gateway';
->>>>>>> 303f6b58a23888337e5c242e9053f9dae5d2a6d7
 
 @Controller('api/goods-receipts')
 @UseGuards(JwtAuthGuard)
@@ -97,7 +94,6 @@ export class GoodsReceiptController implements OnModuleInit {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.get_by_id', { id });
   }
 
-<<<<<<< HEAD
   @Post(':id/submit-inspection')
   @AuditLogAction({
     actionCode: 'GRN_SUBMIT_INSPECTION',
@@ -145,7 +141,8 @@ export class GoodsReceiptController implements OnModuleInit {
     } catch (e) {
       return { success: false, message: 'Failed to fetch inspection record.' };
     }
-=======
+  }
+
   // Inspection Endpoints
   @Post('inspections')
   async createInspectionRecord(@Body() data: any) {
@@ -170,6 +167,5 @@ export class GoodsReceiptController implements OnModuleInit {
   @Get('inspections/all')
   async listInspectionRecords() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.inspection.list', {});
->>>>>>> 303f6b58a23888337e5c242e9053f9dae5d2a6d7
   }
 }

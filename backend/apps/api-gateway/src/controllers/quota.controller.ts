@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Inject, OnModuleInit, HttpStatus, HttpCode, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Inject, OnModuleInit, HttpStatus, HttpCode, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
@@ -30,7 +30,14 @@ export class QuotaController implements OnModuleInit {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Tạo hạn mức nhập hàng mới' })
   async createQuota(@Body() dto: { branchId: string; branchName?: string; cycle: string; totalBudget: number; usedAmount?: number; status?: string; note?: string }) {
-    this.kafkaClient.emit('quota.event.create', JSON.stringify(dto));
+    if (dto.totalBudget === undefined || dto.totalBudget === null) {
+      throw new BadRequestException('Tổng hạn mức ngân sách không được để trống.');
+    }
+    if (typeof dto.totalBudget !== 'number' || isNaN(dto.totalBudget) || dto.totalBudget <= 0) {
+      throw new BadRequestException('Tổng hạn mức ngân sách phải là số dương lớn hơn 0.');
+    }
+
+    this.kafkaClient.emit('quota.event.create', JSON.stringify(dto)).subscribe();
   
     return {
       status: 'Accepted',
@@ -79,9 +86,25 @@ export class QuotaController implements OnModuleInit {
   @Put(':id')
   @ApiOperation({ summary: 'Cập nhật thông tin hạn mức' })
   async updateQuota(@Param('id') id: string, @Body() dto: any) {
+    if (dto.totalBudget === undefined || dto.totalBudget === null) {
+      throw new BadRequestException('Tổng hạn mức ngân sách không được để trống.');
+    }
+    if (typeof dto.totalBudget !== 'number' || isNaN(dto.totalBudget) || dto.totalBudget <= 0) {
+      throw new BadRequestException('Tổng hạn mức ngân sách phải là số dương lớn hơn 0.');
+    }
+
+    // Kiểm tra không cho phép nhỏ hơn số tiền đã sử dụng (usedAmount)
+    const existingQuota = await sendKafkaMessage(this.kafkaClient, 'quota.get.by.id', id);
+    if (existingQuota) {
+      const usedAmount = existingQuota.usedAmount || 0;
+      if (dto.totalBudget < usedAmount) {
+        throw new BadRequestException(`Tổng hạn mức mới không thể nhỏ hơn số tiền đã sử dụng (${usedAmount.toLocaleString()}đ).`);
+      }
+    }
+
     const payload = { id, data: dto };
   
-    this.kafkaClient.emit('quota.event.update', JSON.stringify(payload));
+    this.kafkaClient.emit('quota.event.update', JSON.stringify(payload)).subscribe();
     await this.cacheManager.del(`quota:${id}`);
   
     return {
@@ -93,7 +116,7 @@ export class QuotaController implements OnModuleInit {
   @Delete(':id')
   @ApiOperation({ summary: 'Xóa hạn mức' })
   async deleteQuota(@Param('id') id: string) {
-    this.kafkaClient.emit('quota.event.delete', id);
+    this.kafkaClient.emit('quota.event.delete', id).subscribe();
     await this.cacheManager.del(`quota:${id}`);
 
     return {

@@ -10,6 +10,7 @@ import { InventoryTransaction, InventoryTransactionSchema } from './schemas/inve
 import { StockTransfer, StockTransferSchema } from './schemas/stock-transfer.schema';
 import { InspectionRecord, InspectionRecordSchema } from './schemas/inspection-record.schema';
 import { MedicineModule } from '../medicine/medicine.module';
+import { QuotaModule } from '../quota/quota.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { MedicineModule } from '../medicine/medicine.module';
       { name: InspectionRecord.name, schema: InspectionRecordSchema },
     ]),
     MedicineModule, // To access Medicine and MedicineBatch schemas
+    QuotaModule, // To enforce quota limits
     ClientsModule.register([
       {
         name: 'SUPPLIER_SERVICE',
