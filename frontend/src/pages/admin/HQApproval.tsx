@@ -260,10 +260,18 @@ export function HQApproval() {
         <div className="overflow-auto flex-1">
           {loading ? (
             <div className="flex flex-col items-center py-16 gap-3"><Loader2 className="animate-spin text-violet-600" size={28} /><p className="text-slate-500 text-sm">Đang tải...</p></div>
-          ) : (tab === "URGENT" ? filteredPrs.length === 0 : filteredPos.length === 0) ? (
+          ) : (tab === "URGENT" ? filteredPrs.length === 0 : tab === "GRN_APPROVAL" ? inspectionList.filter((i: any) => i.status === 'WAITING').length === 0 : filteredPos.length === 0) ? (
             <div className="flex flex-col items-center py-16 gap-3 text-slate-400">
               <ShieldCheck size={36} />
-              <p className="text-sm font-semibold">{tab === "PENDING_APPROVAL" ? "Không có PO nào đang chờ phê duyệt." : tab === "URGENT" ? "Không có yêu cầu hỏa tốc nào." : "Không có dữ liệu."}</p>
+              <p className="text-sm font-semibold">
+                {tab === "PENDING_APPROVAL" 
+                  ? "Không có PO nào đang chờ phê duyệt." 
+                  : tab === "URGENT" 
+                    ? "Không có yêu cầu hỏa tốc nào." 
+                    : tab === "GRN_APPROVAL"
+                      ? "Không có phiên kiểm hàng nào chờ duyệt."
+                      : "Không có dữ liệu."}
+              </p>
             </div>
           ) : tab === "URGENT" ? (
             <table className="w-full text-sm text-left">
@@ -298,7 +306,7 @@ export function HQApproval() {
                 ))}
               </tbody>
             </table>
-          ) : (
+          ) : tab !== "GRN_APPROVAL" ? (
             <table className="w-full text-sm text-left">
               <thead className="text-[11px] text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 border-b border-slate-200">
                 <tr>
@@ -352,7 +360,7 @@ export function HQApproval() {
                 ))}
               </tbody>
             </table>
-          )}
+          ) : null}
         </div>
       </div>
 

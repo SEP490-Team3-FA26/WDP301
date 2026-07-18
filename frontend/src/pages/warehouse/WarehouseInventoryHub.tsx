@@ -65,6 +65,29 @@ export function WarehouseInventoryHub() {
     supplierService.getSuppliers().then(d => setSuppliers(d || [])).catch(() => { });
   }, []);
 
+  useEffect(() => {
+    const openCreatePO = searchParams.get("openCreatePO");
+    const prefillStr = searchParams.get("prefill");
+    if (openCreatePO === "true") {
+      if (prefillStr) {
+        try {
+          const decoded = JSON.parse(decodeURIComponent(prefillStr));
+          setPrefillData(decoded);
+        } catch (e) {
+          console.error("Failed to parse prefill parameter", e);
+        }
+      }
+      setShowCreatePOModal(true);
+      
+      // Clear query parameters
+      setSearchParams(prev => {
+        prev.delete("openCreatePO");
+        prev.delete("prefill");
+        return prev;
+      }, { replace: true });
+    }
+  }, [searchParams]);
+
   const TABS = [
     {
       key: "branch_requests" as HubTab,
