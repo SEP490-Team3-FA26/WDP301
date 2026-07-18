@@ -107,9 +107,9 @@ def main():
                 name = batch_item.get("name") or ""
                 details = batch_item.get("thong_tin_chi_tiet") or {}
                 active_ingredient = details.get("Thành phần") or details.get("active_ingredient") or ""
-                indications = batch_item.get("cong_dung") or batch_item.get("indications") or ""
-                default_dosage = batch_item.get("cach_dung") or batch_item.get("default_dosage") or ""
-                contraindications = batch_item.get("tac_dung_phu") or batch_item.get("luu_y") or batch_item.get("contraindications") or ""
+                indications = details.get("Chỉ định") or batch_item.get("cong_dung") or batch_item.get("indications") or ""
+                default_dosage = details.get("Liều dùng") or details.get("Cách dùng") or batch_item.get("cach_dung") or batch_item.get("default_dosage") or ""
+                contraindications = details.get("Chống chỉ định") or details.get("Tác dụng phụ") or details.get("Lưu ý") or batch_item.get("tac_dung_phu") or batch_item.get("luu_y") or batch_item.get("contraindications") or ""
                 
                 # Truncate descriptions for embedding text (saves full text in payload)
                 ind_short = (indications or "")[:400]
@@ -164,9 +164,9 @@ def main():
             name = batch_item.get("name") or ""
             details = batch_item.get("thong_tin_chi_tiet") or {}
             active_ingredient = details.get("Thành phần") or details.get("active_ingredient") or ""
-            indications = batch_item.get("cong_dung") or batch_item.get("indications") or ""
-            default_dosage = batch_item.get("cach_dung") or batch_item.get("default_dosage") or ""
-            contraindications = batch_item.get("tac_dung_phu") or batch_item.get("luu_y") or batch_item.get("contraindications") or ""
+            indications = details.get("Chỉ định") or batch_item.get("cong_dung") or batch_item.get("indications") or ""
+            default_dosage = details.get("Liều dùng") or details.get("Cách dùng") or batch_item.get("cach_dung") or batch_item.get("default_dosage") or ""
+            contraindications = details.get("Chống chỉ định") or details.get("Tác dụng phụ") or details.get("Lưu ý") or batch_item.get("tac_dung_phu") or batch_item.get("luu_y") or batch_item.get("contraindications") or ""
             
             ind_short = (indications or "")[:400]
             contra_short = (contraindications or "")[:400]

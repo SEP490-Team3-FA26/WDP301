@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Plus, X, CheckCircle2, AlertTriangle, Loader2, ClipboardList,
-  Calendar, Package, Trash2, Send, FileText, ChevronRight, Eye, Search, ChevronDown
+  Calendar, Package, Trash2, Send, FileText, ChevronRight, Eye, Search, ChevronDown, Edit
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { purchaseRequisitionService } from "../../services/purchase/purchaseRequisition.service";
@@ -19,7 +19,24 @@ export function BranchRequisition() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [detailPr, setDetailPr] = useState<any>(null);
+  const [editPrData, setEditPrData] = useState<any>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const handleDeletePr = async (id: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn hủy/xóa yêu cầu mua hàng này? Ngân sách hạn mức dự kiến sẽ được hoàn lại.")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await purchaseRequisitionService.deletePurchaseRequisition(id);
+      setSuccessMsg("Đã hủy và xóa yêu cầu mua hàng thành công!");
+      fetchData();
+    } catch (e: any) {
+      alert(e.response?.data?.message || e.message || "Lỗi khi xóa yêu cầu");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -145,7 +162,23 @@ export function BranchRequisition() {
                     <td className="px-5 py-3.5 text-slate-600 max-w-[200px] truncate">{pr.reason || "—"}</td>
                     <td className="px-5 py-3.5 text-center font-bold">{pr.items?.length || 0}</td>
                     <td className="px-5 py-3.5 text-center">{statusBadge(pr.status)}</td>
-                    <td className="px-5 py-3.5"><Eye size={16} className="text-slate-400 hover:text-blue-600" /></td>
+                    <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex gap-2 justify-end">
+                        {['SUBMITTED', 'URGENT_PENDING', 'DRAFT'].includes(pr.status) && (
+                          <>
+                            <button onClick={() => setEditPrData(pr)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="Chỉnh sửa">
+                              <Edit size={14} />
+                            </button>
+                            <button onClick={() => handleDeletePr(pr._id)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg" title="Hủy/Xóa yêu cầu">
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
+                        <button onClick={() => setDetailPr(pr)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-50 rounded-lg" title="Xem chi tiết">
+                          <Eye size={14} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -159,18 +192,34 @@ export function BranchRequisition() {
         {showCreate && <CreatePRModal medicines={medicines} onClose={() => setShowCreate(false)} onSuccess={(msg: string) => { setShowCreate(false); setSuccessMsg(msg); fetchData(); }} />}
       </AnimatePresence>
 
+      {/* Edit Modal */}
+      <AnimatePresence>
+        {editPrData && (
+          <CreatePRModal
+            medicines={medicines}
+            editPr={editPrData}
+            onClose={() => setEditPrData(null)}
+            onSuccess={(msg: string) => {
+              setEditPrData(null);
+              setSuccessMsg(msg);
+              fetchData();
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Detail Modal */}
       <AnimatePresence>
         {detailPr && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setDetailPr(null)} />
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-auto">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-blue-50">
-                <div><h3 className="font-black text-slate-900">{detailPr.prCode}</h3><p className="text-xs text-blue-700 font-bold mt-0.5">{statusBadge(detailPr.status)}</p></div>
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-blue-50 shrink-0">
+                <div><h3 className="font-black text-slate-900 font-mono">{detailPr.prCode}</h3><p className="text-xs text-blue-700 font-bold mt-0.5">{statusBadge(detailPr.status)}</p></div>
                 <button onClick={() => setDetailPr(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"><X size={18} /></button>
               </div>
-              <div className="p-5 space-y-4">
+              <div className="p-5 space-y-4 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-3 text-sm bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <div><span className="text-slate-500 font-bold text-xs block">Chi nhánh</span><span className="font-semibold text-slate-800">{detailPr.branchName}</span></div>
                   <div><span className="text-slate-500 font-bold text-xs block">Ngày tạo</span><span className="font-semibold text-slate-800">{new Date(detailPr.createdAt).toLocaleString("vi-VN")}</span></div>
@@ -187,6 +236,16 @@ export function BranchRequisition() {
                   ))}
                 </div>
               </div>
+              {['SUBMITTED', 'URGENT_PENDING', 'DRAFT'].includes(detailPr.status) && (
+                <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
+                  <button onClick={() => { handleDeletePr(detailPr._id); setDetailPr(null); }} className="px-4 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold rounded-xl text-sm flex items-center gap-1.5 transition-colors">
+                    <Trash2 size={14} /> Hủy yêu cầu
+                  </button>
+                  <button onClick={() => { setEditPrData(detailPr); setDetailPr(null); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5 transition-colors">
+                    <Edit size={14} /> Chỉnh sửa
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

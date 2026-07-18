@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Header, Depends, status
 from services.stt_service import transcribe_audio
 from services.llm_service import generate_prescription, check_drug_interactions
 from services.rag_service import retrieve_medical_context, get_embedding, qdrant
@@ -9,7 +9,16 @@ import re
 import traceback
 import pymongo
 
-router = APIRouter()
+async def verify_internal_token(x_internal_token: str = Header(None)):
+    secret = os.getenv("JWT_SECRET") or "wdp301-super-secret-key-change-in-production"
+    if not x_internal_token or x_internal_token != secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized internal request"
+        )
+
+router = APIRouter(dependencies=[Depends(verify_internal_token)])
+
 
 def get_mongo_collection():
     uri = os.getenv("MONGODB_URI") or os.getenv("MONGODB_CONNECTION_STRING")

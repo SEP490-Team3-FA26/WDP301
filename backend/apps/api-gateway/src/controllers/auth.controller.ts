@@ -24,6 +24,7 @@ import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 import { VerifyTwoFactorDto, AuthenticateTwoFactorDto } from '../dto/two-factor.dto';
 import { VerifyEmailDto, ResendVerificationDto } from '../dto/verify-email.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -52,6 +53,7 @@ export class AuthController implements OnModuleInit {
       'auth.get.user.by.id',
       'auth.forgot.password',
       'auth.reset.password',
+      'auth.change.password',
       'auth.2fa.generate',
       'auth.2fa.enable',
       'auth.2fa.disable',
@@ -196,6 +198,33 @@ export class AuthController implements OnModuleInit {
     // Lưu vào cache
     await this.cacheManager.set(cacheKey, profile, this.CACHE_TTL);
     return profile;
+  }
+
+  // ============================================================
+  // POST /api/auth/change-password — Đổi mật khẩu
+  // ============================================================
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Đổi mật khẩu tài khoản' })
+  @ApiResponse({ status: 200, description: 'Đổi mật khẩu thành công' })
+  @ApiResponse({ status: 401, description: 'Mật khẩu cũ không chính xác hoặc chưa đăng nhập' })
+  async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+    const { sub: userId, email } = req.user;
+    
+    // Gửi qua Kafka -> Auth Microservice
+    const result: any = await sendKafkaMessage(
+      this.kafkaClient, 
+      'auth.change.password', 
+      JSON.stringify({ userId, oldPassword: dto.oldPassword, newPassword: dto.newPassword })
+    );
+
+    // Xóa session cache của user trong Redis để đảm bảo an toàn sau khi đổi mật khẩu
+    await this.cacheManager.del(`auth:session:${email}`);
+    await this.cacheManager.del(`auth:profile:${userId}`);
+
+    return result;
   }
 
   // ============================================================

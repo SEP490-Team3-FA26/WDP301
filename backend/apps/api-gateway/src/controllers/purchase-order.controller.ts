@@ -3,6 +3,7 @@ import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AuditLogAction } from '../decorators/audit-log.decorator';
+import { AutoRoutePoDto, ApprovePayPoDto, RejectPoDeliveryDto, ReceivePoDto } from '../dto/purchase-order.dto';
 
 @Controller('api/purchase-orders')
 @UseGuards(JwtAuthGuard)
@@ -22,8 +23,6 @@ export class PurchaseOrderController implements OnModuleInit {
     ]);
   }
 
-
-
   @Post('auto-route')
   @AuditLogAction({
     actionCode: 'PO_AUTO_ROUTE',
@@ -32,7 +31,7 @@ export class PurchaseOrderController implements OnModuleInit {
     eventType: 'CREATE',
     entityType: 'PurchaseOrder',
   })
-  async createAutoRoutedPurchaseOrders(@Body() data: any) {
+  async createAutoRoutedPurchaseOrders(@Body() data: AutoRoutePoDto) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.po.auto_route', data);
   }
 
@@ -44,7 +43,7 @@ export class PurchaseOrderController implements OnModuleInit {
     eventType: 'APPROVE',
     entityType: 'PurchaseOrder',
   })
-  async approveAndPayPurchaseOrder(@Body() data: any) {
+  async approveAndPayPurchaseOrder(@Body() data: ApprovePayPoDto) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.po.approve_pay', data);
   }
 
@@ -56,7 +55,7 @@ export class PurchaseOrderController implements OnModuleInit {
     eventType: 'REJECT',
     entityType: 'PurchaseOrder',
   })
-  async rejectPurchaseOrderDelivery(@Body() data: any) {
+  async rejectPurchaseOrderDelivery(@Body() data: RejectPoDeliveryDto) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.po.reject_delivery', data);
   }
 
@@ -71,7 +70,8 @@ export class PurchaseOrderController implements OnModuleInit {
   }
 
   @Post(':id/receive')
-  async receivePurchaseOrder(@Param('id') id: string, @Body() data: any) {
+  async receivePurchaseOrder(@Param('id') id: string, @Body() data: ReceivePoDto) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.po.receive', { id, ...data });
   }
 }
+

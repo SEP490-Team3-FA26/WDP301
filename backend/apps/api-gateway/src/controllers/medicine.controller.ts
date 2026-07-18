@@ -10,6 +10,7 @@ import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @ApiTags('💊 Medicines')
 @Controller('api/medicines')
+@UseGuards(JwtAuthGuard)
 export class MedicineController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -77,7 +78,6 @@ export class MedicineController implements OnModuleInit {
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Cập nhật trạng thái / tồn kho của thuốc' })
-  @UseGuards(JwtAuthGuard)
   @AuditLogAction({
     actionCode: 'MEDICINE_STATUS_UPDATE',
     actionName: 'Cập nhật trạng thái thuốc',
@@ -95,7 +95,6 @@ export class MedicineController implements OnModuleInit {
 
   @Patch(':id/price-tiers')
   @ApiOperation({ summary: 'Cập nhật bảng giá sỉ bậc thang của thuốc' })
-  @UseGuards(JwtAuthGuard)
   @AuditLogAction({
     actionCode: 'MEDICINE_PRICE_TIERS_UPDATE',
     actionName: 'Cập nhật giá sỉ thuốc',
@@ -111,7 +110,7 @@ export class MedicineController implements OnModuleInit {
   }
 
   @Patch(':id/price')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cập nhật giá bán chung của thuốc' })
@@ -186,7 +185,7 @@ export class MedicineController implements OnModuleInit {
   @ApiQuery({ name: 'country', required: false, type: String })
   @ApiQuery({ name: 'brand', required: false, type: String })
   @ApiQuery({ name: 'indication', required: false, type: String })
-  @ApiQuery({ name: 'branchOrigin', required: false, type: String })
+  @ApiQuery({ name: 'brandOrigin', required: false, type: String })
   @ApiQuery({ name: 'branchStockOnly', required: false, type: Boolean })
   async getBranchMedicines(
     @Param('branchId') branchId: string,
@@ -232,13 +231,20 @@ export class MedicineController implements OnModuleInit {
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
       const response = await fetch('http://ai-service:8000/api/ai/interactions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
         },
         body: JSON.stringify({ medicines }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new HttpException('Failed to check interactions from AI Service', HttpStatus.BAD_GATEWAY);
@@ -250,3 +256,4 @@ export class MedicineController implements OnModuleInit {
     }
   }
 }
+

@@ -1,21 +1,38 @@
-import { Controller, Post, Get, Param, Body, Query, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Query, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('api/stock-transfers')
+@UseGuards(JwtAuthGuard)
 export class StockTransferController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
   ) {}
 
+
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
       'inventory.transfer.create',
       'inventory.transfer.create_direct',
+      'inventory.transfer.recommend',
       'inventory.transfer.receive',
       'inventory.transfer.list',
       'inventory.transfer.get_by_id',
     ]);
+  }
+
+  @Get('recommend')
+  async recommendStockTransfer(
+    @Query('medicineId') medicineId: string,
+    @Query('toBranchId') toBranchId: string,
+    @Query('quantity') quantity: number,
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.transfer.recommend', {
+      medicineId,
+      toBranchId,
+      quantity: Number(quantity),
+    });
   }
 
   @Post()

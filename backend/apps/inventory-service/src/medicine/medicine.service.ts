@@ -326,10 +326,19 @@ export class MedicineService implements OnModuleInit {
         let useFallback = query.bypassAiSearch || false;
 
         try {
-          const response = await fetch(aiServiceUrl);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+          const response = await fetch(aiServiceUrl, {
+            headers: {
+              'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
           if (!response.ok) {
             useFallback = true;
           } else {
+
             const resJson = await response.json();
             let aiData = resJson.data || [];
 

@@ -26,6 +26,73 @@ export function HQApproval() {
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
 
+  const [detailPr, setDetailPr] = useState<any>(null);
+  const [recommendationResult, setRecommendationResult] = useState<any>(null);
+  const [loadingRec, setLoadingRec] = useState(false);
+  const [activeRecMedicine, setActiveRecMedicine] = useState<any>(null);
+
+  const handleFetchRecommendation = async (medicineId: string, medicineName: string, quantity: number) => {
+    if (!detailPr) return;
+    setLoadingRec(true);
+    setRecommendationResult(null);
+    setActiveRecMedicine({ id: medicineId, name: medicineName, qty: quantity });
+    try {
+      const res = await api.get(`/api/stock-transfers/recommend`, {
+        params: {
+          medicineId,
+          toBranchId: detailPr.branchId,
+          quantity,
+        }
+      });
+      setRecommendationResult(res.data);
+    } catch (err) {
+      console.error(err);
+      setMsg({ type: "error", text: "Không thể lấy gợi ý điều phối. Vui lòng thử lại." });
+    } finally {
+      setLoadingRec(false);
+    }
+  };
+
+  const handleExecuteTransfer = async (rec: any) => {
+    if (!detailPr || !recommendationResult || !activeRecMedicine) return;
+    setActionLoading(true);
+    setMsg(null);
+    try {
+      const response = await fetch("/api/stock-transfers/direct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromBranchId: rec.branchId,
+          toBranchId: detailPr.branchId,
+          toBranchName: detailPr.branchName,
+          shippedBy: "HQ Admin",
+          items: [{
+            medicineId: recommendationResult.medicineId,
+            medicineName: activeRecMedicine.name,
+            quantity: rec.suggestedQty,
+            unit: "Hộp"
+          }]
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || "Giao dịch điều phối thất bại.");
+      }
+
+      setMsg({ type: "success", text: `Đã tạo lệnh điều phối ${rec.suggestedQty} sản phẩm từ ${rec.branchName} sang ${detailPr.branchName} thành công!` });
+      
+      setRecommendationResult(null);
+      setActiveRecMedicine(null);
+      setDetailPr(null);
+      fetchData();
+    } catch (err: any) {
+      setMsg({ type: "error", text: err.message || "Đã xảy ra lỗi khi tạo lệnh điều phối." });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -284,7 +351,7 @@ export function HQApproval() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredPrs.map(pr => (
-                  <tr key={pr._id} className="hover:bg-slate-50 transition-colors cursor-pointer bg-rose-50/30">
+                  <tr key={pr._id} className="hover:bg-slate-50 transition-colors cursor-pointer bg-rose-50/30" onClick={() => setDetailPr(pr)}>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" className="rounded" checked={selectedPrs.includes(pr._id)} onChange={() => toggleSelectPr(pr._id)} />
                     </td>
@@ -426,6 +493,121 @@ export function HQApproval() {
                   className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5 disabled:opacity-50">
                   {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}Xác nhận Hủy Đơn
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* PR Detail Modal & Auto Recommendation */}
+      <AnimatePresence>
+        {detailPr && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setDetailPr(null); setRecommendationResult(null); setActiveRecMedicine(null); }} />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-white rounded-2xl shadow-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+              
+              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-rose-50 shrink-0">
+                <div>
+                  <h3 className="font-black text-rose-900 font-mono flex items-center gap-2">
+                    <Building2 size={18} /> Yêu Cầu Hỏa Tốc: {detailPr.prCode}
+                  </h3>
+                  <p className="text-xs text-rose-600 font-bold mt-0.5">Từ: {detailPr.branchName} • Lý do: {detailPr.reason}</p>
+                </div>
+                <button onClick={() => { setDetailPr(null); setRecommendationResult(null); setActiveRecMedicine(null); }} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"><X size={18} /></button>
+              </div>
+
+              <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                <div>
+                  <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-3">
+                    <Package size={14} className="text-rose-600" /> Danh sách sản phẩm yêu cầu ({detailPr.items?.length || 0})
+                  </h4>
+                  <div className="space-y-2.5">
+                    {detailPr.items?.map((it: any, i: number) => (
+                      <div key={i} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div>
+                          <span className="font-bold text-slate-800 text-sm block">{it.medicineName}</span>
+                          <span className="text-xs text-slate-500">Mã thuốc: {it.medicineId}</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <span className="font-black text-slate-900 text-sm block">Số lượng: {it.requestedQuantity} {it.unit || "Hộp"}</span>
+                          </div>
+                          <button
+                            onClick={() => handleFetchRecommendation(it.medicineId, it.medicineName, it.requestedQuantity)}
+                            className="px-3.5 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1"
+                          >
+                            ✨ Gợi ý điều phối
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Recommendations Area */}
+                {(loadingRec || recommendationResult) && (
+                  <div className="border-t border-slate-100 pt-5 space-y-4">
+                    <h4 className="font-black text-slate-800 text-sm flex items-center gap-2">
+                      💡 Kết quả gợi ý điều phối: <span className="text-violet-700">{activeRecMedicine?.name}</span>
+                    </h4>
+
+                    {loadingRec ? (
+                      <div className="flex items-center justify-center py-8 gap-2">
+                        <Loader2 className="animate-spin text-violet-600" size={20} />
+                        <span className="text-sm text-slate-500 font-bold">Đang tính toán tồn kho an toàn & dư thừa thực tế...</span>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden p-4">
+                        {recommendationResult.recommendations?.length === 0 ? (
+                          <div className="text-center py-6 text-slate-500 text-sm font-semibold">
+                            ❌ Không tìm thấy chi nhánh nào có tồn kho dư thừa (vượt mức an toàn) để điều phối.<br/>
+                            <span className="text-xs font-bold text-slate-400 mt-2 block">Khuyên dùng: Phê duyệt xuất từ Kho Tổng hoặc đặt mua ngoài.</span>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                              <thead>
+                                <tr className="text-xs font-bold text-slate-400 uppercase border-b border-slate-200">
+                                  <th className="pb-2">Nguồn cung cấp</th>
+                                  <th className="pb-2 text-center">Tồn hiện tại</th>
+                                  <th className="pb-2 text-center">Mức an toàn (SS)</th>
+                                  <th className="pb-2 text-center">Khả dụng (Surplus)</th>
+                                  <th className="pb-2 text-center">Đề xuất chuyển</th>
+                                  <th className="pb-2 text-right">Hành động</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-200">
+                                {recommendationResult.recommendations?.map((rec: any, idx: number) => (
+                                  <tr key={idx} className="text-slate-700">
+                                    <td className="py-3 font-semibold text-slate-800">{rec.branchName}</td>
+                                    <td className="py-3 text-center font-bold text-slate-900">{rec.currentStock}</td>
+                                    <td className="py-3 text-center font-semibold text-slate-500">{rec.safetyStock}</td>
+                                    <td className="py-3 text-center font-bold text-emerald-600">+{rec.surplus}</td>
+                                    <td className="py-3 text-center">
+                                      <span className="px-2.5 py-1 bg-violet-100 text-violet-700 rounded-lg font-black text-xs">
+                                        {rec.suggestedQty} Hộp
+                                      </span>
+                                    </td>
+                                    <td className="py-3 text-right">
+                                      <button
+                                        onClick={() => handleExecuteTransfer(rec)}
+                                        disabled={actionLoading}
+                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg disabled:opacity-50"
+                                      >
+                                        Duyệt điều phối
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>
