@@ -56,7 +56,8 @@ export function useSocket(namespace: string = '') {
       
       if (reason === 'io server disconnect') {
         // Server disconnected (token invalid, manual disconnect)
-        console.warn('⚠️  Server disconnected the socket. Token may be invalid.');
+        console.warn('⚠️  Server disconnected the socket. Token may be invalid. Clearing token.');
+        localStorage.removeItem('token');
         setConnectionError('Disconnected by server');
       }
     });

@@ -2,12 +2,14 @@ import { Controller, Post, Get, Patch, Query, Param, Body, Inject, OnModuleInit 
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { AppWebsocketGateway } from '../websocket/websocket.gateway';
+import { NotificationService } from '../notification/notification.service';
 
 @Controller('api/purchase-requisitions')
 export class PurchaseRequisitionController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
     private readonly websocketGateway: AppWebsocketGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async onModuleInit() {
@@ -56,6 +58,19 @@ export class PurchaseRequisitionController implements OnModuleInit {
       
       // Chỉ gửi cho warehouse, không gửi admin
       this.websocketGateway.server.to('warehouse').emit('new_pr_notification', notificationPayload);
+      
+      // Persist to DB
+      this.notificationService.create({
+        type: 'NEW_PR',
+        targetRooms: ['warehouse'],
+        message: notificationPayload.message,
+        prId: notificationPayload.prId,
+        prCode: notificationPayload.prCode,
+        branchId: notificationPayload.branchId,
+        branchName: notificationPayload.branchName,
+        itemsCount: notificationPayload.itemsCount,
+        createdBy: notificationPayload.createdBy,
+      }).catch(err => console.error('Failed to persist NEW_PR notification:', err));
       
       console.log('✅ Notification emitted to warehouse room');
     }
@@ -112,6 +127,18 @@ export class PurchaseRequisitionController implements OnModuleInit {
         
         console.log('✅ Emitting PR approved notification:', notificationPayload);
         this.websocketGateway.server.to(`branch-${prData.branchId}`).emit('pr_approved_notification', notificationPayload);
+        
+        // Persist to DB
+        this.notificationService.create({
+          type: 'PR_APPROVED',
+          targetRooms: [`branch-${prData.branchId}`],
+          message: notificationPayload.message,
+          prId: notificationPayload.prId,
+          prCode: notificationPayload.prCode,
+          branchId: notificationPayload.branchId,
+          branchName: notificationPayload.branchName,
+          approvedBy: notificationPayload.approvedBy,
+        }).catch(err => console.error('Failed to persist PR_APPROVED notification:', err));
       }
       
       if (data.status === 'REJECTED' && prData.branchId) {
@@ -128,6 +155,18 @@ export class PurchaseRequisitionController implements OnModuleInit {
         
         console.log('❌ Emitting PR rejected notification:', notificationPayload);
         this.websocketGateway.server.to(`branch-${prData.branchId}`).emit('pr_rejected_notification', notificationPayload);
+        
+        // Persist to DB
+        this.notificationService.create({
+          type: 'PR_REJECTED',
+          targetRooms: [`branch-${prData.branchId}`],
+          message: notificationPayload.message,
+          prId: notificationPayload.prId,
+          prCode: notificationPayload.prCode,
+          branchId: notificationPayload.branchId,
+          branchName: notificationPayload.branchName,
+          rejectionReason: notificationPayload.rejectionReason,
+        }).catch(err => console.error('Failed to persist PR_REJECTED notification:', err));
       }
     }
     

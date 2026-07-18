@@ -8,7 +8,7 @@ export function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [role, setRole] = useState("admin");
-  const [email, setEmail] = useState("admin@ABC pharmacy.com");
+  const [email, setEmail] = useState("admin@vinapharmacy.com");
   const [password, setPassword] = useState("123456");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

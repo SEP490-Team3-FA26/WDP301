@@ -2,12 +2,14 @@ import { Controller, Post, Get, Query, Param, Body, Inject, OnModuleInit } from 
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { AppWebsocketGateway } from '../websocket/websocket.gateway';
+import { NotificationService } from '../notification/notification.service';
 
 @Controller('api/purchase-orders')
 export class PurchaseOrderController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
     private readonly websocketGateway: AppWebsocketGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async onModuleInit() {
@@ -60,6 +62,17 @@ export class PurchaseOrderController implements OnModuleInit {
         console.log('📦 Emitting NEW_PO notification to ADMIN only:', notificationPayload);
         // Chỉ gửi cho admin, KHÔNG gửi warehouse
         this.websocketGateway.server.to('admin').emit('new_po_notification', notificationPayload);
+        
+        // Persist to DB
+        this.notificationService.create({
+          type: 'NEW_PO',
+          targetRooms: ['admin'],
+          message: notificationPayload.message,
+          poId: notificationPayload.poId,
+          supplierName: notificationPayload.supplierName,
+          itemsCount: notificationPayload.itemsCount,
+          totalAmount: notificationPayload.totalAmount,
+        }).catch(err => console.error('Failed to persist NEW_PO notification:', err));
       });
     }
     

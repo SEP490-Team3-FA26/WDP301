@@ -62,6 +62,15 @@ export function Landing() {
       const res = await fetch("/api/users/cart", {
         headers: { "Authorization": `Bearer ${token}` }
       });
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        // Fallback to guest cart immediately
+        const guestCartStr = localStorage.getItem("guest_cart");
+        const items = guestCartStr ? JSON.parse(guestCartStr) : [];
+        const count = items.reduce((acc: number, item: any) => acc + item.quantity, 0);
+        setCartCount(count);
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         if (data && data.items) {
