@@ -89,6 +89,10 @@ export class SupplierServiceService implements OnModuleInit {
     return await newSupplier.save();
   }
 
+  async update(id: string, data: any) {
+    return await this.supplierModel.findByIdAndUpdate(id, data, { new: true }).exec();
+  }
+
   async validateSupplierForOrder(supplierId: string): Promise<boolean> {
     const supplier = await this.supplierModel.findById(supplierId);
     if (!supplier) {

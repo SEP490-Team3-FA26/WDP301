@@ -210,6 +210,30 @@ export class MedicineService implements OnModuleInit {
   }
 
 
+  async getBranchMedicines(query: any) {
+    // Tách biệt hàm xử lý riêng cho branch để có thể dễ dàng custom
+    // (ví dụ: chỉ hiện các thuốc đang có lô hàng ở branch)
+    // Hiện tại tạm thời gọi lại listMedicines với branchId bắt buộc.
+    if (!query.branchId) {
+      throw new RpcException('Yêu cầu branchId để lấy danh sách thuốc chi nhánh');
+    }
+
+    if (query.branchStockOnly === 'true' || query.branchStockOnly === true) {
+      // Lấy danh sách medicineIds có lô hàng ở chi nhánh này
+      const branchBatches = await this.batchModel.find({ branchId: query.branchId }).select('medicineId').lean().exec();
+      const medicineIds = [...new Set(branchBatches.map(b => b.medicineId))];
+      
+      if (medicineIds.length === 0) {
+        return { data: [], total: 0, page: query.page || 1, limit: query.limit || 10, totalPages: 0 };
+      }
+      
+      query.medicineIds = medicineIds;
+      query.bypassAiSearch = true; // Bỏ qua AI search khi chỉ lấy tồn kho chi nhánh để kết quả chính xác tuyệt đối
+    }
+
+    return this.listMedicines(query);
+  }
+
   async listMedicines(query: {
     page?: number;
     limit?: number;
@@ -225,6 +249,8 @@ export class MedicineService implements OnModuleInit {
     indication?: string;
     brandOrigin?: string;
     branchId?: string;
+    medicineIds?: string[];
+    bypassAiSearch?: boolean;
   }) {
     try {
       console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', query);
@@ -245,6 +271,9 @@ export class MedicineService implements OnModuleInit {
 
       // Construct standard filter conditions
       const conditions: any[] = [];
+      if (query.medicineIds && query.medicineIds.length > 0) {
+        conditions.push({ _id: { $in: query.medicineIds } });
+      }
       if (category) conditions.push({ category });
       if (classification) conditions.push({ drug_classification: classification });
       if (targetGroup) {
@@ -285,7 +314,8 @@ export class MedicineService implements OnModuleInit {
       // Xoá logic filter cứng `stock > 0` theo branchId ở đây để
       // các thuốc hết hàng (stock = 0) vẫn được trả về trong kết quả tìm kiếm.
       // Khi đó, UI sẽ hiển thị Tồn kho: 0 và cho phép user bấm "Gợi ý thay thế" (UC-36).
-      if (search) {
+      // Khi đó, UI sẽ hiển thị Tồn kho: 0 và cho phép user bấm "Gợi ý thay thế" (UC-36).
+      if (search && !query.bypassAiSearch) {
         // AI SERVICE VECTOR SEARCH with Mongoose fallback
         let aiServiceUrl = `http://ai-service:8000/api/ai/medicines?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`;
         if (category) aiServiceUrl += `&category=${encodeURIComponent(category)}`;
@@ -293,7 +323,7 @@ export class MedicineService implements OnModuleInit {
 
         let mappedAiData: any[] = [];
         let aiTotal = 0;
-        let useFallback = false;
+        let useFallback = query.bypassAiSearch || false;
 
         try {
           const response = await fetch(aiServiceUrl);

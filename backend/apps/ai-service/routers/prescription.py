@@ -249,6 +249,295 @@ async def check_interactions(req: InteractionRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==========================================
+# UC-19: GOODS RECEIPT INSPECTION & VERIFICATION API
+# ==========================================
+
+import base64
+import httpx
+from datetime import datetime
+from bson import ObjectId
+from fastapi import status
+
+# Ensure uploads directory exists
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+class VerifyCountRequest(BaseModel):
+    actualQty: int
+    verifiedBy: str
+
+@router.get("/static/uploads/{filename}")
+async def get_uploaded_file(filename: str):
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path)
+
+def parse_roboflow_workflow_count(result: dict) -> int:
+    try:
+        outputs = result.get("outputs", [])
+        for out in outputs:
+            for key, val in out.items():
+                if isinstance(val, dict) and "predictions" in val:
+                    return len(val["predictions"])
+                if isinstance(val, list):
+                    return len(val)
+        return 0
+    except Exception:
+        return 0
+
+@router.post("/api/ai/receipts/{receiptId}/items/{receiptItemId}/inspection")
+async def inspect_receipt_item(
+    receiptId: str,
+    receiptItemId: str,
+    file: UploadFile = File(...)
+):
+    # 1. Validate Uploaded File (format and size)
+    allowed_types = ["image/jpeg", "image/png", "image/jpg"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file format. Only JPEG, JPG, and PNG are allowed."
+        )
+    
+    # Check file size (10MB limit)
+    MAX_SIZE = 10 * 1024 * 1024 # 10MB
+    image_bytes = await file.read()
+    if len(image_bytes) > MAX_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds the 10MB limit."
+        )
+
+    # 2. Get API Key & Configs from Env (Fail fast if missing)
+    api_key = os.getenv("ROBOFLOW_API_KEY")
+    if not api_key:
+        raise RuntimeError("ROBOFLOW_API_KEY environment variable is not set.")
+    
+    try:
+        tolerance_pct = float(os.getenv("GRN_TOLERANCE_PERCENT", "0.02"))
+    except ValueError:
+        tolerance_pct = 0.02
+
+    # 3. Connect to MongoDB and fetch expectedQty & medicineId
+    uri = os.getenv("MONGODB_URI") or os.getenv("MONGODB_CONNECTION_STRING")
+    if not uri:
+        raise HTTPException(status_code=500, detail="Database connection string not configured.")
+    
+    client = pymongo.MongoClient(uri)
+    db_name = "WDP201"
+    if "net/" in uri:
+        parts = uri.split("net/")
+        if len(parts) > 1:
+            db_name = parts[1].split("?")[0]
+    
+    db = client[db_name]
+    
+    receipt_query = {"_id": ObjectId(receiptId)} if ObjectId.is_valid(receiptId) else {"_id": receiptId}
+    receipt = db["goodsreceiptnotes"].find_one(receipt_query)
+    
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Goods Receipt Note not found.")
+        
+    # Transition DRAFT to INSPECTING and PO to RECEIVING on first inspect
+    if receipt.get("status") == "DRAFT":
+        db["goodsreceiptnotes"].update_one(
+            receipt_query,
+            {"$set": {"status": "INSPECTING"}}
+        )
+        po_id = receipt.get("poId")
+        if po_id:
+            po_query = {"_id": ObjectId(po_id)} if ObjectId.is_valid(po_id) else {"_id": po_id}
+            po = db["purchaseorders"].find_one(po_query)
+            if po and po.get("status") in ["SHIPPING", "PARTIAL_RECEIVED"]:
+                db["purchaseorders"].update_one(
+                    po_query,
+                    {"$set": {"status": "RECEIVING"}}
+                )
+    
+    # Locate target receipt item using unique receiptItemId
+    target_item = None
+    if "items" in receipt:
+        for item in receipt["items"]:
+            item_id = str(item.get("_id") or "")
+            if item_id == receiptItemId:
+                target_item = item
+                break
+                
+    if not target_item:
+        raise HTTPException(status_code=404, detail="Receipt Item not found in the specified Goods Receipt.")
+        
+    expected_qty = int(target_item.get("quantity"))
+    medicine_id = target_item.get("medicineId")
+
+    # 4. Save timestamped copy as audit evidence
+    file_extension = os.path.splitext(file.filename)[1] or ".jpg"
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    evidence_filename = f"{receiptId}_{receiptItemId}_{timestamp}{file_extension}"
+    evidence_path = os.path.join(UPLOAD_DIR, evidence_filename)
+    
+    with open(evidence_path, "wb") as f:
+        f.write(image_bytes)
+
+    # 5. Call Roboflow Workflow
+    base64_image = base64.b64encode(image_bytes).decode('utf-8')
+    url = "https://serverless.roboflow.com/infer/workflows/thanh-le-truong/general-segmentation-api-13"
+    
+    payload = {
+        "api_key": api_key,
+        "inputs": {
+            "image": {
+                "type": "base64",
+                "value": base64_image
+            },
+            "classes": "Medicine"
+        }
+    }
+    
+    async with httpx.AsyncClient(timeout=30.0) as client_http:
+        response = await client_http.post(url, json=payload)
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=f"Roboflow API error: {response.text}")
+        
+        result = response.json()
+        ai_count = parse_roboflow_workflow_count(result)
+        
+        # 6. Compute discrepancy details using configurable tolerance threshold
+        difference = ai_count - expected_qty
+        abs_diff = abs(difference)
+        pct_diff = (abs_diff / expected_qty) if expected_qty > 0 else 0
+        
+        if difference == 0:
+            inspection_status = "MATCH"
+        elif pct_diff <= tolerance_pct:
+            inspection_status = "WARNING"
+        else:
+            inspection_status = "MISMATCH"
+        
+        evidence_url = f"/static/uploads/{evidence_filename}"
+
+        # 7. Write Inspection Record with Raw AI Response for debug audits
+        record_id = ObjectId()
+        db["inspection_records"].insert_one({
+            "_id": record_id,
+            "receiptId": receiptId,
+            "receiptItemId": receiptItemId,
+            "medicineId": medicine_id,
+            "expectedQty": expected_qty,
+            "aiCount": ai_count,
+            "actualQty": None, 
+            "difference": difference,
+            "status": "PENDING_VERIFICATION",
+            "evidenceImage": evidence_url,
+            "rawAiResponse": result, # Saved for audit debugging
+            "verifiedBy": None,
+            "createdAt": datetime.utcnow()
+        })
+            
+        return {
+            "success": True,
+            "inspectionRecordId": str(record_id),
+            "receiptId": receiptId,
+            "receiptItemId": receiptItemId,
+            "expectedQty": expected_qty,
+            "aiCount": ai_count,
+            "difference": difference,
+            "status": inspection_status,
+            "evidenceImage": evidence_url
+        }
+
+@router.post("/api/ai/inspections/{inspectionRecordId}/verify")
+async def verify_receipt_item_count(
+    inspectionRecordId: str,
+    req: VerifyCountRequest
+):
+    uri = os.getenv("MONGODB_URI") or os.getenv("MONGODB_CONNECTION_STRING")
+    if not uri:
+         raise HTTPException(status_code=500, detail="Database connection string not configured.")
+    client = pymongo.MongoClient(uri)
+    db_name = "WDP201"
+    if "net/" in uri:
+        parts = uri.split("net/")
+        if len(parts) > 1:
+            db_name = parts[1].split("?")[0]
+    db = client[db_name]
+    
+    # 1. Fetch current record status to check conflict state
+    record = db["inspection_records"].find_one({"_id": ObjectId(inspectionRecordId)})
+    if not record:
+        raise HTTPException(status_code=404, detail="Inspection record not found.")
+    
+    if record.get("status") == "VERIFIED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This inspection record has already been verified."
+        )
+    
+    # 2. Perform verification update on inspection_records
+    db["inspection_records"].update_one(
+        {"_id": ObjectId(inspectionRecordId)},
+        {
+            "$set": {
+                "actualQty": req.actualQty,
+                "verifiedBy": req.verifiedBy,
+                "verifiedAt": datetime.utcnow(),
+                "status": "VERIFIED"
+            }
+        }
+    )
+
+    # 3. Update actualQty & status = 'VERIFIED' directly on the matching item in goodsreceiptnotes.items
+    receipt_id = record.get("receiptId")
+    receipt_item_id = record.get("receiptItemId")
+    if receipt_id and receipt_item_id:
+        grn_query = {"_id": ObjectId(receipt_id)} if ObjectId.is_valid(receipt_id) else {"_id": receipt_id}
+        grn = db["goodsreceiptnotes"].find_one(grn_query)
+        if grn:
+            updated_items = []
+            for item in grn.get("items", []):
+                item_id = str(item.get("_id") or "")
+                if item_id == receipt_item_id:
+                    item["actualQty"] = req.actualQty
+                    item["status"] = "VERIFIED"
+                updated_items.append(item)
+            db["goodsreceiptnotes"].update_one(
+                grn_query,
+                {"$set": {"items": updated_items}}
+            )
+    
+    return {"success": True, "message": "Item count verified successfully."}
+
+
+@router.get("/api/ai/receipts/{receiptId}/items/{receiptItemId}/inspection")
+async def get_inspection_record(receiptId: str, receiptItemId: str):
+    uri = os.getenv("MONGODB_URI") or os.getenv("MONGODB_CONNECTION_STRING")
+    if not uri:
+         raise HTTPException(status_code=500, detail="Database connection string not configured.")
+    client = pymongo.MongoClient(uri)
+    db_name = "WDP201"
+    if "net/" in uri:
+        parts = uri.split("net/")
+        if len(parts) > 1:
+            db_name = parts[1].split("?")[0]
+    db = client[db_name]
+    
+    record = db["inspection_records"].find_one({
+        "receiptId": receiptId,
+        "receiptItemId": receiptItemId
+    })
+    if not record:
+        raise HTTPException(status_code=404, detail="Inspection record not found.")
+        
+    # convert ObjectId to string for JSON serialization
+    record["_id"] = str(record["_id"])
+    return {
+        "success": True,
+        "data": record
+    }
+
+
+
 class ForecastRequest(BaseModel):
     dataset: list
     periodDays: int = 30

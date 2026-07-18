@@ -4,12 +4,11 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { ClientKafka } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
 import { PayOS } from '@payos/node';
 import { Order } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Voucher } from './schemas/voucher.schema';
-import { subscribeToKafkaTopics } from '../../api-gateway/src/common/kafka.helper';
+import { subscribeToKafkaTopics, sendKafkaMessage } from '../../api-gateway/src/common/kafka.helper';
 
 const DEFAULT_PHONE_NUMBER = '0900000000';
 
@@ -72,11 +71,13 @@ export class OrdersServiceService implements OnModuleInit {
 
         // Refund points if they were redeemed
         if (order.redeemedPoints > 0 && order.patientPhone !== '0900000000') {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
+          await sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.update_points',
+            {
               phone: order.patientPhone,
               pointsDelta: order.redeemedPoints,
-            })
+            }
           );
         }
         this.logger.log(`Cancelled expired order: ${order.orderCode}`);
@@ -119,8 +120,10 @@ export class OrdersServiceService implements OnModuleInit {
     // Nếu đơn hàng từ UserLoyalty, lấy thông tin email
     if (data.userId) {
       try {
-        const userLoyalty = await lastValueFrom(
-          this.userClient.send('user.loyalty.get', { userId: data.userId })
+        const userLoyalty = await sendKafkaMessage(
+          this.userClient,
+          'user.loyalty.get',
+          { userId: data.userId }
         );
         if (userLoyalty) {
           // Gắn email để gửi hóa đơn
@@ -135,8 +138,10 @@ export class OrdersServiceService implements OnModuleInit {
       // Fallback: Lấy email từ auth-service (bảng users) nếu chưa có patientEmail
       if (!patientEmail) {
         try {
-          const authUser = await lastValueFrom(
-            this.authClient.send('auth.get.user.by.id', data.userId)
+          const authUser = await sendKafkaMessage(
+            this.authClient,
+            'auth.get.user.by.id',
+            data.userId
           );
           if (authUser && authUser.email) {
             patientEmail = authUser.email;
@@ -149,8 +154,10 @@ export class OrdersServiceService implements OnModuleInit {
 
     if (data.patientPhone && data.patientPhone !== DEFAULT_PHONE_NUMBER) {
       try {
-        const userLoyalty = await lastValueFrom(
-          this.userClient.send('user.loyalty.lookup', { phone: data.patientPhone })
+        const userLoyalty = await sendKafkaMessage(
+          this.userClient,
+          'user.loyalty.lookup',
+          { phone: data.patientPhone }
         );
         if (userLoyalty && !userLoyalty.error) {
           const userPoints = userLoyalty.points || 0;
@@ -197,11 +204,13 @@ export class OrdersServiceService implements OnModuleInit {
 
     // Instantly deduct points from user balance if redeeming
     if (redeemedPoints > 0) {
-      await lastValueFrom(
-        this.userClient.send('user.loyalty.update_points', {
+      await sendKafkaMessage(
+        this.userClient,
+        'user.loyalty.update_points',
+        {
           phone: data.patientPhone,
           pointsDelta: -redeemedPoints,
-        })
+        }
       );
     }
 
@@ -221,6 +230,7 @@ export class OrdersServiceService implements OnModuleInit {
       redeemedPoints,
       pointsDiscount,
       earnedPoints,
+      userId: data.userId,
       branchId: data.branchId || 'BR-001',
     });
 
@@ -246,22 +256,23 @@ export class OrdersServiceService implements OnModuleInit {
       }
     }
 
-      let saleRes;
+    let saleRes;
     try {
       // Step 2: Deduct Loyalty Points (Reserve)
       if (redeemedPoints > 0) {
-        await lastValueFrom(
-          this.userClient.send('user.loyalty.update_points', {
+        await sendKafkaMessage(
+          this.userClient,
+          'user.loyalty.update_points',
+          {
             phone: newOrder.patientPhone,
             pointsDelta: -redeemedPoints,
-          })
+          }
         );
       }
     } catch (err) {
       this.logger.error('Error reserving loyalty points:', err);
       throw new RpcException({ message: `Lỗi trừ điểm tích lũy: ${err.message}` });
     }
-
     // Branching logic based on payment method
     if (data.paymentMethod === 'QR_PAY') {
       try {
@@ -322,12 +333,14 @@ export class OrdersServiceService implements OnModuleInit {
 
       // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
       if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
-        await lastValueFrom(
-          this.userClient.send('user.loyalty.update_points', {
+        await sendKafkaMessage(
+          this.userClient,
+          'user.loyalty.update_points',
+          {
             phone: newOrder.patientPhone,
             pointsDelta: newOrder.earnedPoints,
             accumulatedDelta: newOrder.earnedPoints,
-          })
+          }
         );
       }
 
@@ -392,12 +405,14 @@ export class OrdersServiceService implements OnModuleInit {
 
         // CREDIT POINTS ON SUCCESSFUL PAYOS PAYMENT
         if (order.earnedPoints > 0 && order.patientPhone !== '0900000000') {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
+          await sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.update_points',
+            {
               phone: order.patientPhone,
               pointsDelta: order.earnedPoints,
               accumulatedDelta: order.earnedPoints,
-            })
+            }
           );
         }
 
@@ -411,15 +426,17 @@ export class OrdersServiceService implements OnModuleInit {
         // SAGA REVERT FOR CANCELLED QR_PAY
 
         // 1. Revert Inventory
-        await lastValueFrom(this.inventoryClient.send('inventory.sale.revert', { orderCode: order.orderCode })).catch(e => this.logger.error('Failed to revert inventory on cancel', e));
+        await sendKafkaMessage(this.inventoryClient, 'inventory.sale.revert', { orderCode: order.orderCode }).catch(e => this.logger.error('Failed to revert inventory on cancel', e));
 
         // 2. Refund Points
         if (order.redeemedPoints > 0 && order.patientPhone !== DEFAULT_PHONE_NUMBER) {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
+          await sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.update_points',
+            {
               phone: order.patientPhone,
               pointsDelta: order.redeemedPoints,
-            })
+            }
           ).catch(e => this.logger.error('Failed to refund points on cancel', e));
         }
 
@@ -469,6 +486,34 @@ export class OrdersServiceService implements OnModuleInit {
 
   async listOrders() {
     return this.orderModel.find().sort({ createdAt: -1 }).exec();
+  }
+
+  async getMyOrders(userId: string, fullName?: string) {
+    if (!userId) {
+      throw new RpcException({ message: 'Thiếu thông tin người dùng' });
+    }
+
+    // Tìm đơn hàng:
+    // 1. Đơn mới: có userId khớp với người đang đăng nhập
+    // 2. Đơn cũ theo tên: patientName khớp với tên tài khoản (case-insensitive)
+    // 3. Đơn cũ chưa gán userId: những đơn legacy chưa có trường userId
+    const orConditions: any[] = [
+      { userId },
+      { userId: { $exists: false } },
+      { userId: null },
+      { userId: '' },
+    ];
+
+    if (fullName && fullName.trim() !== '') {
+      orConditions.push({ patientName: { $regex: new RegExp(`^${fullName.trim()}$`, 'i') } });
+    }
+
+    const query = { $or: orConditions };
+
+    this.logger.log(`[getMyOrders] Querying orders for userId=${userId}, fullName=${fullName}`);
+    const results = await this.orderModel.find(query).sort({ createdAt: -1 }).exec();
+    this.logger.log(`[getMyOrders] Found ${results.length} orders`);
+    return results;
   }
 
   private async deductInventory(order: any) {

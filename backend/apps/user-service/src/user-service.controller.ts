@@ -2,13 +2,14 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern, EventPattern, Payload } from '@nestjs/microservices';
 import { UserService } from './user-service.service';
 import { BranchService } from './branch.service';
+import { ExportJobStatusDto } from './dto/export-job-status.dto';
 
 @Controller()
 export class UserServiceController {
   constructor(
     private readonly userService: UserService,
     private readonly branchService: BranchService,
-  ) {}
+  ) { }
 
   @MessagePattern('user.edit_profile')
   handleEditProfile(@Payload() data: { userId: string; fullName?: string }) {
@@ -114,5 +115,24 @@ export class UserServiceController {
   handleLowStockAlertEvent(@Payload() data: any) {
     return this.branchService.handleLowStockAlert(data);
   }
-}
 
+  @MessagePattern('audit.created')
+  handleCreateAuditLog(@Payload() data: any) {
+    return this.userService.createAuditLog(data);
+  }
+
+  @MessagePattern('user.audit.list')
+  handleListAuditLogs(@Payload() query: any) {
+    return this.userService.listAuditLogs(query);
+  }
+
+  @MessagePattern('user.audit.export')
+  handleExportAuditLogs(@Payload() query: any) {
+    return this.userService.exportAuditLogs(query);
+  }
+
+  @MessagePattern('user.audit.export_status')
+  async handleExportAuditLogsStatus(@Payload() data: { jobId: string }): Promise < ExportJobStatusDto > {
+    return this.userService.getExportJobStatus(data.jobId);
+  }
+}

@@ -3,11 +3,11 @@ import {
   ShoppingCart, Minus, Plus, SearchIcon, Sparkles, XCircle, AlertTriangle, ShieldAlert,
   Banknote, QrCode, Printer, CheckCircle2, Mic, Square, Check
 } from "lucide-react";
-import { medicineService } from "../../../services/medicine.service";
-import { orderService } from "../../../services/order.service";
-import { prescriptionService } from "../../../services/prescription.service";
-import { voucherService } from "../../../services/voucher.service";
-import api from "../../../services/api";
+import { medicineService } from "../../../services/inventory/medicine.service";
+import { orderService } from "../../../services/sales/order.service";
+import { prescriptionService } from "../../../services/sales/prescription.service";
+import { voucherService } from "../../../services/sales/voucher.service";
+import api from "../../../services/core/api";
 import { useSocket } from "../../../hooks/useSocket";
 
 // Helper to decode JWT token to extract branchId and user info
@@ -331,7 +331,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
     setLoading(true);
     try {
       const { branchId } = getBranchInfoFromToken();
-      const data = await medicineService.getMedicines({ limit: 10, search: query, branchId: branchId || undefined });
+      const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: query });
       setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);

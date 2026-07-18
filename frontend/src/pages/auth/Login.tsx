@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Mail, Lock, Building2, PackageSearch, Store, Pill, ShieldCheck, CheckCircle2, Users } from "lucide-react";
-import { authService } from "../../services/auth.service";
+import { authService } from "../../services/auth/auth.service";
 import { requestNotificationPermission } from "../../utils/notificationPermission";
 
 export function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [role, setRole] = useState("admin");
-  const [email, setEmail] = useState("admin@ABC pharmacy.com");
+  const [email, setEmail] = useState("admin@vinapharmacy.com");
   const [password, setPassword] = useState("123456");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

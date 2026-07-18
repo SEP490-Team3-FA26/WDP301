@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Plus, BarChart3, FileText, TrendingUp } from "lucide-react";
+import { Plus, BarChart3, FileText } from "lucide-react";
 import { SalesAnalyticsDashboard } from "../../components/reports/SalesAnalyticsDashboard";
 import { ReportHistoryTable } from "../../components/reports/ReportHistoryTable";
 import { ReportCreateModal } from "../../components/reports/ReportCreateModal";
-
-import { InventoryPerformanceDashboard } from "../../components/reports/InventoryPerformanceDashboard";
-import { Link } from "react-router-dom";
-import { Truck } from "lucide-react";
+import { Tabs } from "../../components/ui/Tabs";
 
 export function Reports() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"analytics" | "performance" | "reports">("analytics");
+  const [activeTab, setActiveTab] = useState<"analytics" | "reports">("reports");
   
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,7 +40,7 @@ export function Reports() {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const { reportService } = await import("../../services/report.service");
+      const { reportService } = await import("../../services/report/report.service");
       const data = await reportService.getHistory();
       setReports(data);
     } catch (error) {
@@ -69,70 +66,29 @@ export function Reports() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Báo Cáo Hệ Thống</h1>
           <p className="text-slate-500 mt-1">Quản lý, xuất và phân tích các báo cáo bán hàng định kỳ.</p>
         </div>
-        <div className="flex items-center gap-3">
-          {isAdmin && (
-            <Link 
-              to="/admin/supplier-credit"
-              className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap"
-            >
-              <Truck size={18} className="text-amber-600" />
-              Công nợ NCC
-            </Link>
-          )}
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="px-5 py-2.5 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap"
-          >
-            <Plus size={18} />
-            Tạo báo cáo mới
-          </button>
-        </div>
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="px-5 py-2.5 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap"
+        >
+          <Plus size={18} />
+          Tạo báo cáo mới
+        </button>
       </div>
 
       {/* Tabs Menu (Admin only) */}
       {isAdmin && (
-        <div className="flex border-b border-slate-200">
-          <button
-            onClick={() => setActiveTab("analytics")}
-            className={`px-5 py-3 font-bold text-sm flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "analytics"
-                ? "border-[#0057cd] text-[#0057cd]"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <BarChart3 size={18} />
-            Phân tích bán hàng (BI)
-          </button>
-          <button
-            onClick={() => setActiveTab("performance")}
-            className={`px-5 py-3 font-bold text-sm flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "performance"
-                ? "border-[#0057cd] text-[#0057cd]"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <TrendingUp size={18} />
-            Hiệu suất Sản phẩm
-          </button>
-          <button
-            onClick={() => setActiveTab("reports")}
-            className={`px-5 py-3 font-bold text-sm flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "reports"
-                ? "border-[#0057cd] text-[#0057cd]"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <FileText size={18} />
-            Lịch sử & Xuất báo cáo
-          </button>
-        </div>
+        <Tabs<"analytics" | "reports">
+          tabs={[
+            { id: "analytics", label: "Phân tích bán hàng (BI)", icon: <BarChart3 size={18} /> },
+            { id: "reports", label: "Lịch sử & Xuất báo cáo", icon: <FileText size={18} /> }
+          ]}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
       )}
 
       {/* Analytics Dashboard */}
       {activeTab === "analytics" && isAdmin && <SalesAnalyticsDashboard />}
-      
-      {/* Performance Dashboard */}
-      {activeTab === "performance" && isAdmin && <InventoryPerformanceDashboard />}
 
       {/* Reports History List */}
       {(activeTab === "reports" || !isAdmin) && <ReportHistoryTable reports={reports} />}

@@ -33,6 +33,10 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { S3StorageService } from './storage/s3-storage.service';
 import { ReportService } from './services/report.service';
 import { WebsocketModule } from './websocket/websocket.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
+import { RedactionService } from './services/redaction.service';
+import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
 
 /**
  * Root Module của API Gateway
@@ -217,6 +221,8 @@ export class AppGatewayModule {
       'inventory.transfer.get_by_id',
       'inventory.sale.report',
       'quota.get.by.id',
+      'quota.get.by.branch',
+      'quota.get.summary',
       'quota.get.all',
     ];
     for (const t of inventoryTopics) {
@@ -260,6 +266,7 @@ export class AppGatewayModule {
       'orders.create',
       'orders.check',
       'orders.list',
+      'orders.my-orders',
     ];
     for (const t of orderTopics) {
       this.orderClient.subscribeToResponseOf(t);

@@ -44,7 +44,6 @@ import { InventoryHistory } from "./pages/warehouse/InventoryHistory";
 import { PurchaseRequisition } from "./pages/warehouse/PurchaseRequisition";
 import { InventoryCheck } from "./pages/warehouse/InventoryCheck";
 import { WarehouseInventoryHub } from "./pages/warehouse/WarehouseInventoryHub";
-import { MobileAIInspection } from "./pages/warehouse/MobileAIInspection";
 
 // Admin / HQ Pages
 import { Finance } from "./pages/admin/Finance";
@@ -55,6 +54,8 @@ import { VoucherManagement } from "./pages/admin/VoucherManagement";
 import { HQApproval } from "./pages/admin/HQApproval";
 import { PriceManagement } from "./pages/admin/PriceManagement";
 import { SupplierCreditManagement } from "./pages/admin/SupplierCreditManagement";
+import { AuditLogs } from "./pages/admin/AuditLogs";
+import { QuotaManagement } from "./pages/admin/QuotaManagement";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
@@ -117,8 +118,10 @@ export default function App() {
             <Route path="vouchers" element={<VoucherManagement />} />
             <Route path="approvals" element={<HQApproval />} />
             <Route path="finance" element={<Finance />} />
+            <Route path="quotas" element={<QuotaManagement />} />
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="ai-forecast" element={<AIForecast />} />
             <Route path="lot-tracking" element={<LotTracking />} />
@@ -146,7 +149,7 @@ export default function App() {
             <Route path="inventory/import" element={<WarehouseInventoryHub />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
             <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
-            <Route path="inspection" element={<MobileAIInspection />} />
+            <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="ai-forecast" element={<AIForecast />} />
             <Route path="lot-tracking" element={<LotTracking />} />

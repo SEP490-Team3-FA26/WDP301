@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, Send, ArrowRightLeft, Trash2, Plus, AlertCircle, CheckCircle2, Loader2, Package } from "lucide-react";
-import { branchService } from "../../services/branch.service";
-import { medicineService } from "../../services/medicine.service";
+import { branchService } from "../../services/admin/branch.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 
 // Helper to decode JWT token to extract branchId and user info
 function getBranchInfoFromToken() {
@@ -48,7 +48,7 @@ export function BranchTransfer() {
       try {
         const [branchList, invList] = await Promise.all([
           branchService.getBranches(),
-          medicineService.getMedicines({ branchId: activeBranchId, limit: 500 })
+          medicineService.getBranchMedicines(activeBranchId, { limit: 500, branchStockOnly: true })
         ]);
         
         // Filter out current branch from target branches list
@@ -136,7 +136,7 @@ export function BranchTransfer() {
       
       // Refresh current inventory
       setLoadingInv(true);
-      const invList = await medicineService.getMedicines({ branchId: activeBranchId, limit: 500 });
+      const invList = await medicineService.getBranchMedicines(activeBranchId, { limit: 500, branchStockOnly: true });
       setInventory(invList.data || []);
     } catch (err: any) {
       setMsg({ type: "error", text: err.message || "Đã xảy ra lỗi không xác định." });

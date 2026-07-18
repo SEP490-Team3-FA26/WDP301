@@ -31,6 +31,7 @@ import {
   Pie
 } from "recharts";
 import { motion, AnimatePresence } from "motion/react";
+import api from "../../services/core/api";
 
 export function SupplierCreditManagement() {
   const [tab, setTab] = useState<"SUMMARY" | "LIST" | "OVERDUE">("SUMMARY");
@@ -62,29 +63,21 @@ export function SupplierCreditManagement() {
 
   const fetchSummary = async () => {
     try {
-      const res = await fetch("/api/supplier-credit/summary");
-      if (res.ok) {
-        const data = await res.json();
-        setSummaryData(data);
-      } else {
-        throw new Error("Lỗi tải thông tin tổng hợp công nợ");
-      }
+      const res = await api.get("/api/supplier-credit/summary");
+      setSummaryData(res.data);
     } catch (e: any) {
-      setErrorMsg(e.message || "Lỗi kết nối");
+      const errorResponse = e?.response?.data;
+      setErrorMsg(errorResponse?.message || e.message || "Lỗi kết nối");
     }
   };
 
   const fetchOverdue = async () => {
     try {
-      const res = await fetch("/api/supplier-credit/overdue");
-      if (res.ok) {
-        const data = await res.json();
-        setOverdueData(data);
-      } else {
-        throw new Error("Lỗi tải thông tin nợ quá hạn");
-      }
+      const res = await api.get("/api/supplier-credit/overdue");
+      setOverdueData(res.data);
     } catch (e: any) {
-      setErrorMsg(e.message || "Lỗi kết nối");
+      const errorResponse = e?.response?.data;
+      setErrorMsg(errorResponse?.message || e.message || "Lỗi kết nối");
     }
   };
 
@@ -120,18 +113,14 @@ export function SupplierCreditManagement() {
     setLoadingDetail(true);
     try {
       const [resDetail, resAging] = await Promise.all([
-        fetch(`/api/suppliers/${supplier.id}/credit`),
-        fetch(`/api/suppliers/${supplier.id}/aging`)
+        api.get(`/api/suppliers/${supplier.id}/credit`),
+        api.get(`/api/suppliers/${supplier.id}/aging`)
       ]);
-      if (resDetail.ok) {
-        setDebtDetail(await resDetail.json());
-      }
-      if (resAging.ok) {
-        const aging = await resAging.json();
-        setAgingData(aging);
-      }
+      setDebtDetail(resDetail.data);
+      setAgingData(resAging.data);
     } catch (e: any) {
-      setErrorMsg("Lỗi tải lịch sử công nợ: " + e.message);
+      const errorResponse = e?.response?.data;
+      setErrorMsg("Lỗi tải lịch sử công nợ: " + (errorResponse?.message || e.message));
     } finally {
       setLoadingDetail(false);
     }
@@ -141,25 +130,17 @@ export function SupplierCreditManagement() {
     if (!selectedSupplier) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/suppliers/${selectedSupplier.id}/credit-limit`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          creditLimit: Number(newCreditLimit),
-          paymentTermDays: Number(newPaymentTerm)
-        })
+      const res = await api.put(`/api/suppliers/${selectedSupplier.id}/credit-limit`, {
+        creditLimit: Number(newCreditLimit),
+        paymentTermDays: Number(newPaymentTerm)
       });
-      const resData = await res.json();
-      if (res.ok) {
-        setSuccessMsg(resData.message || "Cập nhật hạn mức công nợ thành công!");
-        setShowLimitModal(false);
-        await initData();
-        setTimeout(() => setSuccessMsg(null), 4000);
-      } else {
-        throw new Error(resData.message || "Cập nhật thất bại");
-      }
+      setSuccessMsg(res.data.message || "Cập nhật hạn mức công nợ thành công!");
+      setShowLimitModal(false);
+      await initData();
+      setTimeout(() => setSuccessMsg(null), 4000);
     } catch (e: any) {
-      setErrorMsg(e.message);
+      const errorResponse = e?.response?.data;
+      setErrorMsg(errorResponse?.message || e.message || "Cập nhật thất bại");
       setTimeout(() => setErrorMsg(null), 5000);
     } finally {
       setLoading(false);
@@ -174,27 +155,19 @@ export function SupplierCreditManagement() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/suppliers/${selectedSupplier.id}/payment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: Number(payAmount),
-          paymentMethod,
-          notes: paymentNotes,
-          performedBy
-        })
+      const res = await api.post(`/api/suppliers/${selectedSupplier.id}/payment`, {
+        amount: Number(payAmount),
+        paymentMethod,
+        notes: paymentNotes,
+        performedBy
       });
-      const resData = await res.json();
-      if (res.ok) {
-        setSuccessMsg(resData.message || "Ghi nhận thanh toán thành công!");
-        setShowPaymentModal(false);
-        await initData();
-        setTimeout(() => setSuccessMsg(null), 4000);
-      } else {
-        throw new Error(resData.message || "Ghi nhận thất bại");
-      }
+      setSuccessMsg(res.data.message || "Ghi nhận thanh toán thành công!");
+      setShowPaymentModal(false);
+      await initData();
+      setTimeout(() => setSuccessMsg(null), 4000);
     } catch (e: any) {
-      setErrorMsg(e.message);
+      const errorResponse = e?.response?.data;
+      setErrorMsg(errorResponse?.message || e.message || "Ghi nhận thất bại");
       setTimeout(() => setErrorMsg(null), 5000);
     } finally {
       setLoading(false);

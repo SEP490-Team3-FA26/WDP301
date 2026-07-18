@@ -8,6 +8,7 @@ import { UserService } from './user-service.service';
 import { Branch, BranchSchema } from './schemas/branch.schema';
 import { BranchService } from './branch.service';
 import { Cart, CartSchema } from './schemas/cart.schema';
+import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { Cart, CartSchema } from './schemas/cart.schema';
       { name: User.name, schema: UserSchema },
       { name: Branch.name, schema: BranchSchema },
       { name: Cart.name, schema: CartSchema },
+      { name: AuditLog.name, schema: AuditLogSchema },
     ]),
     ClientsModule.registerAsync([
       {

@@ -16,6 +16,19 @@ export class MedicineController {
     }
   }
 
+  @MessagePattern('inventory.medicine.branch_list')
+  async listBranchMedicines(@Payload() query: any) {
+    try {
+      if (!query.branchId) {
+        throw new RpcException('Branch ID is required for branch inventory API');
+      }
+      return await this.medicineService.getBranchMedicines(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách thuốc chi nhánh');
+    }
+  }
+
   @MessagePattern('inventory.medicine.get_by_id')
   async getMedicineById(@Payload() data: { id: string }) {
     try {
