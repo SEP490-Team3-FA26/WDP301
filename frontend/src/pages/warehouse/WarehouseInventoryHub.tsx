@@ -5,7 +5,7 @@ import {
   ArrowRight, Building2, Calendar, Eye, FileText, Truck,
   ClipboardList, ShoppingCart, ArrowDownToLine, DollarSign,
   CreditCard, XCircle, SendHorizonal, Warehouse, ChevronRight,
-  PackageCheck, PackageX
+  PackageCheck, PackageX, Scan, Camera, ClipboardCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { CreatePOModal } from "../../components/CreatePOModal";

@@ -15,7 +15,7 @@ export class QuotaController implements OnModuleInit {
   constructor(
     @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     await subscribeToKafkaTopics(this.kafkaClient, [
@@ -38,7 +38,7 @@ export class QuotaController implements OnModuleInit {
     }
 
     this.kafkaClient.emit('quota.event.create', JSON.stringify(dto)).subscribe();
-  
+
     return {
       status: 'Accepted',
       message: 'Sự kiện tạo hạn mức đã được gửi vào hàng đợi Kafka để xử lý!',
@@ -103,10 +103,10 @@ export class QuotaController implements OnModuleInit {
     }
 
     const payload = { id, data: dto };
-  
+
     this.kafkaClient.emit('quota.event.update', JSON.stringify(payload)).subscribe();
     await this.cacheManager.del(`quota:${id}`);
-  
+
     return {
       status: 'Accepted',
       message: 'Yêu cầu cập nhật hạn mức đang được xử lý ngầm!',
@@ -125,4 +125,3 @@ export class QuotaController implements OnModuleInit {
     };
   }
 }
-

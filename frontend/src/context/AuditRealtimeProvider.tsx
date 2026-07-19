@@ -89,7 +89,7 @@ export const AuditRealtimeProvider: React.FC<{ children: React.ReactNode }> = ({
     if (incomingLogs.length === 0) return;
     
     setVisibleLogs(prev => {
-      const prevMap = new Map(prev.map(item => [item.auditEventId, item]));
+      const prevMap = new Map<string, AuditLogItem>(prev.map(item => [item.auditEventId, item]));
       // Prepend incoming items (reversing to insert newest first)
       const sortedIncoming = [...incomingLogs];
       for (const item of sortedIncoming) {

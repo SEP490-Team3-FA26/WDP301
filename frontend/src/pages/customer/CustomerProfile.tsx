@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, MapPin, Phone, Mail, Edit2 } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../services/core/api';
 
 export function CustomerProfile() {
   const [user, setUser] = useState({

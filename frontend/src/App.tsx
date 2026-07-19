@@ -56,6 +56,7 @@ import { PriceManagement } from "./pages/admin/PriceManagement";
 import { SupplierCreditManagement } from "./pages/admin/SupplierCreditManagement";
 import { AuditLogs } from "./pages/admin/AuditLogs";
 import { QuotaManagement } from "./pages/admin/QuotaManagement";
+import { SupplyChainDashboard } from "./pages/admin/SupplyChainDashboard";
 
 // Branch Pages
 import { BranchRequisition } from "./pages/branch/BranchRequisition";
@@ -122,6 +123,7 @@ export default function App() {
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />
             <Route path="audit-logs" element={<AuditLogs />} />
+            <Route path="supply-chain" element={<SupplyChainDashboard />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="ai-forecast" element={<AIForecast />} />
             <Route path="lot-tracking" element={<LotTracking />} />
@@ -152,6 +154,7 @@ export default function App() {
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="ai-forecast" element={<AIForecast />} />
+            <Route path="supply-chain" element={<SupplyChainDashboard />} />
             <Route path="lot-tracking" element={<LotTracking />} />
             <Route path="profile" element={<Profile />} />
 

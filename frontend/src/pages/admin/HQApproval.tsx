@@ -260,7 +260,7 @@ export function HQApproval() {
         <div className="overflow-auto flex-1">
           {loading ? (
             <div className="flex flex-col items-center py-16 gap-3"><Loader2 className="animate-spin text-violet-600" size={28} /><p className="text-slate-500 text-sm">Đang tải...</p></div>
-          ) : (tab === "URGENT" ? filteredPrs.length === 0 : tab === "GRN_APPROVAL" ? inspectionList.filter((i: any) => i.status === 'WAITING').length === 0 : filteredPos.length === 0) ? (
+          ) : (tab === "URGENT" ? filteredPrs.length === 0 : filteredPos.length === 0) ? (
             <div className="flex flex-col items-center py-16 gap-3 text-slate-400">
               <ShieldCheck size={36} />
               <p className="text-sm font-semibold">

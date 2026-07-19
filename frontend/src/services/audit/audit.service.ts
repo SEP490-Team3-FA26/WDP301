@@ -16,6 +16,7 @@ export interface AuditLogItem {
   _id: string;
   auditEventId: string;
   correlationId: string;
+  transactionId?: string;
   requestId: string;
   sessionId?: string;
   userId?: string;

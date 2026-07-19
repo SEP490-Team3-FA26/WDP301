@@ -28,6 +28,8 @@ export class MedicineController implements OnModuleInit {
       'inventory.medicine.dropdown_list',
       'inventory.medicine.get_alternatives',
       'inventory.medicine.update_price',
+      'inventory.medicine.safe_stock_chain',
+      'inventory.medicine.detect_anomalies',
       'inventory.medicine.branch_list',
     ]);
   }
@@ -60,6 +62,49 @@ export class MedicineController implements OnModuleInit {
   @ApiOperation({ summary: 'Lấy danh sách tối giản của các loại thuốc phục vụ cho dropdown' })
   async getMedicinesDropdown() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.dropdown_list', {});
+  }
+
+  // UC-30: Tồn kho thời gian thực toàn chuỗi + Thuật toán tồn kho an toàn
+  @Get('safe-stock-chain')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[UC-30] Xem tồn kho thời gian thực toàn chuỗi + phân tích an toàn' })
+  @ApiQuery({ name: 'serviceLevel', required: false, type: Number, description: 'Mức phục vụ: 0.90/0.95/0.98/0.99', example: 0.95 })
+  @ApiQuery({ name: 'periodDays', required: false, type: Number, description: 'Kỳ phân tích (ngày)', example: 30 })
+  @ApiQuery({ name: 'branchId', required: false, type: String, description: 'Lọc theo chi nhánh' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getSafeStockChain(
+    @Query('serviceLevel') serviceLevel?: number,
+    @Query('periodDays') periodDays?: number,
+    @Query('branchId') branchId?: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.safe_stock_chain', {
+      serviceLevel: serviceLevel ? Number(serviceLevel) : 0.95,
+      periodDays: periodDays ? Number(periodDays) : 30,
+      branchId: branchId || undefined,
+      page: Number(page),
+      limit: Number(limit),
+    });
+  }
+
+  // UC-37: Phát hiện bất thường tồn kho (Z-Score / 3-Sigma Thống Kê Thuần Túy)
+  @Get('anomaly-detection')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[UC-37] Phát hiện bất thường tồn kho bằng Z-Score / 3-Sigma' })
+  @ApiQuery({ name: 'periodDays', required: false, type: Number, description: 'Kỳ phân tích (ngày)', example: 60 })
+  @ApiQuery({ name: 'zScoreThreshold', required: false, type: Number, description: 'Ngưỡng Z-Score (mặc định: 3)', example: 3 })
+  async getAnomalyDetection(
+    @Query('periodDays') periodDays?: number,
+    @Query('zScoreThreshold') zScoreThreshold?: number,
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.detect_anomalies', {
+      periodDays: periodDays ? Number(periodDays) : 60,
+      zScoreThreshold: zScoreThreshold ? Number(zScoreThreshold) : 3,
+    });
   }
 
   @Get(':id')
@@ -249,4 +294,5 @@ export class MedicineController implements OnModuleInit {
       throw new HttpException(error.message || 'Lỗi khi gọi AI Service', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
 }

@@ -9,10 +9,9 @@ import { InventoryTransaction } from './schemas/inventory-transaction.schema';
 import { StockTransfer } from './schemas/stock-transfer.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
+import { firstValueFrom } from 'rxjs';
 import { subscribeToKafkaTopics, sendKafkaMessage } from '../../../api-gateway/src/common/kafka.helper';
 import { QuotaService } from '../quota/quota.service';
-import { firstValueFrom } from 'rxjs';
-
 import { InspectionRecord } from './schemas/inspection-record.schema';
 
 @Injectable()
@@ -635,6 +634,7 @@ export class PurchaseService {
       const stockBefore = batch ? batch.stock : 0;
       if (batch) {
         batch.stock += (item.actualQty ?? 0);
+        batch.importPrice = item.unitPrice; // Cập nhật giá nhập mới nhất
         batch.status = batch.expDate < new Date() ? 'EXPIRED' : 'ACTIVE';
         await batch.save();
       } else {
@@ -644,6 +644,7 @@ export class PurchaseService {
           batchNo: item.batchNo,
           expDate: new Date(item.expDate),
           stock: (item.actualQty ?? 0),
+          importPrice: item.unitPrice,
           status: new Date(item.expDate) < new Date() ? 'EXPIRED' : 'ACTIVE',
         });
         await batch.save();
@@ -898,7 +899,7 @@ export class PurchaseService {
           origin = {
             grnId: grn._id.toString(),
             poId: grn.poId,
-            importDate: grn.createdAt,
+            importDate: (grn as any).createdAt,
             supplierId: po ? po.supplierId : null,
             supplierName,
             importQty: grnItem ? grnItem.actualQty : importTxn.quantityChange,
@@ -937,7 +938,7 @@ export class PurchaseService {
         referenceType: t.referenceType,
         performedBy: t.performedBy,
         notes: t.notes,
-        createdAt: t.createdAt,
+        createdAt: (t as any).createdAt,
       })),
     };
   }
@@ -1533,6 +1534,7 @@ export class PurchaseService {
           if (batch) {
             stockBefore = batch.stock;
             batch.stock += item.actualQty;
+            batch.importPrice = item.unitPrice; // Cập nhật giá nhập
             batch.expDate = item.expDate;
             await batch.save({ session });
           } else {
@@ -1542,6 +1544,7 @@ export class PurchaseService {
               batchNo: item.batchNo,
               expDate: item.expDate,
               stock: item.actualQty,
+              importPrice: item.unitPrice, // Lưu giá nhập
               status: 'ACTIVE'
             });
             await batch.save({ session });
