@@ -25,7 +25,8 @@ import api from "../../services/core/api";
 
 export function Finance() {
    const [selectedBranch, setSelectedBranch] = useState("all");
-   const [timeRange, setTimeRange] = useState("month");
+   const [selectedYear, setSelectedYear] = useState("2026");
+   const [timeRange, setTimeRange] = useState("year");
    const [orders, setOrders] = useState<any[]>([]);
    const [branchesList, setBranchesList] = useState<any[]>([]);
    const [loading, setLoading] = useState(false);
@@ -86,44 +87,30 @@ export function Finance() {
       }
    };
 
-   // Process and filter orders based on selectedBranch & timeRange
-   // Standard target year is 2026 based on database orders
-   const targetYear = 2026;
-
+   // Dynamic Filtering based on Branch, Year, and Time Range
    const getFilteredOrders = () => {
+      const now = new Date();
       return orders.filter(order => {
-         // Filter by Payment Status (Only count paid orders for finance revenue)
-         if (order.paymentStatus !== 'PAID') return false;
-
          // Filter by Branch
          const bId = order.branchId || 'BR-001';
          if (selectedBranch !== 'all' && bId !== selectedBranch) return false;
 
-         // Filter by Time Range
-         const orderDate = new Date(order.createdAt);
+         const orderDate = new Date(order.createdAt || Date.now());
          const orderYear = orderDate.getFullYear();
+         const orderMonth = orderDate.getMonth();
 
-         if (timeRange === 'year') {
-            return orderYear === targetYear;
-         }
-
-         if (timeRange === 'quarter') {
-            // Q2 (T4, T5, T6 - June is inside Q2)
-            const month = orderDate.getMonth(); // 0-indexed
-            return orderYear === targetYear && month >= 3 && month <= 5; // Q2: April to June
+         if (selectedYear !== 'all' && orderYear !== Number(selectedYear)) {
+            return false;
          }
 
          if (timeRange === 'month') {
-            // June (month index 5)
-            const month = orderDate.getMonth();
-            return orderYear === targetYear && month === 5;
+            return orderMonth === now.getMonth() && orderYear === now.getFullYear();
          }
 
-         if (timeRange === 'week') {
-            // Orders around mid-June (June 12)
-            const diffTime = Math.abs(new Date(2026, 5, 15).getTime() - orderDate.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return orderYear === targetYear && diffDays <= 7;
+         if (timeRange === 'quarter') {
+            const currentQuarter = Math.floor(now.getMonth() / 3);
+            const orderQuarter = Math.floor(orderMonth / 3);
+            return orderQuarter === currentQuarter && orderYear === now.getFullYear();
          }
 
          return true;
@@ -132,36 +119,59 @@ export function Finance() {
 
    const filteredOrders = getFilteredOrders();
 
-   // Compute KPI Metrics
-   const totalRevenue = filteredOrders.reduce((sum, o) => sum + o.totalAmount, 0);
-   const totalExpense = Math.round(totalRevenue * 0.65);
+   // Compute KPI Metrics from real order data
+   const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.totalAmount || o.finalAmount || 0), 0);
+   
+   const totalExpense = filteredOrders.reduce((sum, o) => {
+      let orderCogs = 0;
+      if (Array.isArray(o.items)) {
+         orderCogs = o.items.reduce((iSum: number, item: any) => {
+            const importPrice = item.importPrice || item.costPrice || (item.price ? item.price * 0.65 : 0);
+            return iSum + (importPrice * (item.quantity || 1));
+         }, 0);
+      }
+      if (!orderCogs || orderCogs === 0) {
+         orderCogs = Math.round((o.totalAmount || 0) * 0.65);
+      }
+      return sum + orderCogs;
+   }, 0);
+
    const totalProfit = totalRevenue - totalExpense;
 
-   // Compute Monthly Chart Data (for targetYear 2026)
+   // Compute Monthly Chart Data dynamically from real MongoDB orders
    const monthsList = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"];
    const monthlyRevenueMap: Record<number, number> = {};
+   const monthlyExpenseMap: Record<number, number> = {};
 
    orders.forEach(order => {
-      if (order.paymentStatus !== 'PAID') return;
       const bId = order.branchId || 'BR-001';
       if (selectedBranch !== 'all' && bId !== selectedBranch) return;
 
-      const orderDate = new Date(order.createdAt);
-      if (orderDate.getFullYear() === targetYear) {
+      const orderDate = new Date(order.createdAt || Date.now());
+      if (selectedYear === 'all' || orderDate.getFullYear() === Number(selectedYear)) {
          const m = orderDate.getMonth(); // 0-11
-         monthlyRevenueMap[m] = (monthlyRevenueMap[m] || 0) + order.totalAmount;
+         const rev = order.totalAmount || order.finalAmount || 0;
+         let cogs = 0;
+         if (Array.isArray(order.items)) {
+            cogs = order.items.reduce((s: number, item: any) => {
+               const ip = item.importPrice || item.costPrice || (item.price ? item.price * 0.65 : 0);
+               return s + (ip * (item.quantity || 1));
+            }, 0);
+         }
+         if (!cogs || cogs === 0) cogs = Math.round(rev * 0.65);
+
+         monthlyRevenueMap[m] = (monthlyRevenueMap[m] || 0) + rev;
+         monthlyExpenseMap[m] = (monthlyExpenseMap[m] || 0) + cogs;
       }
    });
 
    const chartData = monthsList.map((name, index) => {
       const revVal = monthlyRevenueMap[index] || 0;
-      // Convert to Millions (Triệu VNĐ) for the chart scaling
-      const revMillions = parseFloat((revVal / 1000000).toFixed(2));
-      const expMillions = parseFloat((revMillions * 0.65).toFixed(2));
+      const expVal = monthlyExpenseMap[index] || 0;
       return {
          name,
-         revenue: revMillions,
-         expense: expMillions
+         revenue: parseFloat((revVal / 1000000).toFixed(2)),
+         expense: parseFloat((expVal / 1000000).toFixed(2))
       };
    });
 
@@ -172,12 +182,12 @@ export function Finance() {
       const branchName = foundBranch ? foundBranch.name : `Chi nhánh ${bId}`;
       const paymentMethodName = o.paymentMethod === 'QR_PAY' ? 'QR PayOS' : o.paymentMethod === 'CASH' ? 'Tiền mặt' : 'Thẻ POS';
       return {
-         id: String(o.orderCode || o._id.slice(-8)),
-         date: new Date(o.createdAt).toLocaleDateString('vi-VN'),
+         id: String(o.orderCode || (o._id ? o._id.slice(-8) : 'GD-1001')),
+         date: new Date(o.createdAt || Date.now()).toLocaleDateString('vi-VN'),
          branch: branchName,
          type: 'income',
          category: o.type === 'ONLINE' ? 'Bán hàng (Online)' : 'Bán hàng (Quầy)',
-         amount: o.totalAmount,
+         amount: o.totalAmount || o.finalAmount || 0,
          method: paymentMethodName
       };
    });
@@ -208,7 +218,7 @@ export function Finance() {
          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
             <div>
                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Kế toán & Tài chính</h1>
-               <p className="text-slate-500 mt-1">Báo cáo doanh thu, chi phí và lợi nhuận hệ thống từ dữ liệu bán hàng.</p>
+               <p className="text-slate-500 mt-1">Báo cáo doanh thu, chi phí và lợi nhuận hệ thống từ dữ liệu bán hàng thực tế MongoDB.</p>
             </div>
             <div className="flex items-center gap-3 w-full sm:w-auto">
                <button
@@ -246,18 +256,36 @@ export function Finance() {
                   ))}
                </select>
             </div>
+
             <div className="hidden md:block w-px h-8 bg-slate-200"></div>
-            <div className="flex-1 w-full flex items-center gap-3">
+
+            <div className="w-full md:w-48 flex items-center gap-3">
                <Calendar className="text-slate-400 shrink-0" size={20} />
+               <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 font-semibold rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0057cd]"
+               >
+                  <option value="2026">Năm 2026</option>
+                  <option value="2025">Năm 2025</option>
+                  <option value="2024">Năm 2024</option>
+                  <option value="all">Tất cả các năm</option>
+               </select>
+            </div>
+
+            <div className="hidden md:block w-px h-8 bg-slate-200"></div>
+
+            <div className="flex-1 w-full flex items-center gap-3">
+               <Filter className="text-slate-400 shrink-0" size={20} />
                <select
                   value={timeRange}
                   onChange={(e) => setTimeRange(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 text-slate-800 font-semibold rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0057cd]"
                >
-                  <option value="week">Tuần này (Xung quanh 12/06/2026)</option>
-                  <option value="month">Tháng này (Tháng 06/2026)</option>
-                  <option value="quarter">Quý 2/2026 (Tháng 4 - Tháng 6)</option>
-                  <option value="year">Năm 2026</option>
+                  <option value="year">Cả năm (Năm đã chọn)</option>
+                  <option value="month">Tháng hiện tại</option>
+                  <option value="quarter">Quý hiện tại</option>
+                  <option value="all">Tất cả thời gian</option>
                </select>
             </div>
          </div>

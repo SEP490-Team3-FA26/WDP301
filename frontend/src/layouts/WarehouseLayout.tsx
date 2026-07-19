@@ -12,6 +12,7 @@ export function WarehouseLayout() {
         { name: "Quản trị Nhập / Xuất", href: "/warehouse/inventory/import" },
         { name: "Biên bản kiểm kê", href: "/warehouse/inventory/checks" },
         { name: "Lịch sử hủy thuốc", href: "/warehouse/inventory/dispose" },
+        { name: "Truy xuất Lô & IoT Tracking", href: "/warehouse/inventory/lot-tracking" },
       ]
     },
     { 
