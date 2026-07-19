@@ -58,6 +58,27 @@ class _AdminScreenState extends State<AdminScreen> {
     },
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _checkHealth();
+  }
+
+  Future<void> _checkHealth() async {
+    try {
+      final healthList = await ApiService.getServiceHealth();
+      if (mounted) {
+        setState(() {
+          for (int i = 0; i < _services.length && i < healthList.length; i++) {
+            _services[i]['status'] = healthList[i]['status'];
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error checking health: $e");
+    }
+  }
+
   void _toggleService(int index) {
     setState(() {
       final current = _services[index]['status'];
