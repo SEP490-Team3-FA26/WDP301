@@ -4,7 +4,8 @@ import {
   ShieldCheck, Calendar, Package, Eye, ArrowRight, DollarSign, Building2, CreditCard
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
+import { purchaseRequisitionService } from "../../services/purchase/purchaseRequisition.service";
+import api from "../../services/core/api";
 
 /**
  * Admin phê duyệt & thanh toán các Đơn Đặt Hàng (PO) đã được tự động tách theo NCC.
@@ -28,37 +29,28 @@ export function HQApproval() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
-
       const [resPo, resSuppliers, resPr] = await Promise.all([
-        fetch(`/api/purchase-orders?status=${tab === "URGENT" ? "PENDING_APPROVAL" : tab}`, { signal: controller.signal }),
-        fetch(`/api/suppliers`, { signal: controller.signal }),
-        fetch(`/api/purchase-requisitions?status=URGENT_PENDING`, { signal: controller.signal })
+        api.get(`/api/purchase-orders?status=${tab === "URGENT" ? "PENDING_APPROVAL" : tab}`),
+        api.get(`/api/suppliers`),
+        api.get(`/api/purchase-requisitions?status=URGENT_PENDING`)
       ]);
-      clearTimeout(timeoutId);
 
-      if (resSuppliers.ok) setSuppliers(await resSuppliers.json());
+      setSuppliers(Array.isArray(resSuppliers.data) ? resSuppliers.data : []);
 
-      if (resPr.ok) {
-        const data = await resPr.json();
-        setUrgentPrs(data || []);
-        // Nếu không có đơn hỏa tốc nào và đang ở tab URGENT, tự chuyển về PENDING_APPROVAL
-        if ((!data || data.length === 0) && tab === "URGENT") {
-          setTab("PENDING_APPROVAL");
-        }
+      const prData = resPr.data;
+      setUrgentPrs(prData || []);
+      // Nếu không có đơn hỏa tốc nào và đang ở tab URGENT, tự chuyển về PENDING_APPROVAL
+      if ((!prData || prData.length === 0) && tab === "URGENT") {
+        setTab("PENDING_APPROVAL");
       }
 
-      if (resPo.ok) {
-        let data = await resPo.json();
-        if (data && data.value) data = data.value;
-        if (!Array.isArray(data)) data = [];
-        setPoList(data);
-      }
+      let poData = resPo.data;
+      if (poData && poData.value) poData = poData.value;
+      if (!Array.isArray(poData)) poData = [];
+      setPoList(poData);
     } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        setMsg({ type: "error", text: "Tải dữ liệu quá lâu (timeout). Vui lòng thử lại." });
-      }
+      console.error("Failed to fetch HQ approval data", err);
+      setMsg({ type: "error", text: "Lỗi tải dữ liệu. Vui lòng thử lại." });
     } finally { setLoading(false); }
   };
 
@@ -75,26 +67,17 @@ export function HQApproval() {
 
       for (const currentPoId of targetPos) {
         try {
-          const res = await fetch("/api/purchase-orders/approve-pay", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              poId: currentPoId,
-              action,
-              rejectionReason: action === "REJECT" ? rejectReason : undefined,
-              paymentType: action === "APPROVE" ? paymentType : undefined,
-            }),
+          await api.post("/api/purchase-orders/approve-pay", {
+            poId: currentPoId,
+            action,
+            rejectionReason: action === "REJECT" ? rejectReason : undefined,
+            paymentType: action === "APPROVE" ? paymentType : undefined,
           });
-          if (res.ok) {
-            successCount++;
-          } else {
-            errorCount++;
-            const errData = await res.json();
-            lastErrorMessage = errData.message || "Lỗi xử lý đơn.";
-          }
+          successCount++;
         } catch (e: any) {
           errorCount++;
-          lastErrorMessage = e.message || "Lỗi kết nối.";
+          const errorResponse = e?.response?.data;
+          lastErrorMessage = errorResponse?.message || e.message || "Lỗi kết nối.";
         }
       }
 
@@ -124,12 +107,8 @@ export function HQApproval() {
 
       for (const prId of selectedPrs) {
         try {
-          const res = await fetch("/api/purchase-requisitions/process-urgent", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prId, action }),
-          });
-          if (res.ok) successCount++;
-          else errorCount++;
+          await api.post("/api/purchase-requisitions/process-urgent", { prId, action });
+          successCount++;
         } catch { errorCount++; }
       }
 
@@ -284,7 +263,15 @@ export function HQApproval() {
           ) : (tab === "URGENT" ? filteredPrs.length === 0 : filteredPos.length === 0) ? (
             <div className="flex flex-col items-center py-16 gap-3 text-slate-400">
               <ShieldCheck size={36} />
-              <p className="text-sm font-semibold">{tab === "PENDING_APPROVAL" ? "Không có PO nào đang chờ phê duyệt." : tab === "URGENT" ? "Không có yêu cầu hỏa tốc nào." : "Không có dữ liệu."}</p>
+              <p className="text-sm font-semibold">
+                {tab === "PENDING_APPROVAL" 
+                  ? "Không có PO nào đang chờ phê duyệt." 
+                  : tab === "URGENT" 
+                    ? "Không có yêu cầu hỏa tốc nào." 
+                    : tab === "GRN_APPROVAL"
+                      ? "Không có phiên kiểm hàng nào chờ duyệt."
+                      : "Không có dữ liệu."}
+              </p>
             </div>
           ) : tab === "URGENT" ? (
             <table className="w-full text-sm text-left">
@@ -319,7 +306,7 @@ export function HQApproval() {
                 ))}
               </tbody>
             </table>
-          ) : (
+          ) : tab !== "GRN_APPROVAL" ? (
             <table className="w-full text-sm text-left">
               <thead className="text-[11px] text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 border-b border-slate-200">
                 <tr>
@@ -373,7 +360,7 @@ export function HQApproval() {
                 ))}
               </tbody>
             </table>
-          )}
+          ) : null}
         </div>
       </div>
 

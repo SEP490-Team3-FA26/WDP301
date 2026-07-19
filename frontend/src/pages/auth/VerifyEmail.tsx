@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ShieldCheck, Mail } from "lucide-react";
-import { authService } from "../../services/auth.service";
+import { authService } from "../../services/auth/auth.service";
 
 export function VerifyEmail() {
   const navigate = useNavigate();

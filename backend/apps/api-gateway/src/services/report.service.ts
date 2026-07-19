@@ -38,7 +38,7 @@ export class ReportService {
         const safeCreatorName = removeAccents(creatorName);
 
         const startMetaY = doc.y;
-        
+
         // Left Column: Branch Info
         doc.fillColor(primaryColor).font('Helvetica-Bold').fontSize(11).text('CHI NHANH (BRANCH)', 50, startMetaY);
         doc.fillColor(textColor).font('Helvetica').fontSize(10);
@@ -153,7 +153,7 @@ export class ReportService {
           if (currentY > 680) {
             doc.addPage();
             currentY = 50;
-            
+
             // Draw Table Header on New Page
             doc.rect(50, currentY, 510, tableHeaderHeight).fill(primaryColor);
             doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
@@ -163,7 +163,7 @@ export class ReportService {
             doc.text('PTTT', 340, currentY + 6, { width: 60 });
             doc.text('NGAY TAO', 410, currentY + 6, { width: 65 });
             doc.text('TRI GIA (NET)', 480, currentY + 6, { width: 75, align: 'right' });
-            
+
             currentY += tableHeaderHeight;
             doc.font('Helvetica').fontSize(8);
             doc.fillColor(textColor);
@@ -178,7 +178,7 @@ export class ReportService {
           doc.fillColor(textColor);
           const oDate = new Date(order.createdAt).toLocaleDateString('vi-VN');
           const codeStr = String(order.orderCode || order.orderId.slice(-8));
-          
+
           doc.text(codeStr, 55, currentY + 5, { width: 80 });
           doc.text(removeAccents(order.patientName || 'Khach le'), 140, currentY + 5, { width: 120, lineBreak: false });
           doc.text(order.type || 'RETAIL', 270, currentY + 5, { width: 60 });
@@ -237,7 +237,7 @@ export class ReportService {
         const safeCreatorName = removeAccents(creatorName);
 
         const startMetaY = doc.y;
-        
+
         // Left Column: Branch Info
         doc.fillColor(primaryColor).font('Helvetica-Bold').fontSize(11).text('CHI NHANH (BRANCH)', 50, startMetaY);
         doc.fillColor(textColor).font('Helvetica').fontSize(10);
@@ -354,7 +354,7 @@ export class ReportService {
           if (currentY > 680) {
             doc.addPage();
             currentY = 50;
-            
+
             // Draw Table Header on New Page
             doc.rect(50, currentY, 510, tableHeaderHeight).fill(primaryColor);
             doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
@@ -364,7 +364,7 @@ export class ReportService {
             doc.text('GIA VON', 315, currentY + 6, { width: 70, align: 'right' });
             doc.text('LOI NHUAN', 395, currentY + 6, { width: 80, align: 'right' });
             doc.text('TYSUT', 485, currentY + 6, { width: 70, align: 'right' });
-            
+
             currentY += tableHeaderHeight;
             doc.font('Helvetica').fontSize(8);
             doc.fillColor(textColor);
@@ -379,7 +379,7 @@ export class ReportService {
           doc.fillColor(textColor);
           const codeStr = String(order.orderCode || order.orderId.slice(-8));
           const orderMargin = order.net > 0 ? ((order.profit / order.net) * 100).toFixed(1) : '0.0';
-          
+
           doc.text(codeStr, 55, currentY + 5, { width: 70 });
           doc.text(removeAccents(order.patientName || 'Khach le'), 130, currentY + 5, { width: 90, lineBreak: false });
           doc.text(`${order.net.toLocaleString('vi-VN')}`, 230, currentY + 5, { width: 75, align: 'right' });

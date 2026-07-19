@@ -4,8 +4,8 @@ import {
   Calendar, Package, Trash2, Send, FileText, ChevronRight, Eye, Search, ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
-import { medicineService } from "../../services/medicine.service";
+import { purchaseRequisitionService } from "../../services/purchase/purchaseRequisition.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 import { CreatePRModal } from "../../components/CreatePRModal";
 import { useSocket } from "../../hooks/useSocket";
 
@@ -24,17 +24,13 @@ export function BranchRequisition() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
-
       const [prRes, medRes] = await Promise.all([
-        fetch("/api/purchase-requisitions", { signal: controller.signal }).then(r => r.json()).catch(() => []),
-        fetch("/api/medicines?limit=500", { signal: controller.signal }).then(r => r.json()).then(d => d.data || d).catch(() => []),
+        purchaseRequisitionService.getPurchaseRequisitions().catch(() => []),
+        medicineService.getMedicines({ limit: 500 }).then(r => r.data || r).catch(() => []),
       ]);
 
-      clearTimeout(timeoutId);
-      setPrList(prRes);
-      setMedicines(medRes);
+      setPrList(Array.isArray(prRes) ? prRes : (prRes.data || []));
+      setMedicines(Array.isArray(medRes) ? medRes : []);
     } catch (err: any) {
       if (err?.name === 'AbortError') {
         console.error('Fetch timed out after 20s');

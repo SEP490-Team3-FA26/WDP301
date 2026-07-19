@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import {
   SearchIcon, XCircle, ShoppingCart, Minus, Plus, Building, Banknote, CreditCard, QrCode, FileText, Check, Printer
 } from "lucide-react";
-import { medicineService } from "../../../services/medicine.service";
-import { orderService } from "../../../services/order.service";
+import { medicineService } from "../../../services/inventory/medicine.service";
+import { orderService } from "../../../services/sales/order.service";
 
 // Helper to decode JWT token to extract branchId and user info
 function getBranchInfoFromToken() {
@@ -67,7 +67,7 @@ export default function WholesaleView() {
   const searchMedicines = async (query: string) => {
     try {
       const { branchId } = getBranchInfoFromToken();
-      const data = await medicineService.getMedicines({ limit: 10, search: query, _t: Date.now(), branchId: branchId || undefined });
+      const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: query, _t: Date.now() });
       setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);
@@ -163,7 +163,7 @@ export default function WholesaleView() {
             setPayosPolling(false);
             setShowPayOSModal(false);
             alert("Thanh toán PayOS thành công!");
-            
+
             const saleRes = data.saleResult || data;
             setInvoiceData(saleRes.data || saleRes);
             setShowInvoiceModal(true);
@@ -188,7 +188,7 @@ export default function WholesaleView() {
         setPayosPolling(false);
         setShowPayOSModal(false);
         alert("Thanh toán PayOS thành công!");
-        
+
         const saleRes = data.saleResult || data;
         setInvoiceData(saleRes.data || saleRes);
         setShowInvoiceModal(true);
@@ -237,7 +237,7 @@ export default function WholesaleView() {
     setError("");
     try {
       const { branchId: currentBranchId, fullName: currentUserName } = getBranchInfoFromToken();
-      
+
       const generatedOrderCode = Math.floor(10000000 + Math.random() * 90000000);
       const payload = {
         type: "WHOLESALE" as const,
@@ -289,7 +289,7 @@ export default function WholesaleView() {
     <div className="h-full flex flex-col xl:flex-row gap-6 overflow-hidden">
       {/* CỘT TRÁI: Tìm kiếm và Giỏ hàng sỉ */}
       <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-6 pb-6">
-        
+
         {/* Tìm kiếm thuốc */}
         <div className="bg-white rounded-[16px] border border-slate-200 p-5 shadow-sm flex flex-col gap-3 shrink-0">
           <label className="block text-xs font-black text-slate-700 uppercase tracking-wide">
@@ -485,8 +485,8 @@ export default function WholesaleView() {
                 type="button"
                 onClick={() => setPaymentMethod("CASH")}
                 className={`py-3.5 px-2.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center focus:outline-none ${paymentMethod === "CASH"
-                    ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd] font-black"
-                    : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-slate-50"
+                  ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd] font-black"
+                  : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-slate-50"
                   }`}
               >
                 <Banknote size={16} />
@@ -497,8 +497,8 @@ export default function WholesaleView() {
                 type="button"
                 onClick={() => setPaymentMethod("CARD")}
                 className={`py-3.5 px-2.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center focus:outline-none ${paymentMethod === "CARD"
-                    ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd] font-black"
-                    : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-slate-50"
+                  ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd] font-black"
+                  : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-slate-50"
                   }`}
               >
                 <CreditCard size={16} />
@@ -509,8 +509,8 @@ export default function WholesaleView() {
                 type="button"
                 onClick={() => setPaymentMethod("QR_PAY")}
                 className={`py-3.5 px-2.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center focus:outline-none ${paymentMethod === "QR_PAY"
-                    ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd] font-black"
-                    : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-slate-50"
+                  ? "border-[#0057cd] bg-[#f2f3ff] text-[#0057cd] font-black"
+                  : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-slate-50"
                   }`}
               >
                 <QrCode size={16} />
@@ -566,7 +566,7 @@ export default function WholesaleView() {
               <h3 className="font-black text-slate-800 text-sm">Quét mã VietQR chuyển khoản (PayOS)</h3>
               <p className="text-xs text-[#0057cd] font-bold mt-1">Đơn hàng sỉ: {total.toLocaleString()}₫</p>
             </div>
-            
+
             {payosQrCode ? (
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
                 <img src={payosQrCode} alt="PayOS VietQR Code" className="w-56 h-56 object-contain" />
@@ -576,7 +576,7 @@ export default function WholesaleView() {
                 Đang tạo mã QR...
               </div>
             )}
-            
+
             <p className="text-[10px] text-slate-500 font-semibold leading-relaxed">
               Vui lòng quét QR bằng ứng dụng ngân hàng của bạn. Hệ thống tự động xác nhận sau khi nhận được tiền.
             </p>

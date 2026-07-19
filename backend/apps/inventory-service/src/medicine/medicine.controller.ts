@@ -16,6 +16,19 @@ export class MedicineController {
     }
   }
 
+  @MessagePattern('inventory.medicine.branch_list')
+  async listBranchMedicines(@Payload() query: any) {
+    try {
+      if (!query.branchId) {
+        throw new RpcException('Branch ID is required for branch inventory API');
+      }
+      return await this.medicineService.getBranchMedicines(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách thuốc chi nhánh');
+    }
+  }
+
   @MessagePattern('inventory.medicine.get_by_id')
   async getMedicineById(@Payload() data: { id: string }) {
     try {
@@ -166,28 +179,20 @@ export class MedicineController {
     }
   }
 
-  // UC-30: Tồn kho thời gian thực toàn chuỗi + Thuật toán tồn kho an toàn
   @MessagePattern('inventory.medicine.safe_stock_chain')
-  async calculateSafeStockChain(@Payload() query: {
-    serviceLevel?: number;
-    periodDays?: number;
-    branchId?: string;
-    page?: number;
-    limit?: number;
-  }) {
+  async getSafeStockChain(@Payload() query: any) {
     try {
-      return await this.medicineService.calculateSafeStockChain(query);
+      return await this.medicineService.getSafeStockChain(query);
     } catch (error) {
       if (error instanceof RpcException) throw error;
-      throw new RpcException(error.message || 'Lỗi hệ thống khi tính toán tồn kho an toàn');
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy báo cáo tồn kho an toàn');
     }
   }
 
-  // UC-37: Phát hiện bất thường tồn kho (Z-Score / 3-Sigma Statistics)
   @MessagePattern('inventory.medicine.detect_anomalies')
-  async detectAnomalies(@Payload() query: { periodDays?: number; zScoreThreshold?: number }) {
+  async getAnomalyDetection(@Payload() query: any) {
     try {
-      return await this.medicineService.detectAnomalies(query);
+      return await this.medicineService.getAnomalyDetection(query);
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi phát hiện bất thường tồn kho');

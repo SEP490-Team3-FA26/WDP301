@@ -1,8 +1,11 @@
-import { Controller, Post, Get, Body, Param, Query, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @Controller('api/sales')
+@UseGuards(JwtAuthGuard)
 export class SalesController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -19,6 +22,13 @@ export class SalesController implements OnModuleInit {
   }
 
   @Post()
+  @AuditLogAction({
+    actionCode: 'SALES_CREATE',
+    actionName: 'Bán lẻ thuốc tại quầy',
+    module: 'Sales',
+    eventType: 'CREATE',
+    entityType: 'SalesOrder',
+  })
   async createSalesOrder(@Body() data: any) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.sale.create', data);
   }

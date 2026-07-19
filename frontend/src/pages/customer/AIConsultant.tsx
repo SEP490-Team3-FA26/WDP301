@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Mic, Square, Sparkles, AlertTriangle, CheckCircle, ShoppingCart, Volume2, Info, ArrowRight, HeartPulse } from "lucide-react";
-import { prescriptionService } from "../../services/prescription.service";
-import { cartService } from "../../services/cart.service";
+import { prescriptionService } from "../../services/sales/prescription.service";
+import { cartService } from "../../services/sales/cart.service";
 
 export function AIConsultant() {
   const [recording, setRecording] = useState(false);

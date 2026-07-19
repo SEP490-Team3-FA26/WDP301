@@ -107,3 +107,62 @@ async def check_drug_interactions(medicines_list: list[str], context: str) -> di
         return json.loads(content)
     except json.JSONDecodeError:
         return {"error": "Lỗi phân tích JSON từ LLM", "raw_content": content}
+
+FORECAST_SYSTEM_PROMPT = """Bạn là Chuyên gia Kế hoạch & Phân tích Chuỗi cung ứng Dược phẩm bằng AI tại Việt Nam.
+Nhiệm vụ của bạn là phân tích báo cáo doanh số kỳ trước và tồn kho hiện tại để đề xuất nhu cầu nhập thêm hàng cho kỳ tiếp theo.
+
+NGUYÊN TẮC QUAN TRỌNG:
+1. Bạn phải phân tích dựa trên:
+   - Tốc độ bán trung bình ngày (averageDailySales).
+   - Tồn kho thực tế hiện tại (currentStock).
+   - Số lượng hàng đang trên đường về (expectedIncoming).
+   - Định mức tồn tối thiểu (minStock).
+2. Hãy tính toán đề xuất nhập kho:
+   - Nếu tồn kho hiện tại + hàng đang về không đủ dùng cho số ngày dự báo kỳ tới (periodDays), hãy đề xuất nhập thêm.
+   - Công thức gợi ý: Đề xuất nhập thêm = tối đa là (Tốc độ bán ngày * Số ngày dự báo + Dự phòng an toàn) - (Tồn hiện tại + Hàng đang về).
+3. Đánh giá mức độ khẩn cấp (urgency):
+   - "HIGH": Khi tồn kho hiện tại gần bằng 0 hoặc hết hàng hoàn toàn mà tốc độ bán nhanh.
+   - "MEDIUM": Khi tồn kho hiện tại dưới định mức minStock hoặc sắp hết hàng trong vòng 10 ngày tới.
+   - "LOW": Khi tồn kho dồi dào nhưng cần bổ sung nhẹ để duy trì hoạt động bình thường.
+4. Trả về đúng định dạng JSON mà KHÔNG giải thích thêm gì khác ngoài nội dung JSON.
+
+BẮT BUỘC TRẢ VỀ JSON HỢP LỆ THEO SCHEMA SAU:
+{
+  "summary": "Tóm tắt xu hướng tồn kho và phân tích thị trường toàn cảnh",
+  "recommendations": [
+    {
+      "medicineId": "ID của thuốc",
+      "name": "Tên thuốc",
+      "currentStock": 100,
+      "averageDailySales": 5.2,
+      "expectedIncoming": 0,
+      "suggestedOrderQty": 150,
+      "urgency": "HIGH | MEDIUM | LOW",
+      "reason": "Lý do AI phân tích cụ thể cho loại thuốc này (VD: nhu cầu tăng cao, sắp hết hàng...)"
+    }
+  ]
+}"""
+
+async def generate_demand_forecast(dataset: list, period_days: int) -> dict:
+    """
+    Tạo dự báo nhu cầu nhập hàng JSON dựa trên dataset lịch sử bán hàng và tồn kho
+    """
+    dataset_str = json.dumps(dataset, ensure_ascii=False)
+    
+    user_prompt = f"Số ngày dự báo kỳ tới: {period_days} ngày. Dưới đây là dữ liệu tồn kho và bán hàng thô:\n{dataset_str}"
+    
+    response = await client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": FORECAST_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt}
+        ],
+        temperature=0.2,
+        response_format={"type": "json_object"}
+    )
+    
+    content = response.choices[0].message.content
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return {"error": "Lỗi phân tích JSON dự báo từ LLM", "raw_content": content}

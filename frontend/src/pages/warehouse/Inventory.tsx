@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck, Tag, TrendingDown } from "lucide-react";
-import { medicineService } from "../../services/medicine.service";
+import { medicineService } from "../../services/inventory/medicine.service";
 
 export function Inventory() {
   const navigate = useNavigate();
@@ -205,7 +205,7 @@ export function Inventory() {
           classification: selectedClassification || undefined
         });
         setInventory(result.data);
-        setTotal(result.total);
+        setTotal(result.pagination?.total || 0);
       } catch (error) {
         console.error("Error fetching inventory:", error);
       } finally {

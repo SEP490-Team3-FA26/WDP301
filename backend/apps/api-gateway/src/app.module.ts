@@ -4,6 +4,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ClientsModule, Transport, ClientKafka } from '@nestjs/microservices';
+import { MongooseModule } from '@nestjs/mongoose';
 
 import { SupplierController } from './controllers/supplier.controller';
 import { PurchaseRequisitionController } from './controllers/purchase-requisition.controller';
@@ -33,6 +34,11 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { S3StorageService } from './storage/s3-storage.service';
 import { ReportService } from './services/report.service';
 import { WebsocketModule } from './websocket/websocket.module';
+import { NotificationModule } from './notification/notification.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
+import { RedactionService } from './services/redaction.service';
+import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
 
 /**
  * Root Module của API Gateway
@@ -42,6 +48,15 @@ import { WebsocketModule } from './websocket/websocket.module';
   imports: [
     // Đọc biến môi trường toàn cục
     ConfigModule.forRoot({ isGlobal: true }),
+
+    // MongoDB connection for notifications persistence
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => ({
+        uri: config.get<string>('MONGODB_URI'),
+      }),
+      inject: [ConfigService],
+    }),
 
     // Redis Cache (Cache-Aside Strategy)
     CacheModule.register({
@@ -143,6 +158,7 @@ import { WebsocketModule } from './websocket/websocket.module';
       },
     ]),
     WebsocketModule,
+    NotificationModule,
   ],
   controllers: [
     SupplierController,
@@ -217,6 +233,8 @@ export class AppGatewayModule {
       'inventory.transfer.get_by_id',
       'inventory.sale.report',
       'quota.get.by.id',
+      'quota.get.by.branch',
+      'quota.get.summary',
       'quota.get.all',
     ];
     for (const t of inventoryTopics) {

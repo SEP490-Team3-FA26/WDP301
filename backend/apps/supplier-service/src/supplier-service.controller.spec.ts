@@ -1,22 +1,37 @@
+/// <reference types="jest" />
 import { Test, TestingModule } from '@nestjs/testing';
 import { SupplierServiceController } from './supplier-service.controller';
 import { SupplierServiceService } from './supplier-service.service';
 
 describe('SupplierServiceController', () => {
-  let supplierServiceController: SupplierServiceController;
+  let controller: SupplierServiceController;
+  let service: SupplierServiceService;
+
+  const mockSupplierService = {
+    getById: jest.fn(),
+    getAll: jest.fn(),
+    create: jest.fn(),
+  };
 
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [SupplierServiceController],
-      providers: [SupplierServiceService],
+      providers: [
+        { provide: SupplierServiceService, useValue: mockSupplierService },
+      ],
     }).compile();
 
-    supplierServiceController = app.get<SupplierServiceController>(SupplierServiceController);
+    controller = app.get<SupplierServiceController>(SupplierServiceController);
+    service = app.get<SupplierServiceService>(SupplierServiceService);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(supplierServiceController.getHello()).toBe('Hello World!');
-    });
+  it('should return supplier by id', async () => {
+    const id = '123';
+    const mockSupplier = { id, name: 'Test Supplier' };
+    mockSupplierService.getById.mockResolvedValue(mockSupplier);
+
+    const result = await controller.getById({ id });
+    expect(service.getById).toHaveBeenCalledWith(id);
+    expect(result).toEqual(mockSupplier);
   });
 });

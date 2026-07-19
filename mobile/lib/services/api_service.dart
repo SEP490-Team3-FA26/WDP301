@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+
 
 class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
@@ -203,6 +205,379 @@ class ApiService {
         }
       } catch (e) {
         debugPrint("Interaction check failed. Offline mode fallback. Error: $e");
+      }
+    }
+    return null;
+  }
+
+  // Trace batch/lot lifecycle
+  static Future<Map<String, dynamic>?> traceLot(String batchNo) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}'),
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {
+      try {
+        final response = await http.get(
+          Uri.parse('$fallbackUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}'),
+        ).timeout(const Duration(seconds: 5));
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body);
+        }
+      } catch (e) {
+        debugPrint("Trace lot failed: $e");
+      }
+    }
+
+    // Offline Mock Fallback for Lot Trace
+    return {
+      'batchNo': batchNo,
+      'medicine': {
+        '_id': 'med_mock_1',
+        'name': 'Panadol Extra 500mg',
+        'sku': 'PAN-EXT-500',
+        'unit': 'Hộp',
+        'category': 'Giảm đau / Giảm sốt',
+      },
+      'batches': [
+        {'branchId': 'CENTRAL_WH', 'stock': 120, 'expDate': '2026-12-31T00:00:00.000Z', 'status': 'ACTIVE'},
+        {'branchId': 'CN1', 'stock': 45, 'expDate': '2026-12-31T00:00:00.000Z', 'status': 'ACTIVE'},
+      ],
+      'origin': {
+        'grnId': 'GRN-984F7E',
+        'poId': 'PO-882C1B',
+        'importDate': '2026-06-15T08:30:00.000Z',
+        'supplierId': 'sup_1',
+        'supplierName': 'Eco Pharma JSC',
+        'importQty': 500,
+        'importPrice': 32000,
+        'receivedBy': 'Nguyễn Văn Kho',
+      },
+      'timeline': [
+        {
+          '_id': 'tx1',
+          'type': 'GRN_IMPORT',
+          'quantityChange': 500,
+          'stockBefore': 0,
+          'stockAfter': 500,
+          'referenceId': 'grn-1',
+          'referenceType': 'GRN',
+          'performedBy': 'Nguyễn Văn Kho',
+          'notes': 'Nhập kho lô mới từ PO-882C1B',
+          'createdAt': '2026-06-15T08:30:00.000Z'
+        },
+        {
+          '_id': 'tx2',
+          'type': 'TRANSFER',
+          'quantityChange': -100,
+          'stockBefore': 500,
+          'stockAfter': 400,
+          'referenceId': 'tf-1',
+          'referenceType': 'TRANSFER',
+          'performedBy': 'Lê Điều Phối',
+          'notes': 'Chuyển hàng sang cơ sở CN1',
+          'createdAt': '2026-06-20T10:15:00.000Z'
+        },
+        {
+          '_id': 'tx3',
+          'type': 'SALE_EXPORT',
+          'quantityChange': -2,
+          'stockBefore': 400,
+          'stockAfter': 398,
+          'referenceId': 'so-1',
+          'referenceType': 'SALE',
+          'performedBy': 'Trần Dược Sĩ',
+          'notes': 'Xuất bán lẻ cho khách hàng',
+          'createdAt': '2026-07-02T14:45:00.000Z'
+        }
+      ]
+    };
+  }
+
+  // Get AI Demand Forecast
+  static Future<Map<String, dynamic>?> getAIForecast(int periodDays) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/reports/ai-forecast?periodDays=$periodDays'),
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {
+      try {
+        final response = await http.get(
+          Uri.parse('$fallbackUrl/api/reports/ai-forecast?periodDays=$periodDays'),
+        ).timeout(const Duration(seconds: 15));
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body);
+        }
+      } catch (e) {
+        debugPrint("AI Forecast failed: $e");
+      }
+    }
+
+    // Offline Mock Fallback for AI Forecast
+    return {
+      'summary': 'Dựa trên phân tích xu hướng bán hàng của kỳ trước, nhu cầu đối với các loại thuốc giảm sốt, hạ nhiệt và kháng sinh dự kiến sẽ tăng trưởng đều 15% trong thời gian tới. Khuyến nghị bổ sung kho cho các dòng sản phẩm sắp cạn kiệt dưới định mức tối thiểu.',
+      'recommendations': [
+        {
+          'medicineId': 'med-1',
+          'name': 'Panadol Extra',
+          'category': 'Giảm đau / Giảm sốt',
+          'unit': 'Hộp',
+          'currentStock': 8,
+          'averageDailySales': 6.2,
+          'expectedIncoming': 0,
+          'suggestedOrderQty': 200,
+          'urgency': 'HIGH',
+          'reason': 'Tồn kho còn rất thấp (8 hộp) trong khi tốc độ bán nhanh. Sẽ hết hàng hoàn toàn trong vòng 1-2 ngày tới nếu không bổ sung gấp.'
+        },
+        {
+          'medicineId': 'med-2',
+          'name': 'Amoxicillin 500mg',
+          'category': 'Kháng sinh / Antibiotics',
+          'unit': 'Hộp',
+          'currentStock': 12,
+          'averageDailySales': 2.5,
+          'expectedIncoming': 50,
+          'suggestedOrderQty': 80,
+          'urgency': 'MEDIUM',
+          'reason': 'Tồn kho thực tế (12 hộp) dưới mức minStock (50). Đang có đơn hàng 50 hộp chuẩn bị giao về, đề xuất nhập thêm 80 hộp nữa để đảm bảo an toàn.'
+        },
+        {
+          'medicineId': 'med-3',
+          'name': 'Decolgen Forte',
+          'category': 'Hô hấp / Cough & Cold',
+          'unit': 'Vỉ',
+          'currentStock': 95,
+          'averageDailySales': 1.8,
+          'expectedIncoming': 0,
+          'suggestedOrderQty': 0,
+          'urgency': 'LOW',
+          'reason': 'Tồn kho hiện tại dồi dào, đủ đáp ứng cho chu kỳ dự kiến 30 ngày tiếp theo. Không cần nhập thêm.'
+        }
+      ]
+    };
+  }
+
+  // UC-19: Inspect Receipt Item using AI Count
+  static Future<Map<String, dynamic>> inspectReceiptItemAI({
+    required String receiptId,
+    required String receiptItemId,
+    required String filePath,
+  }) async {
+    final lowerPath = filePath.toLowerCase();
+    MediaType mediaType = MediaType('image', 'jpeg');
+    if (lowerPath.endsWith('.png')) {
+      mediaType = MediaType('image', 'png');
+    }
+
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection'),
+      );
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        filePath,
+        contentType: mediaType,
+      ));
+      
+      var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      var response = await http.Response.fromStream(streamedResponse);
+      
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception("AI Service returned code ${response.statusCode}: ${response.body}");
+      }
+    } catch (_) {
+      try {
+        // Fallback to direct FastAPI port for local emulator testing
+        final localAiUrl = baseUrl.contains('10.0.2.2') ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+        var request = http.MultipartRequest(
+          'POST',
+          Uri.parse('$localAiUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection'),
+        );
+        request.files.add(await http.MultipartFile.fromPath(
+          'file',
+          filePath,
+          contentType: mediaType,
+        ));
+        
+        var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+        var response = await http.Response.fromStream(streamedResponse);
+        
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        } else {
+          throw Exception("AI Service returned code ${response.statusCode}: ${response.body}");
+        }
+      } catch (e) {
+        debugPrint("AI GRN inspection failed: $e");
+        rethrow;
+      }
+    }
+  }
+
+  // UC-19: Verify Actual Count and override AI Count
+  static Future<bool> verifyReceiptItemCount({
+    required String inspectionRecordId,
+    required int actualQty,
+    required String userId,
+  }) async {
+    final body = jsonEncode({
+      'actualQty': actualQty,
+      'verifiedBy': userId,
+    });
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/ai/inspections/$inspectionRecordId/verify'),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (_) {
+      try {
+        final localAiUrl = baseUrl.contains('10.0.2.2') ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+        final response = await http.post(
+          Uri.parse('$localAiUrl/api/ai/inspections/$inspectionRecordId/verify'),
+          headers: {'Content-Type': 'application/json'},
+          body: body,
+        ).timeout(const Duration(seconds: 5));
+        return response.statusCode == 200;
+      } catch (e) {
+        debugPrint("Failed to verify count: $e");
+        return false;
+      }
+    }
+  }
+
+  // UC-19: Approve Goods Receipt
+  static Future<bool> approveGoodsReceipt(String receiptId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/goods-receipts/$receiptId/approve'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+      return response.statusCode == 200;
+    } catch (_) {
+      try {
+        final response = await http.post(
+          Uri.parse('$fallbackUrl/api/goods-receipts/$receiptId/approve'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 10));
+        return response.statusCode == 200;
+      } catch (e) {
+        debugPrint("Failed to approve GRN: $e");
+        return false;
+      }
+    }
+  }
+
+  static final List<Map<String, dynamic>> localMockGoodsReceipts = [
+    {
+      '_id': 'GRN-001',
+      'poId': 'PO-001',
+      'supplier': 'ABC Pharma',
+      'status': 'DRAFT',
+      'items': [
+        {
+          '_id': 'ITEM-001',
+          'medicineId': 'MED-001',
+          'expectedQty': 10,
+          'actualQty': 0,
+          'unit': 'Hộp',
+          'status': 'PENDING'
+        }
+      ]
+    }
+  ];
+
+  // UC-19: Fetch all Goods Receipt Notes from database
+  static Future<List<dynamic>> getGoodsReceipts() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/goods-receipts'),
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as List<dynamic>;
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch dynamic goods receipts: $e");
+    }
+    return localMockGoodsReceipts;
+  }
+
+  // UC-19: Fetch single medicine details by ID
+  static Future<Map<String, dynamic>?> getMedicineById(String id) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/medicines/$id'),
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch medicine $id details: $e");
+    }
+    return null;
+  }
+
+  // UC-19: Submit inspection report
+  static Future<bool> submitInspection(String receiptId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/goods-receipts/$receiptId/submit-inspection'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+      return response.statusCode == 200;
+    } catch (_) {
+      try {
+        final response = await http.post(
+          Uri.parse('$fallbackUrl/api/goods-receipts/$receiptId/submit-inspection'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 10));
+        return response.statusCode == 200;
+      } catch (e) {
+        debugPrint("Failed to submit inspection: $e");
+        return false;
+      }
+    }
+  }
+
+  // Get User Profile using JWT token
+  static Future<Map<String, dynamic>?> getProfile(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/auth/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {
+      try {
+        final response = await http.get(
+          Uri.parse('$fallbackUrl/api/auth/profile'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        ).timeout(const Duration(seconds: 5));
+
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint("Failed to fetch user profile: $e");
       }
     }
     return null;

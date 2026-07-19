@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, RefreshCw } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../services/core/api';
 
 interface ReportCreateModalProps {
   isOpen: boolean;
@@ -78,7 +78,7 @@ export function ReportCreateModal({ isOpen, onClose, onSuccess, userDetails }: R
           };
         }
 
-        setSuccessMessage('Khởi tạo báo cáo doanh thu thành công!');
+        setSuccessMessage('Khởi tạo báo cáo thành công!');
         onSuccess(newReport);
 
         // Gắn URL thật vào tab trống đã mở lúc nãy

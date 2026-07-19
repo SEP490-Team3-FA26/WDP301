@@ -7,7 +7,7 @@ import {
   PieChart, 
   Building 
 } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../services/core/api';
 import { KpiCard } from './KpiCard';
 
 const branchColors: Record<string, string> = {

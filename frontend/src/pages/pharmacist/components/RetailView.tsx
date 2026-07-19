@@ -3,11 +3,11 @@ import {
   ShoppingCart, Minus, Plus, SearchIcon, Sparkles, XCircle, AlertTriangle, ShieldAlert,
   Banknote, QrCode, Printer, CheckCircle2, Mic, Square, Check
 } from "lucide-react";
-import { medicineService } from "../../../services/medicine.service";
-import { orderService } from "../../../services/order.service";
-import { prescriptionService } from "../../../services/prescription.service";
-import { voucherService } from "../../../services/voucher.service";
-import api from "../../../services/api";
+import { medicineService } from "../../../services/inventory/medicine.service";
+import { orderService } from "../../../services/sales/order.service";
+import { prescriptionService } from "../../../services/sales/prescription.service";
+import { voucherService } from "../../../services/sales/voucher.service";
+import api from "../../../services/core/api";
 import { useSocket } from "../../../hooks/useSocket";
 
 // Helper to decode JWT token to extract branchId and user info
@@ -331,7 +331,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
     setLoading(true);
     try {
       const { branchId } = getBranchInfoFromToken();
-      const data = await medicineService.getMedicines({ limit: 10, search: query, branchId: branchId || undefined });
+      const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: query });
       setSearchResults(data.data || []);
     } catch (err) {
       console.error(err);
@@ -379,7 +379,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
     }
   };
 
-  const handleApplyVoucher = () => {};
+  const handleApplyVoucher = () => { };
 
   const handleRemoveVoucher = () => {
     setAppliedVoucher(null);
@@ -405,7 +405,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
     setError("");
     try {
       const { branchId: currentBranchId, fullName: currentUserName } = getBranchInfoFromToken();
-      
+
       const generatedOrderCode = Math.floor(10000000 + Math.random() * 90000000);
       const patientName = loyaltyInfo ? loyaltyInfo.fullName : "Khách lẻ vãng lai";
       const patientPhone = loyaltyInfo ? loyaltyInfo.phone : "0900000000";
@@ -414,7 +414,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
         type: "RETAIL",
         branchId: currentBranchId || undefined,
         items: cart.map(it => ({
-          medicineId: it.id,
+          medicineId: it.id || it._id,
           quantity: it.quantity
         })),
         paymentMethod,
@@ -433,7 +433,6 @@ export default function RetailView({ showToast }: RetailViewProps) {
           patientEmail: patientEmail || undefined,
           totalAmount: total,
           voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
-          // @ts-ignore
           redeemedPoints: usePoints ? redeemedPoints : 0,
           items: cart.map(it => ({
             medicineId: it.id || it._id,
@@ -465,17 +464,17 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const subtotal = cart.reduce((sum, it) => sum + (it.price * it.quantity), 0);
   const vipDiscount = Math.round(subtotal * 0.05); // VIP discount
   const voucherDiscount = appliedVoucher ? appliedVoucher.discount : 0;
-  
+
   // 1 point = 1 VND
   const pointsDiscount = usePoints ? Math.min(redeemedPoints, Math.max(0, subtotal - vipDiscount - voucherDiscount)) : 0;
-  
+
   const vat = Math.round(Math.max(0, subtotal - vipDiscount - voucherDiscount - pointsDiscount) * 0.08);
   const total = Math.max(0, subtotal - vipDiscount - voucherDiscount - pointsDiscount + vat);
   const earnedPoints = Math.round(total / 100) * (loyaltyInfo ? loyaltyInfo.multiplier || 1.0 : 1.0);
 
   // Cảnh báo tương tác thuốc trong giỏ hàng lẻ
-  const hasCiprofloxacin = cart.some(it => it.name.toLowerCase().includes("ciprofloxacin") || it.active_ingredient.toLowerCase().includes("ciprofloxacin"));
-  const hasWarfarin = cart.some(it => it.name.toLowerCase().includes("warfarin") || it.active_ingredient.toLowerCase().includes("warfarin"));
+  const hasCiprofloxacin = cart.some(it => it.name?.toLowerCase().includes("ciprofloxacin") || it.active_ingredient?.toLowerCase().includes("ciprofloxacin"));
+  const hasWarfarin = cart.some(it => it.name?.toLowerCase().includes("warfarin") || it.active_ingredient?.toLowerCase().includes("warfarin"));
   const hasInteraction = hasCiprofloxacin && hasWarfarin;
 
   return (
@@ -726,7 +725,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
                     />
                     <span className="text-xs font-bold text-slate-700">Tiêu điểm giảm giá</span>
                   </label>
-                  
+
                   {usePoints && (
                     <div className="flex flex-col gap-1 pl-6">
                       <div className="flex items-center gap-2">
@@ -1182,13 +1181,13 @@ export default function RetailView({ showToast }: RetailViewProps) {
               </h3>
               <button onClick={() => setShowAlternativesModal(false)} className="text-rose-400 hover:text-rose-700 font-extrabold">✕</button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
               <p className="text-sm text-slate-600 mb-4">
-                Thuốc <span className="font-bold text-slate-800">{selectedOutOfStockMed.name}</span> hiện tại đã hết hàng tại chi nhánh. 
+                Thuốc <span className="font-bold text-slate-800">{selectedOutOfStockMed.name}</span> hiện tại đã hết hàng tại chi nhánh.
                 Dưới đây là các loại thuốc thay thế phù hợp (cùng hoạt chất hoặc cùng danh mục) có sẵn tồn kho:
               </p>
-              
+
               {loadingAlternatives ? (
                 <div className="flex flex-col items-center justify-center py-8">
                   <div className="w-8 h-8 border-4 border-slate-200 border-t-[#0057cd] rounded-full animate-spin mb-3"></div>
@@ -1210,7 +1209,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
                       <div className="text-right shrink-0 flex flex-col items-end ml-4">
                         <div className="font-black text-[#0057cd] text-lg">{alt.price.toLocaleString()}₫</div>
                         <div className="text-[11px] font-bold text-slate-500 mt-0.5 mb-2">Tồn kho: {alt.stock} {alt.unit}</div>
-                        <button 
+                        <button
                           onClick={() => addToCart(alt)}
                           className="px-4 py-1.5 bg-[#0057cd] hover:bg-[#00419e] text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
                         >

@@ -4,9 +4,10 @@ import {
   Building2, DollarSign, Layers, AlertCircle, RefreshCw, Save
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { branchService } from "../../services/branch.service";
-import { medicineService } from "../../services/medicine.service";
-import { pricingService } from "../../services/pricing.service";
+import { branchService } from "../../services/admin/branch.service";
+import { medicineService } from "../../services/inventory/medicine.service";
+import { pricingService } from "../../services/inventory/pricing.service";
+import api from "../../services/core/api";
 
 interface WholesaleTier {
   minQuantity: number;
@@ -199,24 +200,10 @@ export function PriceManagement() {
     setCopyLoading(true);
     try {
       if (syncAll) {
-        await fetch(`${API_BASE}/api/pricing/sync-all`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({ fromBranchId: selectedBranch }),
-        });
+        await api.post("/api/pricing/sync-all", { fromBranchId: selectedBranch });
         alert("Đồng bộ giá tới tất cả chi nhánh thành công!");
       } else {
-        await fetch(`${API_BASE}/api/pricing/copy`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({ fromBranchId: selectedBranch, toBranchId: copyToBranch }),
-        });
+        await api.post("/api/pricing/copy", { fromBranchId: selectedBranch, toBranchId: copyToBranch });
         alert("Sao chép bảng giá thành công!");
       }
       setShowCopyModal(false);

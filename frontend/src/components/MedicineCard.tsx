@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { CheckCircle2, Plus, ShoppingBag, AlertCircle } from "lucide-react";
 
 interface MedicineCardProps {
@@ -8,7 +8,7 @@ interface MedicineCardProps {
   onClick: () => void;
 }
 
-export function MedicineCard({ med, added, onAddToCart, onClick }: MedicineCardProps) {
+export const MedicineCard: React.FC<MedicineCardProps> = ({ med, added, onAddToCart, onClick }) => {
   const isOutOfStock = med.stock <= 0;
   const isLowStock = med.stock > 0 && med.stock <= 50;
 

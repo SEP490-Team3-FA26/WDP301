@@ -210,6 +210,30 @@ export class MedicineService implements OnModuleInit {
   }
 
 
+  async getBranchMedicines(query: any) {
+    // Tách biệt hàm xử lý riêng cho branch để có thể dễ dàng custom
+    // (ví dụ: chỉ hiện các thuốc đang có lô hàng ở branch)
+    // Hiện tại tạm thời gọi lại listMedicines với branchId bắt buộc.
+    if (!query.branchId) {
+      throw new RpcException('Yêu cầu branchId để lấy danh sách thuốc chi nhánh');
+    }
+
+    if (query.branchStockOnly === 'true' || query.branchStockOnly === true) {
+      // Lấy danh sách medicineIds có lô hàng ở chi nhánh này
+      const branchBatches = await this.batchModel.find({ branchId: query.branchId }).select('medicineId').lean().exec();
+      const medicineIds = [...new Set(branchBatches.map(b => b.medicineId))];
+      
+      if (medicineIds.length === 0) {
+        return { data: [], total: 0, page: query.page || 1, limit: query.limit || 10, totalPages: 0 };
+      }
+      
+      query.medicineIds = medicineIds;
+      query.bypassAiSearch = true; // Bỏ qua AI search khi chỉ lấy tồn kho chi nhánh để kết quả chính xác tuyệt đối
+    }
+
+    return this.listMedicines(query);
+  }
+
   async listMedicines(query: {
     page?: number;
     limit?: number;
@@ -225,6 +249,8 @@ export class MedicineService implements OnModuleInit {
     indication?: string;
     brandOrigin?: string;
     branchId?: string;
+    medicineIds?: string[];
+    bypassAiSearch?: boolean;
   }) {
     try {
       console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', query);
@@ -245,6 +271,9 @@ export class MedicineService implements OnModuleInit {
 
       // Construct standard filter conditions
       const conditions: any[] = [];
+      if (query.medicineIds && query.medicineIds.length > 0) {
+        conditions.push({ _id: { $in: query.medicineIds } });
+      }
       if (category) conditions.push({ category });
       if (classification) conditions.push({ drug_classification: classification });
       if (targetGroup) {
@@ -285,7 +314,8 @@ export class MedicineService implements OnModuleInit {
       // Xoá logic filter cứng `stock > 0` theo branchId ở đây để
       // các thuốc hết hàng (stock = 0) vẫn được trả về trong kết quả tìm kiếm.
       // Khi đó, UI sẽ hiển thị Tồn kho: 0 và cho phép user bấm "Gợi ý thay thế" (UC-36).
-      if (search) {
+      // Khi đó, UI sẽ hiển thị Tồn kho: 0 và cho phép user bấm "Gợi ý thay thế" (UC-36).
+      if (search && !query.bypassAiSearch) {
         // AI SERVICE VECTOR SEARCH with Mongoose fallback
         let aiServiceUrl = `http://ai-service:8000/api/ai/medicines?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`;
         if (category) aiServiceUrl += `&category=${encodeURIComponent(category)}`;
@@ -293,7 +323,7 @@ export class MedicineService implements OnModuleInit {
 
         let mappedAiData: any[] = [];
         let aiTotal = 0;
-        let useFallback = false;
+        let useFallback = query.bypassAiSearch || false;
 
         try {
           const response = await fetch(aiServiceUrl);
@@ -1076,10 +1106,7 @@ export class MedicineService implements OnModuleInit {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // UC-30: XEM TỒN KHO THỜI GIAN THỰC TOÀN CHUỖI + THUẬT TOÁN AN TOÀN
-  // ═══════════════════════════════════════════════════════════════════
-  async calculateSafeStockChain(query: {
+  async getSafeStockChain(query: {
     serviceLevel?: number;
     periodDays?: number;
     branchId?: string;
@@ -1087,121 +1114,176 @@ export class MedicineService implements OnModuleInit {
     limit?: number;
   }) {
     try {
-      this.logger.log('[UC-30] Starting safe stock calculation for entire chain...');
-      const {
-        serviceLevel = 0.95,
-        periodDays = 30,
-        branchId,
-        page = 1,
-        limit = 20,
-      } = query;
-
-      // FIX: dùng hàm thay vì object key (tránh lỗi float key lookup)
-      const getZ = (sl: number): number => {
-        if (sl >= 0.99) return 2.33;
-        if (sl >= 0.98) return 2.05;
-        if (sl >= 0.95) return 1.65;
-        if (sl >= 0.90) return 1.28;
-        return 1.65;
-      };
-      const Z = getZ(Number(serviceLevel));
+      const serviceLevel = query.serviceLevel ? Number(query.serviceLevel) : 0.95;
+      const periodDays = query.periodDays ? Number(query.periodDays) : 30;
+      const branchId = query.branchId;
+      const page = query.page ? Number(query.page) : 1;
+      const limit = query.limit ? Number(query.limit) : 20;
+      const skip = (page - 1) * limit;
 
       const endDate = new Date();
       const startDate = new Date();
-      startDate.setDate(endDate.getDate() - Number(periodDays));
+      startDate.setDate(endDate.getDate() - periodDays);
 
-      // Lấy toàn bộ medicines và batches song song
-      const [medicines, allBatches, exportTxns] = await Promise.all([
-        this.medicineModel.find().select('name category unit price stock').lean().exec(),
-        this.batchModel.find({ status: 'ACTIVE', stock: { $gt: 0 } })
-          .select('medicineId branchId stock batchNo expDate')
-          .lean().exec(),
-        this.txnModel.find({
-          type: { $in: ['SALE_EXPORT', 'DISPOSE'] },
-          createdAt: { $gte: startDate, $lte: endDate },
-        }).select('medicineId quantityChange createdAt stockBefore stockAfter').lean().exec(),
+      const filterQuery: any = {};
+      const [medicines, total] = await Promise.all([
+        this.medicineModel.find(filterQuery).skip(skip).limit(limit).lean().exec(),
+        this.medicineModel.countDocuments(filterQuery).exec()
       ]);
 
-      this.logger.log(`[UC-30] Fetched: ${medicines.length} medicines, ${allBatches.length} batches, ${exportTxns.length} txns`);
+      const medIds = medicines.map(med => med._id.toString());
 
-      // Nhóm batches theo medicineId (và branchId nếu có filter)
-      const batchesByMedId = new Map<string, any[]>();
-      for (const b of allBatches) {
-        if (branchId && b.branchId !== branchId) continue;
-        const list = batchesByMedId.get(b.medicineId.toString()) || [];
-        list.push(b);
-        batchesByMedId.set(b.medicineId.toString(), list);
+      // Bulk queries:
+      // 1. Get all active batches for these medicines
+      const batchQuery: any = { medicineId: { $in: medIds } };
+      if (branchId) batchQuery.branchId = branchId;
+      const allActiveBatches = await this.batchModel.find(batchQuery).lean().exec();
+
+      // Group batches by medicineId
+      const batchesByMedMap = new Map<string, any[]>();
+      for (const batch of allActiveBatches) {
+        if (!batch.medicineId) continue;
+        const mId = batch.medicineId.toString();
+        const list = batchesByMedMap.get(mId) || [];
+        list.push(batch);
+        batchesByMedMap.set(mId, list);
       }
 
-      // Nhóm giao dịch theo medicineId
-      const txnsByMed = new Map<string, any[]>();
-      for (const t of exportTxns) {
-        const list = txnsByMed.get(t.medicineId.toString()) || [];
-        list.push(t);
-        txnsByMed.set(t.medicineId.toString(), list);
+      // 2. Query transactions for demand calculation in bulk
+      const txnQuery: any = {
+        medicineId: { $in: medIds },
+        type: { $in: ['SALE_EXPORT', 'DISPOSE'] },
+        createdAt: { $gte: startDate, $lte: endDate }
+      };
+
+      if (branchId) {
+        const branchBatches = await this.batchModel.find({ branchId, medicineId: { $in: medIds } }).select('batchNo').lean().exec();
+        const batchNos = branchBatches.map(b => b.batchNo);
+        txnQuery.batchNo = { $in: batchNos };
       }
 
-      const skip = (page - 1) * Number(limit);
-      const results = [];
+      const allExportTxns = await this.txnModel.find(txnQuery).sort({ createdAt: 1 }).lean().exec();
+
+      // Group transactions by medicineId
+      const txnsByMedMap = new Map<string, any[]>();
+      for (const txn of allExportTxns) {
+        const mId = txn.medicineId.toString();
+        const list = txnsByMedMap.get(mId) || [];
+        list.push(txn);
+        txnsByMedMap.set(mId, list);
+      }
+
+      // 3. Lead Time: Query POs & GRNs in bulk
+      let purchaseOrders = [];
+      let grns = [];
+      try {
+        const db = this.medicineModel.db;
+        purchaseOrders = await db.collection('purchaseorders').find({
+          status: 'COMPLETED',
+          'items.medicineId': { $in: medIds }
+        }).toArray();
+
+        const poIds = purchaseOrders.map(po => po._id.toString());
+        if (poIds.length > 0) {
+          grns = await db.collection('goodsreceiptnotes').find({
+            poId: { $in: poIds },
+            status: 'COMPLETED'
+          }).toArray();
+        }
+      } catch (err) {
+        this.logger.error('Failed to query purchase orders and grns in bulk', err);
+      }
+
+      // Group POs by medicineId
+      const posByMedMap = new Map<string, any[]>();
+      for (const po of purchaseOrders) {
+        for (const item of po.items || []) {
+          if (!item.medicineId) continue;
+          const list = posByMedMap.get(item.medicineId) || [];
+          list.push(po);
+          posByMedMap.set(item.medicineId, list);
+        }
+      }
+
+      const data = [];
 
       for (const med of medicines) {
         const medId = med._id.toString();
-        const medTxns = txnsByMed.get(medId) || [];
-        const medBatches = batchesByMedId.get(medId) || [];
-        const currentStock = medBatches.reduce((sum, b) => sum + b.stock, 0);
 
-        // ── TÍNH NHU CẦU THEO NGÀY ──
-        const dailyMap: Record<string, number> = {};
-        let totalExported = 0;
-        for (const t of medTxns) {
-          const dayKey = new Date(t.createdAt).toISOString().split('T')[0];
-          const qty = Math.abs(t.quantityChange);
-          dailyMap[dayKey] = (dailyMap[dayKey] || 0) + qty;
-          totalExported += qty;
+        // 1. Get batches & currentStock
+        const activeBatches = batchesByMedMap.get(medId) || [];
+        const currentStock = activeBatches.reduce((sum, b) => sum + (b.stock || 0), 0);
+
+        // 2. Query transactions for demand calculation
+        const exportTxns = txnsByMedMap.get(medId) || [];
+
+        // 3. Compute daily demand array & statistics
+        const dailyDemandMap: Record<string, number> = {};
+        const d = new Date(startDate);
+        while (d <= endDate) {
+          const dateStr = d.toISOString().split('T')[0];
+          dailyDemandMap[dateStr] = 0;
+          d.setDate(d.getDate() + 1);
         }
-
-        // Điền 0 cho các ngày không có giao dịch
-        const numPeriodDays = Number(periodDays);
-        const allDays: number[] = [];
-        for (let i = 0; i < numPeriodDays; i++) {
-          const d = new Date(startDate);
-          d.setDate(d.getDate() + i);
-          const key = d.toISOString().split('T')[0];
-          allDays.push(dailyMap[key] || 0);
-        }
-
-        const avgDailyDemand = totalExported / numPeriodDays;
-        const variance = allDays.reduce((sum, v) => sum + Math.pow(v - avgDailyDemand, 2), 0) / numPeriodDays;
+        exportTxns.forEach(t => {
+          const dateStr = new Date((t as any).createdAt).toISOString().split('T')[0];
+          if (dailyDemandMap[dateStr] !== undefined) {
+            dailyDemandMap[dateStr] += Math.abs(t.quantityChange);
+          }
+        });
+        const dailyDemands = Object.values(dailyDemandMap);
+        const totalExported = dailyDemands.reduce((a, b) => a + b, 0);
+        const avgDailyDemand = dailyDemands.length > 0 ? totalExported / dailyDemands.length : 0;
+        const variance = dailyDemands.length > 0
+          ? dailyDemands.reduce((sum, val) => sum + Math.pow(val - avgDailyDemand, 2), 0) / dailyDemands.length
+          : 0;
         const stdDevDemand = Math.sqrt(variance);
 
-        // ── TÍNH LEAD TIME GIẢ ĐỊNH (7 ngày mặc định nếu không có lịch sử) ──
-        const avgLeadTime = 7;
-        const stdDevLeadTime = 1.5;
+        // 4. Lead Time: Calculate from bulk POs & GRNs
+        let avgLeadTimeDays = 5;
+        let stdDevLeadTimeDays = 1.2;
 
-        // ── VÒNG QUAY TỒN KHO ──
-        const firstTxn = medTxns[0];
-        const lastTxn = medTxns[medTxns.length - 1];
-        const openingStock = firstTxn?.stockBefore ?? (currentStock + totalExported);
-        const closingStock = lastTxn?.stockAfter ?? currentStock;
+        const medPOs = posByMedMap.get(medId) || [];
+        const leadTimes = medPOs.map(po => {
+          const grn = grns.find(g => g.poId === po._id.toString());
+          if (!grn) return null;
+          const poTime = new Date(po.createdAt).getTime();
+          const grnTime = new Date(grn.createdAt).getTime();
+          return (grnTime - poTime) / (1000 * 60 * 60 * 24);
+        }).filter((val): val is number => val !== null && val >= 0);
+
+        if (leadTimes.length > 0) {
+          avgLeadTimeDays = leadTimes.reduce((sum, val) => sum + val, 0) / leadTimes.length;
+          const ltVariance = leadTimes.reduce((sum, val) => sum + Math.pow(val - avgLeadTimeDays, 2), 0) / leadTimes.length;
+          stdDevLeadTimeDays = Math.sqrt(ltVariance);
+        }
+
+        // 5. Turnover calculation
+        const firstTxn = exportTxns[0];
+        const lastTxn = exportTxns[exportTxns.length - 1];
+        const openingStock = firstTxn ? firstTxn.stockBefore : currentStock;
+        const closingStock = lastTxn ? lastTxn.stockAfter : currentStock;
         const avgInventory = (openingStock + closingStock) / 2;
         const inventoryTurnoverRate = avgInventory > 0 ? totalExported / avgInventory : 0;
         const daysInInventory = inventoryTurnoverRate > 0 ? periodDays / inventoryTurnoverRate : periodDays;
 
-        // ── SAFETY STOCK (Công thức đầy đủ xét cả biến động Lead Time) ──
-        const safetyStock = Math.ceil(
-          Z * Math.sqrt(avgLeadTime * Math.pow(stdDevDemand, 2) + Math.pow(avgDailyDemand, 2) * Math.pow(stdDevLeadTime, 2))
+        // 6. Safety Stock & ROP & EOQ
+        const Z_TABLE = { 0.90: 1.28, 0.95: 1.65, 0.98: 2.05, 0.99: 2.33 };
+        const Z = Z_TABLE[serviceLevel] || 1.65;
+
+        const safetyStock = Z * Math.sqrt(
+          avgLeadTimeDays * Math.pow(stdDevDemand, 2) +
+          Math.pow(avgDailyDemand, 2) * Math.pow(stdDevLeadTimeDays, 2)
         );
+        const reorderPoint = (avgDailyDemand * avgLeadTimeDays) + safetyStock;
 
-        // ── REORDER POINT ──
-        const reorderPoint = Math.ceil(avgDailyDemand * avgLeadTime + safetyStock);
-
-        // ── EOQ ──
         const annualDemand = avgDailyDemand * 365;
         const orderingCost = 200000;
-        const holdingCost = 0.05 * (med.price || 10000);
-        const eoq = holdingCost > 0 ? Math.ceil(Math.sqrt((2 * annualDemand * orderingCost) / holdingCost)) : 100;
+        const unitCost = med.price || 10000;
+        const holdingCost = 0.05 * unitCost;
+        const eoq = holdingCost > 0 ? Math.sqrt((2 * annualDemand * orderingCost) / holdingCost) : 0;
 
-        // ── ĐÁNH GIÁ TRẠNG THÁI ──
+        // 7. Stock status assessment
         let stockStatus: 'CRITICAL' | 'LOW' | 'SAFE' | 'OVERSTOCK';
         if (currentStock <= 0) {
           stockStatus = 'CRITICAL';
@@ -1209,13 +1291,20 @@ export class MedicineService implements OnModuleInit {
           stockStatus = 'LOW';
         } else if (currentStock < reorderPoint) {
           stockStatus = 'SAFE';
-        } else if (currentStock > eoq * 3) {
+        } else if (eoq > 0 && currentStock > eoq * 3) {
           stockStatus = 'OVERSTOCK';
         } else {
           stockStatus = 'SAFE';
         }
 
-        results.push({
+        const branchBreakdown = activeBatches.map(b => ({
+          branchId: b.branchId || 'CENTRAL_WH',
+          batchNo: b.batchNo || 'UNKNOWN-BATCH',
+          stock: b.stock || 0,
+          expDate: b.expDate ? new Date(b.expDate).toISOString() : '2026-12-31'
+        }));
+
+        data.push({
           medicineId: medId,
           medicineName: med.name,
           category: med.category || 'Chưa phân loại',
@@ -1224,189 +1313,141 @@ export class MedicineService implements OnModuleInit {
           stockStatus,
           demand: {
             totalExported,
-            avgDailyDemand: Math.round(avgDailyDemand * 100) / 100,
-            stdDevDemand: Math.round(stdDevDemand * 100) / 100,
+            avgDailyDemand: Number(avgDailyDemand.toFixed(2)),
+            stdDevDemand: Number(stdDevDemand.toFixed(2)),
           },
-          leadTime: { avgDays: avgLeadTime, stdDevDays: stdDevLeadTime },
+          leadTime: {
+            avgDays: Number(avgLeadTimeDays.toFixed(2)),
+            stdDevDays: Number(stdDevLeadTimeDays.toFixed(2)),
+          },
           turnover: {
             openingStock,
             closingStock,
-            avgInventory: Math.round(avgInventory * 100) / 100,
-            inventoryTurnoverRate: Math.round(inventoryTurnoverRate * 100) / 100,
-            daysInInventory: Math.round(daysInInventory * 100) / 100,
+            avgInventory: Number(avgInventory.toFixed(2)),
+            inventoryTurnoverRate: Number(inventoryTurnoverRate.toFixed(2)),
+            daysInInventory: Number(daysInInventory.toFixed(2)),
           },
           thresholds: {
-            safetyStock,
-            reorderPoint,
-            eoq,
-            serviceLevel: `${Math.round(Number(serviceLevel) * 100)}%`,
+            safetyStock: Math.ceil(safetyStock),
+            reorderPoint: Math.ceil(reorderPoint),
+            eoq: Math.ceil(eoq),
+            serviceLevel: (serviceLevel * 100) + '%',
           },
-          branchBreakdown: medBatches.map(b => ({
-            branchId: b.branchId || 'CENTRAL_WH',
-            batchNo: b.batchNo,
-            stock: b.stock,
-            expDate: b.expDate,
-          })),
+          branchBreakdown,
         });
       }
 
-      // Sắp xếp: CRITICAL lên đầu, OVERSTOCK xuống cuối
-      const ORDER = { CRITICAL: 0, LOW: 1, SAFE: 2, OVERSTOCK: 3 };
-      results.sort((a, b) => ORDER[a.stockStatus] - ORDER[b.stockStatus]);
-
-      const total = results.length;
-      const paginated = results.slice(skip, skip + Number(limit));
-
-      this.logger.log(`[UC-30] Completed. ${total} medicines analyzed. Page ${page}/${Math.ceil(total / Number(limit))}`);
-      return { data: paginated, total, page: Number(page), limit: Number(limit), periodDays: Number(periodDays), serviceLevel: Number(serviceLevel) };
+      return {
+        data,
+        total,
+        page,
+        limit,
+        periodDays,
+        serviceLevel
+      };
     } catch (error) {
-      throw new RpcException(error.message || 'Lỗi tính toán tồn kho an toàn toàn chuỗi');
+      this.logger.error('Failed to get safe stock chain:', error);
+      throw new RpcException(error.message || 'Lỗi lấy báo cáo tồn kho an toàn');
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // UC-37: PHÁT HIỆN BẤT THƯỜNG TỒN KHO (TOÁN THỐNG KÊ - Z-SCORE / 3-SIGMA)
-  // ═══════════════════════════════════════════════════════════════════
-  async detectAnomalies(query: { periodDays?: number; zScoreThreshold?: number }) {
+  async getAnomalyDetection(query: {
+    periodDays?: number;
+    zScoreThreshold?: number;
+  }) {
     try {
-      this.logger.log('[UC-37] Starting anomaly detection using Z-Score/3-Sigma statistics...');
-      const numPeriodDays = Number(query.periodDays ?? 60);
-      const numZScore = Number(query.zScoreThreshold ?? 3);
+      const periodDays = query.periodDays ? Number(query.periodDays) : 60;
+      const zScoreThreshold = query.zScoreThreshold ? Number(query.zScoreThreshold) : 3;
 
       const endDate = new Date();
       const startDate = new Date();
-      startDate.setDate(endDate.getDate() - numPeriodDays);
+      startDate.setDate(endDate.getDate() - periodDays);
 
-      // Lấy toàn bộ giao dịch xuất kho trong kỳ phân tích
-      const allTxns = await this.txnModel.find({
-        createdAt: { $gte: startDate, $lte: endDate },
-      }).select('medicineId medicineName type quantityChange createdAt referenceId referenceType notes performedBy stockBefore stockAfter').lean().exec();
+      const transactions = await this.txnModel.find({
+        type: { $in: ['SALE_EXPORT', 'DISPOSE', 'ADJUSTMENT'] },
+        createdAt: { $gte: startDate, $lte: endDate }
+      }).lean().exec();
 
-      // Nhóm theo medicineId
-      const txnsByMed = new Map<string, any[]>();
-      for (const t of allTxns) {
-        const list = txnsByMed.get(t.medicineId) || [];
-        list.push(t);
-        txnsByMed.set(t.medicineId, list);
+      const txnsByMed: Record<string, any[]> = {};
+      for (const t of transactions) {
+        if (!txnsByMed[t.medicineId]) txnsByMed[t.medicineId] = [];
+        txnsByMed[t.medicineId].push(t);
       }
 
       const anomalies = [];
+      let summaryHigh = 0;
+      let summaryMedium = 0;
+      let summarySpikeExport = 0;
+      let summaryLargeAdjustment = 0;
 
-      for (const [medicineId, txns] of txnsByMed.entries()) {
-        // Chỉ lấy giao dịch xuất kho (giảm số lượng) để phân tích nhu cầu bình thường
-        const exportTxns = txns.filter(t => ['SALE_EXPORT', 'DISPOSE'].includes(t.type));
-
-        // Cần ít nhất 7 điểm dữ liệu để tính thống kê có ý nghĩa
-        if (exportTxns.length < 7) continue;
-
-        // Nhóm giao dịch theo ngày để tính lượng xuất mỗi ngày
-        const dailyMap: Record<string, number> = {};
-        for (const t of exportTxns) {
-          const dayKey = new Date(t.createdAt).toISOString().split('T')[0];
-          dailyMap[dayKey] = (dailyMap[dayKey] || 0) + Math.abs(t.quantityChange);
-        }
-        const dailyValues = Object.values(dailyMap);
-        const n = dailyValues.length;
-
-        // Tính Mean và Standard Deviation
-        const mean = dailyValues.reduce((a, b) => a + b, 0) / n;
-        const variance = dailyValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / n;
+      for (const [medId, txs] of Object.entries(txnsByMed)) {
+        const quantities = txs.map(t => Math.abs(t.quantityChange));
+        const total = quantities.reduce((a, b) => a + b, 0);
+        const mean = total / quantities.length;
+        const variance = quantities.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / quantities.length;
         const stdDev = Math.sqrt(variance);
 
-        // Ngưỡng bất thường: mean ± numZScore * stdDev
-        const upperThreshold = mean + numZScore * stdDev;
-        const lowerThreshold = Math.max(0, mean - numZScore * stdDev);
+        if (stdDev === 0) continue;
 
-        // Tìm các giao dịch đơn lẻ vượt ngưỡng (bất thường tức thời)
-        for (const t of exportTxns) {
+        for (const t of txs) {
           const qty = Math.abs(t.quantityChange);
-          const zScore = stdDev > 0 ? Math.abs(qty - mean) / stdDev : 0;
+          const zScore = (qty - mean) / stdDev;
 
-          if (zScore >= numZScore) {
-            const medicine = await this.medicineModel.findById(medicineId).select('name category').lean().exec();
+          if (zScore > zScoreThreshold) {
+            const severity = zScore > 4 ? 'HIGH' : 'MEDIUM';
+            const anomalyType = t.type === 'ADJUSTMENT' ? 'LARGE_ADJUSTMENT' : 'SPIKE_EXPORT';
+
+            if (severity === 'HIGH') summaryHigh++;
+            else summaryMedium++;
+
+            if (anomalyType === 'LARGE_ADJUSTMENT') summaryLargeAdjustment++;
+            else summarySpikeExport++;
+
+            const med = await this.medicineModel.findById(medId).select('name category').lean().exec();
+
             anomalies.push({
-              id: t._id?.toString() || `${medicineId}-${t.createdAt}`,
-              medicineId,
-              medicineName: t.medicineName || medicine?.name || 'Không xác định',
-              category: medicine?.category || 'Chưa phân loại',
-              anomalyType: qty > upperThreshold ? 'SPIKE_EXPORT' : 'UNUSUAL_LOW',
-              severity: zScore >= numZScore * 1.5 ? 'HIGH' : 'MEDIUM',
+              id: t._id.toString(),
+              medicineId: medId,
+              medicineName: med ? med.name : t.medicineName || 'Thuốc không xác định',
+              category: med ? med.category : 'Chưa phân loại',
+              anomalyType,
+              severity,
               transactionType: t.type,
               quantityChange: t.quantityChange,
-              detectedAt: t.createdAt,
+              detectedAt: new Date((t as any).createdAt).toISOString(),
               referenceId: t.referenceId || null,
               referenceType: t.referenceType || null,
-              performedBy: t.performedBy || 'Không xác định',
+              performedBy: t.performedBy || 'System',
               statistics: {
-                avgDailyExport: Math.round(mean * 100) / 100,
-                stdDev: Math.round(stdDev * 100) / 100,
-                zScore: Math.round(zScore * 100) / 100,
-                upperThreshold: Math.round(upperThreshold * 100) / 100,
-                lowerThreshold: Math.round(lowerThreshold * 100) / 100,
+                avgDailyExport: Number(mean.toFixed(2)),
+                stdDev: Number(stdDev.toFixed(2)),
+                zScore: Number(zScore.toFixed(2)),
+                upperThreshold: Number((mean + zScoreThreshold * stdDev).toFixed(2)),
+                lowerThreshold: Number(Math.max(0, mean - zScoreThreshold * stdDev).toFixed(2)),
               },
-              description: qty > upperThreshold
-                ? `Xuất kho bất thường: ${qty} đơn vị (gấp ${(zScore).toFixed(1)}σ mức bình thường)`
-                : `Mức xuất bất thường thấp: ${qty} đơn vị (${(zScore).toFixed(1)}σ dưới mức bình thường)`,
-            });
-          }
-        }
-
-        // Phát hiện giao dịch ĐIỀU CHỈNH (ADJUSTMENT) lớn bất thường
-        const adjustTxns = txns.filter(t => t.type === 'ADJUSTMENT');
-        for (const t of adjustTxns) {
-          const qty = Math.abs(t.quantityChange);
-          const deviationPercent = mean > 0 ? (qty / mean) * 100 : 0;
-
-          // Nếu điều chỉnh > 50% nhu cầu trung bình ngày thì đáng nghi
-          if (deviationPercent > 50 && qty > 10) {
-            const medicine = await this.medicineModel.findById(medicineId).select('name category').lean().exec();
-            anomalies.push({
-              id: `adj-${t._id?.toString() || medicineId}`,
-              medicineId,
-              medicineName: t.medicineName || medicine?.name || 'Không xác định',
-              category: medicine?.category || 'Chưa phân loại',
-              anomalyType: 'LARGE_ADJUSTMENT',
-              severity: deviationPercent > 200 ? 'HIGH' : 'MEDIUM',
-              transactionType: 'ADJUSTMENT',
-              quantityChange: t.quantityChange,
-              detectedAt: t.createdAt,
-              referenceId: t.referenceId || null,
-              referenceType: 'INVENTORY_CHECK',
-              performedBy: t.performedBy || 'Không xác định',
-              statistics: {
-                avgDailyExport: Math.round(mean * 100) / 100,
-                stdDev: Math.round(stdDev * 100) / 100,
-                zScore: stdDev > 0 ? Math.round((qty / stdDev) * 100) / 100 : 0,
-                upperThreshold: Math.round(upperThreshold * 100) / 100,
-                lowerThreshold: Math.round(lowerThreshold * 100) / 100,
-              },
-              description: `Điều chỉnh kho lớn bất thường: ${t.quantityChange > 0 ? '+' : ''}${t.quantityChange} đơn vị (${deviationPercent.toFixed(0)}% nhu cầu TB ngày). Lý do: ${t.notes || 'Không có ghi chú'}`,
+              description: `${t.type === 'ADJUSTMENT' ? 'Biến động kiểm kê/điều chỉnh' : 'Số lượng xuất kho'} đột biến: ${qty} đơn vị (Z-Score = ${zScore.toFixed(2)})`
             });
           }
         }
       }
 
-      // Sắp xếp: HIGH severity và mới nhất lên đầu
-      anomalies.sort((a, b) => {
-        if (a.severity !== b.severity) return a.severity === 'HIGH' ? -1 : 1;
-        return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
-      });
+      anomalies.sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
 
-      this.logger.log(`[UC-37] Anomaly detection complete. Found ${anomalies.length} anomalies from ${txnsByMed.size} medicines analyzed.`);
       return {
         data: anomalies,
         total: anomalies.length,
-        periodDays: numPeriodDays,
-        zScoreThreshold: numZScore,
+        periodDays,
+        zScoreThreshold,
         analyzedAt: new Date().toISOString(),
         summary: {
-          high: anomalies.filter(a => a.severity === 'HIGH').length,
-          medium: anomalies.filter(a => a.severity === 'MEDIUM').length,
-          spikeExport: anomalies.filter(a => a.anomalyType === 'SPIKE_EXPORT').length,
-          largeAdjustment: anomalies.filter(a => a.anomalyType === 'LARGE_ADJUSTMENT').length,
-        },
+          high: summaryHigh,
+          medium: summaryMedium,
+          spikeExport: summarySpikeExport,
+          largeAdjustment: summaryLargeAdjustment,
+        }
       };
     } catch (error) {
+      this.logger.error('Failed to detect anomalies:', error);
       throw new RpcException(error.message || 'Lỗi phát hiện bất thường tồn kho');
     }
   }

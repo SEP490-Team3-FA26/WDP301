@@ -17,7 +17,7 @@ export class ReportController implements OnModuleInit {
     @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
     private readonly storage: S3StorageService,
     private readonly reportService: ReportService,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
@@ -25,6 +25,8 @@ export class ReportController implements OnModuleInit {
       'inventory.profit.report',
       'inventory.report.create',
       'inventory.report.list',
+      'inventory.sale.performance',
+      'inventory.reports.forecast_dataset',
     ]);
   }
 
@@ -39,13 +41,60 @@ export class ReportController implements OnModuleInit {
   ) {
     const user = req.user;
     let targetBranchId = branchId;
-    
+
     if (user.role !== 'admin' && user.role !== 'head_branch') {
       targetBranchId = user.branchId;
     }
 
     const reports = await this.storage.listReports(targetBranchId, type);
     return reports;
+  }
+
+  @Get('revenue/analytics')
+  @ApiOperation({ summary: 'Lấy dữ liệu phân tích doanh thu (JSON only, không tạo PDF)' })
+  @ApiQuery({ name: 'period', required: true, enum: ['day', 'week', 'month', 'quarter'] })
+  @ApiQuery({ name: 'date', required: false, description: 'Định dạng YYYY-MM-DD, mặc định là hôm nay' })
+  @ApiQuery({ name: 'branchId', required: false, description: 'Chỉ áp dụng với Admin/HQ' })
+  async getRevenueAnalytics(
+    @Query('period') period: 'day' | 'week' | 'month' | 'quarter',
+    @Query('date') date?: string,
+    @Query('branchId') branchId?: string,
+    @Req() req?: any,
+  ) {
+    const user = req.user;
+    let targetBranchId = branchId;
+
+    if (user.role !== 'admin' && user.role !== 'head_branch') {
+      if (!user.branchId) {
+        throw new BadRequestException('Tài khoản của bạn chưa được liên kết với chi nhánh nào');
+      }
+      targetBranchId = user.branchId;
+    } else {
+      if (!targetBranchId) {
+        targetBranchId = user.branchId || 'all';
+      }
+    }
+
+    const reportDate = date || new Date().toISOString().split('T')[0];
+
+    try {
+      const reportData = await sendKafkaMessage(this.inventoryClient, 'inventory.sale.report', {
+        branchId: targetBranchId,
+        period,
+        date: reportDate,
+      });
+
+      if (!reportData || reportData.error) {
+        throw new InternalServerErrorException(reportData?.message || 'Không thể lấy dữ liệu báo cáo doanh thu');
+      }
+
+      return {
+        success: true,
+        data: reportData,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi lấy dữ liệu phân tích doanh thu');
+    }
   }
 
   @Get('revenue')
@@ -113,7 +162,7 @@ export class ReportController implements OnModuleInit {
 
       const periodName = period === 'day' ? 'ngày' : period === 'week' ? 'tuần' : period === 'month' ? 'tháng' : 'quý';
       const branchName = branchInfo ? branchInfo.name : targetBranchId;
-      
+
       // 6. Save to DB
       const reportRecord = {
         reportCode: `REP-${Math.floor(100 + Math.random() * 900)}${uuidStr.split('-')[0].substring(0, 4)}`.toUpperCase(), // Mã định danh duy nhất (VD: REP-883A2C)
@@ -231,6 +280,101 @@ export class ReportController implements OnModuleInit {
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
       throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi tạo báo cáo lợi nhuận');
+    }
+  }
+
+  @Get('inventory-performance')
+  @ApiOperation({ summary: 'Báo cáo hàng bán chạy và chậm luân chuyển' })
+  @ApiQuery({ name: 'branchId', required: false })
+  @ApiQuery({ name: 'startDate', required: false, description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'YYYY-MM-DD' })
+  async getInventoryPerformance(
+    @Query('branchId') branchId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Req() req?: any,
+  ) {
+    const user = req.user;
+    let targetBranchId = branchId;
+
+    if (user.role !== 'admin' && user.role !== 'head_branch') {
+      targetBranchId = user.branchId;
+    }
+
+    try {
+      const data = await sendKafkaMessage(this.inventoryClient, 'inventory.sale.performance', {
+        branchId: targetBranchId,
+        startDate,
+        endDate
+      });
+
+      return {
+        success: true,
+        data
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message || 'Lỗi lấy báo cáo hiệu suất');
+    }
+  }
+
+  @Get('ai-forecast')
+  @ApiOperation({ summary: 'Dự báo nhu cầu nhập hàng theo kỳ bằng AI' })
+  @ApiQuery({ name: 'periodDays', required: false, description: 'Số ngày phân tích kỳ trước, mặc định là 30' })
+  @ApiQuery({ name: 'branchId', required: false, description: 'Chi nhánh cần dự báo' })
+  async getAIForecast(
+    @Query('periodDays') periodDays?: string,
+    @Query('branchId') branchId?: string,
+    @Req() req?: any,
+  ) {
+    const user = req.user;
+    let targetBranchId = branchId;
+    if (user.role !== 'admin' && user.role !== 'head_branch') {
+      targetBranchId = user.branchId;
+    }
+
+    const days = periodDays ? Number(periodDays) : 30;
+
+    try {
+      // 1. Lấy dữ liệu thô từ inventory service
+      const rawDataset = await sendKafkaMessage(this.inventoryClient, 'inventory.reports.forecast_dataset', {
+        periodDays: days,
+        branchId: targetBranchId,
+      });
+
+      if (!rawDataset || rawDataset.error) {
+        throw new InternalServerErrorException(rawDataset?.message || 'Không thể lấy dữ liệu phân tích kho');
+      }
+
+      // 2. Gọi AI Service để chạy dự báo
+      let aiUrl = 'http://ai-service:8000/api/ai/forecast';
+      try {
+        const response = await fetch(aiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataset: rawDataset, periodDays: days }),
+        });
+
+        if (response.ok) {
+          return await response.json();
+        }
+
+        const errorText = await response.text();
+        throw new Error(errorText);
+      } catch (err) {
+        aiUrl = 'http://localhost:8000/api/ai/forecast';
+        const response = await fetch(aiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataset: rawDataset, periodDays: days }),
+        });
+
+        if (response.ok) {
+          return await response.json();
+        }
+        throw new Error(await response.text());
+      }
+    } catch (error) {
+      throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi tạo dự báo nhu cầu bằng AI');
     }
   }
 }

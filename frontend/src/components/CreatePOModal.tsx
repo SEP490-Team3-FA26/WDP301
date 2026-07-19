@@ -304,7 +304,7 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
                     key={med.id || med._id} 
                     med={med} 
                     added={cart.some(i => i.id === (med.id || med._id))} 
-                    onAddToCart={(m, q) => handleAddMedicine(m, q)} 
+                    onAddToCart={(m, q, _unit) => { handleAddMedicine(m, q); }} 
                     onClick={() => {}} 
                   />
                 ))
