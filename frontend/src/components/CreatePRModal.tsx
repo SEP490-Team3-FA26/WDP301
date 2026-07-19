@@ -4,13 +4,26 @@ import { motion, AnimatePresence } from "motion/react";
 import { ShopFilterSidebar } from "./ShopFilterSidebar";
 import { MedicineCard } from "./MedicineCard";
 
-export function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: any[]; onClose: () => void; onSuccess: (msg: string) => void }) {
+export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems }: { medicines: any[]; onClose: () => void; onSuccess: (msg: string) => void; prefillPrItems?: any[] }) {
   const [branchName, setBranchName] = useState("Chi nhánh Quận 1");
   const [reason, setReason] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
   const [items, setItems] = useState<{ medicineId: string; quantity: number }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (prefillPrItems && prefillPrItems.length > 0) {
+      const itemsList = prefillPrItems.map(item => ({
+        medicineId: item.medicineId,
+        quantity: item.requestedQuantity
+      }));
+      setItems(itemsList);
+      if (prefillPrItems[0].aiReason) {
+        setReason(prefillPrItems[0].aiReason);
+      }
+    }
+  }, [prefillPrItems]);
   
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -108,6 +121,7 @@ export function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: an
     setIsSubmitting(true);
     setErr(null);
     try {
+      const isAiGenerated = prefillPrItems && prefillPrItems.length > 0 && prefillPrItems[0].isAiGenerated;
       const res = await fetch("/api/purchase-requisitions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,6 +130,10 @@ export function CreatePRModal({ medicines, onClose, onSuccess }: { medicines: an
           reason,
           isUrgent,
           items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity })),
+          isAiGenerated: isAiGenerated || false,
+          aiConfidence: isAiGenerated ? prefillPrItems[0].aiConfidence : undefined,
+          aiReason: isAiGenerated ? prefillPrItems[0].aiReason : undefined,
+          aiAnalysisVersion: isAiGenerated ? prefillPrItems[0].aiAnalysisVersion : undefined,
         }),
       });
       const resData = await res.json();

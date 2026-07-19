@@ -551,3 +551,19 @@ async def generate_forecast_endpoint(req: ForecastRequest):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+class SeasonalAnalysisRequest(BaseModel):
+    dataset: list
+    weatherRegion: str
+    currentSeason: str
+    currentMonth: str
+
+@router.post("/api/ai/seasonal-analysis")
+async def generate_seasonal_analysis_endpoint(req: SeasonalAnalysisRequest):
+    try:
+        from services.llm_service import analyze_seasonal_trends
+        result = await analyze_seasonal_trends(req.dataset, req.weatherRegion, req.currentSeason, req.currentMonth)
+        return result
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

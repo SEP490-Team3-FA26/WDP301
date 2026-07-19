@@ -600,17 +600,22 @@ export class MedicineService implements OnModuleInit {
     }
   }
 
-  async getInventoryStats() {
+  async getInventoryStats(branchId?: string) {
     try {
-      console.log('📨 [Inventory MS] Nhận yêu cầu lấy thống kê tồn kho');
+      console.log(`📨 [Inventory MS] Nhận yêu cầu lấy thống kê tồn kho. Branch: ${branchId}`);
       const today = new Date();
       const ninetyDaysFromNow = new Date();
       ninetyDaysFromNow.setDate(today.getDate() + 90);
 
+      const batchQuery: any = { stock: { $gt: 0 } };
+      if (branchId && branchId !== 'all') {
+        batchQuery.branchId = branchId;
+      }
+
       console.log('🔍 [Inventory MS] Đang truy vấn database (tối ưu select & lean)...');
       const [medicines, batches] = await Promise.all([
         this.medicineModel.find().select('price').lean().exec(),
-        this.batchModel.find({ stock: { $gt: 0 } }).select('medicineId stock expDate status').lean().exec()
+        this.batchModel.find(batchQuery).select('medicineId stock expDate status branchId').lean().exec()
       ]);
       console.log(`✅ [Inventory MS] Truy vấn thành công: ${medicines.length} medicines, ${batches.length} batches`);
 

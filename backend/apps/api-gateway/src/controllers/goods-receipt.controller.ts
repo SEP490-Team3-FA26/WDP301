@@ -4,6 +4,8 @@ import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AuditLogAction } from '../decorators/audit-log.decorator';
 import { AppWebsocketGateway } from '../websocket/websocket.gateway';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { NotificationService } from '../notification/notification.service';
 
 @Controller('api/goods-receipts')
@@ -12,6 +14,7 @@ export class GoodsReceiptController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
     private readonly websocketGateway: AppWebsocketGateway,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private readonly notificationService: NotificationService,
   ) {}
 
@@ -86,6 +89,17 @@ export class GoodsReceiptController implements OnModuleInit {
       }).catch(err => console.error('Failed to persist GRN_COMPLETED notification:', err));
     }
     
+    // Evict seasonal analysis cache on inventory updates
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const branch = data.branchId || (grnData && grnData.branchId) || 'all';
+      await this.cacheManager.del(`reports:seasonal-analysis:${branch}:${currentMonth}`);
+      await this.cacheManager.del(`reports:seasonal-analysis:all:${currentMonth}`);
+      console.log(`🗑️ [Cache Evict] Evicted seasonal analysis cache on GRN create for branch ${branch}`);
+    } catch (err) {
+      console.error('Lỗi xóa cache trong GoodsReceiptController:', err);
+    }
+    
     return result;
   }
 
@@ -132,7 +146,22 @@ export class GoodsReceiptController implements OnModuleInit {
     entityType: 'GoodsReceiptNote',
   })
   async approveGoodsReceiptNote(@Param('id') id: string, @Body() data: { discrepancyReason?: string }) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.grn.approve', { id, discrepancyReason: data.discrepancyReason });
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.grn.approve', { id, discrepancyReason: data.discrepancyReason });
+    
+    // Evict cache on approval
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      // Evict all since GRN approval impacts multi-branch/HQ status or specific branch
+      const grnData = result?.data || result;
+      const branch = (grnData && grnData.branchId) || 'all';
+      await this.cacheManager.del(`reports:seasonal-analysis:${branch}:${currentMonth}`);
+      await this.cacheManager.del(`reports:seasonal-analysis:all:${currentMonth}`);
+      console.log(`🗑️ [Cache Evict] Evicted seasonal analysis cache on GRN approval for branch ${branch}`);
+    } catch (err) {
+      console.error('Lỗi xóa cache trong GoodsReceiptController:', err);
+    }
+    
+    return result;
   }
 
   @Post(':id/reject')
