@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import api from "../../services/core/api";
 import { 
   Sparkles, 
   ShoppingCart, 
@@ -51,20 +52,19 @@ export function AIForecast() {
     setError(null);
     setSelectedIds([]);
     try {
-      const response = await fetch(`/api/reports/ai-forecast?periodDays=${pDays}`);
-      if (!response.ok) {
-        throw new Error("Lỗi hệ thống khi tạo dự báo từ AI Service");
-      }
-      const data = await response.json();
+      const res = await api.get(`/api/reports/ai-forecast?periodDays=${pDays}`);
+      const data = res.data;
       
       // Đảm bảo dữ liệu đúng định dạng
       if (data && data.recommendations) {
         setForecast(data);
+      } else if (data && data.data && data.data.recommendations) {
+        setForecast(data.data);
       } else {
         throw new Error("Dữ liệu phản hồi từ AI không đúng định dạng chuẩn.");
       }
     } catch (err: any) {
-      setError(err.message || "Không thể tải dự báo nhu cầu nhập hàng.");
+      setError(err.response?.data?.message || err.message || "Không thể tải dự báo nhu cầu nhập hàng.");
     } finally {
       setLoading(false);
     }
