@@ -228,6 +228,8 @@ export class AppGatewayModule {
       'inventory.sales.return',
       'inventory.sales.exchange',
       'inventory.transfer.create',
+      'inventory.transfer.create_direct',
+      'inventory.transfer.recommend',
       'inventory.transfer.receive',
       'inventory.transfer.list',
       'inventory.transfer.get_by_id',

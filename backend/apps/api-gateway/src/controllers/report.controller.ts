@@ -25,9 +25,10 @@ export class ReportController implements OnModuleInit {
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
       'inventory.sale.report',
-      'inventory.sale.performance',
+      'inventory.profit.report',
       'inventory.report.create',
       'inventory.report.list',
+      'inventory.sale.performance',
       'inventory.reports.forecast_dataset',
       'inventory.medicine.stats',
       'inventory.reports.seasonal_trends',
@@ -45,7 +46,7 @@ export class ReportController implements OnModuleInit {
   ) {
     const user = req.user;
     let targetBranchId = branchId;
-    
+
     if (user.role !== 'admin' && user.role !== 'head_branch') {
       targetBranchId = user.branchId;
     }
@@ -244,7 +245,7 @@ export class ReportController implements OnModuleInit {
 
       const periodName = period === 'day' ? 'ngày' : period === 'week' ? 'tuần' : period === 'month' ? 'tháng' : 'quý';
       const branchName = branchInfo ? branchInfo.name : targetBranchId;
-      
+
       // 6. Save to DB
       const reportRecord = {
         reportCode: `REP-${Math.floor(100 + Math.random() * 900)}${uuidStr.split('-')[0].substring(0, 4)}`.toUpperCase(), // Mã định danh duy nhất (VD: REP-883A2C)
@@ -270,6 +271,98 @@ export class ReportController implements OnModuleInit {
       };
     } catch (error) {
       throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi tạo báo cáo doanh thu');
+    }
+  }
+
+  @Get('profit')
+  @ApiOperation({ summary: 'Tạo báo cáo lợi nhuận theo ngày/tuần/tháng/quý và lưu trên S3 (Chỉ Admin/HQ)' })
+  @ApiQuery({ name: 'period', required: true, enum: ['day', 'week', 'month', 'quarter'] })
+  @ApiQuery({ name: 'date', required: false, description: 'Định dạng YYYY-MM-DD, mặc định là hôm nay' })
+  @ApiQuery({ name: 'branchId', required: false, description: 'Chỉ áp dụng với Admin/HQ' })
+  async getProfitReport(
+    @Query('period') period: 'day' | 'week' | 'month' | 'quarter',
+    @Query('date') date?: string,
+    @Query('branchId') branchId?: string,
+    @Req() req?: any,
+  ) {
+    const user = req.user;
+
+    // Ràng buộc bảo mật tuyệt đối: Chỉ Admin và Head Branch được phép xem báo cáo lợi nhuận
+    if (user.role !== 'admin' && user.role !== 'head_branch') {
+      throw new ForbiddenException('Bạn không có quyền truy cập báo cáo lợi nhuận hệ thống');
+    }
+
+    let targetBranchId = branchId;
+    if (!targetBranchId) {
+      targetBranchId = user.branchId || 'all';
+    }
+
+    const reportDate = date || new Date().toISOString().split('T')[0];
+
+    try {
+      // 1. Lấy dữ liệu tổng hợp lợi nhuận từ inventory service qua Kafka
+      const reportData = await sendKafkaMessage(this.inventoryClient, 'inventory.profit.report', {
+        branchId: targetBranchId,
+        period,
+        date: reportDate,
+      });
+
+      if (!reportData || reportData.error) {
+        throw new InternalServerErrorException(reportData?.message || 'Không thể lấy dữ liệu báo cáo lợi nhuận');
+      }
+
+      // 2. Lấy thông tin chi nhánh từ user service
+      let branchInfo = null;
+      try {
+        const branches = await sendKafkaMessage(this.userClient, 'user.branch.list', {});
+        if (Array.isArray(branches)) {
+          branchInfo = branches.find((b: any) => b.branchCode === targetBranchId);
+        }
+      } catch (err) {
+        // Lỗi lấy tên chi nhánh không làm gián đoạn luồng chính
+      }
+
+      // 3. Tạo file PDF báo cáo lợi nhuận
+      const pdfBuffer = await this.reportService.generateProfitPdf(reportData, branchInfo, user.fullName);
+
+      // 4. Tải PDF lên S3
+      const datePath = new Date().toISOString().slice(0, 10);
+      const uuidStr = randomUUID();
+      const key = `reports/profit/${targetBranchId}/${period}_${datePath}_${uuidStr}.pdf`;
+      await this.storage.uploadFile(pdfBuffer, key, 'application/pdf');
+
+      // 5. Tạo link tải có hạn (7 ngày)
+      const downloadUrl = await this.storage.getPresignedUrl(key, 86400 * 7);
+
+      const periodName = period === 'day' ? 'ngày' : period === 'week' ? 'tuần' : period === 'month' ? 'tháng' : 'quý';
+      const branchName = branchInfo ? branchInfo.name : targetBranchId;
+
+      // 6. Ghi nhận báo cáo vào DB
+      const reportRecord = {
+        reportCode: `REP-${Math.floor(100 + Math.random() * 900)}${uuidStr.split('-')[0].substring(0, 4)}`.toUpperCase(),
+        name: `Báo cáo lợi nhuận ${periodName} - ${branchName}`,
+        type: 'Lợi nhuận',
+        format: 'PDF',
+        size: `${(pdfBuffer.length / 1024).toFixed(1)} KB`,
+        status: 'Hoàn thành',
+        author: user.fullName || 'Quản lý',
+        downloadUrl,
+        branchId: targetBranchId,
+      };
+
+      await sendKafkaMessage(this.inventoryClient, 'inventory.report.create', reportRecord);
+
+      return {
+        success: true,
+        message: 'Tạo báo cáo lợi nhuận thành công!',
+        s3Key: key,
+        downloadUrl,
+        data: reportData,
+        record: reportRecord,
+      };
+    } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
+      throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi tạo báo cáo lợi nhuận');
     }
   }
 

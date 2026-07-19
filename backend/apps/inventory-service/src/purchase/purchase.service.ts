@@ -9,10 +9,9 @@ import { InventoryTransaction } from './schemas/inventory-transaction.schema';
 import { StockTransfer } from './schemas/stock-transfer.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
+import { firstValueFrom } from 'rxjs';
 import { subscribeToKafkaTopics, sendKafkaMessage } from '../../../api-gateway/src/common/kafka.helper';
 import { QuotaService } from '../quota/quota.service';
-import { firstValueFrom } from 'rxjs';
-
 import { InspectionRecord } from './schemas/inspection-record.schema';
 
 @Injectable()
@@ -202,6 +201,131 @@ export class PurchaseService {
     pr.status = status;
     await pr.save();
     return pr;
+  }
+
+  async updatePurchaseRequisition(id: string, data: any) {
+    this.logger.log(`Updating Purchase Requisition: ${id}`);
+    const pr = await this.prModel.findById(id).exec();
+    if (!pr) throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${id}` });
+
+    const allowedStatuses = ['DRAFT', 'SUBMITTED', 'URGENT_PENDING'];
+    if (!allowedStatuses.includes(pr.status)) {
+      throw new RpcException({ message: `Không thể chỉnh sửa yêu cầu ở trạng thái: ${pr.status}` });
+    }
+
+    if (!data.items || data.items.length === 0) {
+      throw new RpcException({ message: 'Phiếu yêu cầu mua hàng phải có nhất 1 sản phẩm' });
+    }
+
+    let oldEstimatedCost = 0;
+    for (const item of pr.items) {
+      const medicine = await this.medicineModel.findById(item.medicineId).exec();
+      if (medicine) {
+        oldEstimatedCost += item.requestedQuantity * (medicine.price || 0);
+      }
+    }
+
+    const enrichedItems = [];
+    let newEstimatedCost = 0;
+    for (const item of data.items) {
+      const medicine = await this.medicineModel.findById(item.medicineId).exec();
+      if (!medicine) {
+        throw new RpcException({ message: `Không tìm thấy thuốc có ID: ${item.medicineId}` });
+      }
+      const qty = item.requestedQuantity || item.quantity;
+      newEstimatedCost += qty * (medicine.price || 0);
+
+      enrichedItems.push({
+        medicineId: item.medicineId,
+        medicineName: medicine.name,
+        requestedQuantity: qty,
+        unit: medicine.unit || 'Hộp',
+      });
+    }
+
+    const costDiff = newEstimatedCost - oldEstimatedCost;
+    const branchId = pr.branchId || 'BRANCH_HQ';
+
+    if (branchId !== 'BRANCH_HQ' && costDiff !== 0) {
+      const prDate = new Date((pr as any).createdAt || new Date());
+      const cycle = `${prDate.getFullYear()}-${String(prDate.getMonth() + 1).padStart(2, '0')}`;
+      const quotas = await this.quotaService.findAll({ branchId, cycle });
+      
+      if (!quotas || quotas.length === 0) {
+        throw new RpcException({ message: `Không tìm thấy hạn mức chu kỳ ${cycle} cho chi nhánh.` });
+      }
+
+      const quota = quotas[0];
+      if (quota.status !== 'Active') {
+        throw new RpcException({ message: 'Hạn mức của chi nhánh đang bị khóa.' });
+      }
+
+      const remainingBudget = quota.totalBudget - (quota.usedAmount || 0);
+      if (costDiff > remainingBudget) {
+        throw new RpcException({
+          message: `Vượt quá hạn mức ngân sách! Yêu cầu mới cần thêm ${costDiff.toLocaleString()}đ, nhưng ngân sách còn lại chỉ là ${remainingBudget.toLocaleString()}đ.`
+        });
+      }
+
+      const newUsedAmount = Math.max(0, (quota.usedAmount || 0) + costDiff);
+      await this.quotaService.update((quota as any)._id.toString(), { usedAmount: newUsedAmount });
+    }
+
+    pr.items = enrichedItems as any;
+    pr.reason = data.reason || pr.reason;
+    if (data.notes !== undefined) pr.notes = data.notes;
+    
+    if (data.isUrgent !== undefined) {
+      pr.isUrgent = !!data.isUrgent;
+      if (pr.status === 'SUBMITTED' || pr.status === 'URGENT_PENDING') {
+        pr.status = pr.isUrgent ? 'URGENT_PENDING' : 'SUBMITTED';
+      }
+    }
+
+    await pr.save();
+
+    return {
+      success: true,
+      message: 'Cập nhật yêu cầu mua hàng thành công',
+      data: pr,
+    };
+  }
+
+  async deletePurchaseRequisition(id: string) {
+    this.logger.log(`Deleting Purchase Requisition: ${id}`);
+    const pr = await this.prModel.findById(id).exec();
+    if (!pr) throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${id}` });
+
+    const allowedStatuses = ['DRAFT', 'SUBMITTED', 'URGENT_PENDING'];
+    if (!allowedStatuses.includes(pr.status)) {
+      throw new RpcException({ message: `Không thể xóa yêu cầu ở trạng thái: ${pr.status}` });
+    }
+
+    if (pr.branchId !== 'BRANCH_HQ') {
+      const prDate = new Date((pr as any).createdAt || new Date());
+      const cycle = `${prDate.getFullYear()}-${String(prDate.getMonth() + 1).padStart(2, '0')}`;
+      const quotas = await this.quotaService.findAll({ branchId: pr.branchId, cycle });
+      
+      if (quotas && quotas.length > 0) {
+        const quota = quotas[0];
+        let totalEstimatedCost = 0;
+        for (const item of pr.items) {
+          const medicine = await this.medicineModel.findById(item.medicineId).exec();
+          if (medicine) {
+            totalEstimatedCost += item.requestedQuantity * (medicine.price || 0);
+          }
+        }
+        const newUsedAmount = Math.max(0, (quota.usedAmount || 0) - totalEstimatedCost);
+        await this.quotaService.update((quota as any)._id.toString(), { usedAmount: newUsedAmount });
+      }
+    }
+
+    await this.prModel.findByIdAndDelete(id).exec();
+
+    return {
+      success: true,
+      message: 'Xóa yêu cầu mua hàng thành công',
+    };
   }
 
   // ===========================================================================================
@@ -635,6 +759,7 @@ export class PurchaseService {
       const stockBefore = batch ? batch.stock : 0;
       if (batch) {
         batch.stock += (item.actualQty ?? 0);
+        batch.importPrice = item.unitPrice; // Cập nhật giá nhập mới nhất
         batch.status = batch.expDate < new Date() ? 'EXPIRED' : 'ACTIVE';
         await batch.save();
       } else {
@@ -644,6 +769,7 @@ export class PurchaseService {
           batchNo: item.batchNo,
           expDate: new Date(item.expDate),
           stock: (item.actualQty ?? 0),
+          importPrice: item.unitPrice,
           status: new Date(item.expDate) < new Date() ? 'EXPIRED' : 'ACTIVE',
         });
         await batch.save();
@@ -898,7 +1024,7 @@ export class PurchaseService {
           origin = {
             grnId: grn._id.toString(),
             poId: grn.poId,
-            importDate: grn.createdAt,
+            importDate: (grn as any).createdAt,
             supplierId: po ? po.supplierId : null,
             supplierName,
             importQty: grnItem ? grnItem.actualQty : importTxn.quantityChange,
@@ -937,7 +1063,7 @@ export class PurchaseService {
         referenceType: t.referenceType,
         performedBy: t.performedBy,
         notes: t.notes,
-        createdAt: t.createdAt,
+        createdAt: (t as any).createdAt,
       })),
     };
   }
@@ -1287,6 +1413,168 @@ export class PurchaseService {
     return report;
   }
 
+
+  async calculateSafeStock(medicineId: string, branchId: string, startDate: Date, endDate: Date): Promise<{ safetyStock: number, currentStock: number, reorderPoint: number }> {
+    const periodDays = Math.max(1, (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // 1. Get batches for this branch
+    const branchBatches = await this.batchModel.find({ medicineId, branchId, status: 'ACTIVE' }).exec();
+    const currentStock = branchBatches.reduce((sum, b) => sum + b.stock, 0);
+    const batchNos = branchBatches.map(b => b.batchNo);
+
+    // 2. Query transactions for these batches
+    const exportTxns = await this.txnModel.find({
+      medicineId,
+      batchNo: { $in: batchNos },
+      type: { $in: ['SALE_EXPORT', 'DISPOSE'] },
+      createdAt: { $gte: startDate, $lte: endDate }
+    }).exec();
+
+    const totalExported = exportTxns.reduce((sum, t) => sum + Math.abs(t.quantityChange), 0);
+    const avgDailyDemand = totalExported / periodDays;
+
+    // Daily demand deviation
+    const demandByDay: Record<string, number> = {};
+    exportTxns.forEach(t => {
+      if (t.createdAt) {
+        const day = new Date(t.createdAt).toISOString().split('T')[0];
+        demandByDay[day] = (demandByDay[day] || 0) + Math.abs(t.quantityChange);
+      }
+    });
+
+    // Populate 0s for missing days
+    const dailyDemands: number[] = [];
+    const tempDate = new Date(startDate);
+    while (tempDate <= endDate) {
+      const dayStr = tempDate.toISOString().split('T')[0];
+      dailyDemands.push(demandByDay[dayStr] || 0);
+      tempDate.setDate(tempDate.getDate() + 1);
+    }
+
+    // stdDev of demand
+    let stdDevDemand = 0;
+    if (dailyDemands.length > 0) {
+      const variance = dailyDemands.reduce((sum, val) => sum + Math.pow(val - avgDailyDemand, 2), 0) / dailyDemands.length;
+      stdDevDemand = Math.sqrt(variance);
+    }
+
+    // 3. Lead time (PO to GRN)
+    // Find completed POs containing this medicine
+    const completedPOs = await this.poModel.find({
+      status: 'COMPLETED',
+      'items.medicineId': medicineId,
+      createdAt: { $gte: startDate, $lte: endDate }
+    }).exec();
+
+    const poIds = completedPOs.map(po => po._id.toString());
+    const grns = await this.grnModel.find({
+      poId: { $in: poIds },
+      status: 'COMPLETED'
+    }).exec();
+
+    const leadTimes: number[] = [];
+    completedPOs.forEach(po => {
+      const grn = grns.find(g => g.poId === po._id.toString());
+      if (grn) {
+        const diffDays = (new Date(grn.createdAt).getTime() - new Date(po.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+        leadTimes.push(diffDays);
+      }
+    });
+
+    const avgLeadTime = leadTimes.length > 0
+      ? leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length
+      : 7; // default 7 days
+
+    let stdDevLeadTime = 1.5; // default stdDev for lead time
+    if (leadTimes.length > 0) {
+      const meanLt = avgLeadTime;
+      const varianceLt = leadTimes.reduce((sum, val) => sum + Math.pow(val - meanLt, 2), 0) / leadTimes.length;
+      stdDevLeadTime = Math.sqrt(varianceLt);
+    }
+
+    const Z = 1.65; // 95% service level
+    // SS = Z * sqrt( LT * stdDevDemand^2 + avgDailyDemand^2 * stdDevLeadTime^2 )
+    const safetyStock = Z * Math.sqrt(
+      avgLeadTime * Math.pow(stdDevDemand, 2) +
+      Math.pow(avgDailyDemand, 2) * Math.pow(stdDevLeadTime, 2)
+    );
+
+    const reorderPoint = (avgDailyDemand * avgLeadTime) + safetyStock;
+
+    return {
+      safetyStock: Math.ceil(safetyStock) || 10,
+      currentStock,
+      reorderPoint: Math.ceil(reorderPoint) || 20,
+    };
+  }
+
+  async recommendStockTransfer(data: { medicineId: string, toBranchId: string, quantity: number }) {
+    const { medicineId, toBranchId, quantity } = data;
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - 30); // 30 days history
+
+    // Get all distinct branchIds from MedicineBatch
+    const distinctBranches = await this.batchModel.distinct('branchId', { medicineId }).exec();
+
+    const recommendations = [];
+
+    for (const fromBranchId of distinctBranches) {
+      if (fromBranchId === toBranchId) continue;
+
+      // Calculate safe stock and current stock for this source branch
+      const info = await this.calculateSafeStock(medicineId, fromBranchId, startDate, endDate);
+
+      // Surplus is currentStock - safetyStock
+      const surplus = Math.max(0, info.currentStock - info.safetyStock);
+
+      if (surplus > 0 || fromBranchId === 'CENTRAL_WH') {
+        const actualSurplus = fromBranchId === 'CENTRAL_WH' ? info.currentStock : surplus;
+        if (actualSurplus > 0) {
+          recommendations.push({
+            branchId: fromBranchId,
+            branchName: fromBranchId === 'CENTRAL_WH' ? 'Kho Tổng' : `Chi nhánh ${fromBranchId}`,
+            currentStock: info.currentStock,
+            safetyStock: fromBranchId === 'CENTRAL_WH' ? 0 : info.safetyStock,
+            surplus: actualSurplus,
+          });
+        }
+      }
+    }
+
+    // Sort by: Kho Tổng always goes first if it has stock, then by surplus descending
+    recommendations.sort((a, b) => {
+      if (a.branchId === 'CENTRAL_WH') return -1;
+      if (b.branchId === 'CENTRAL_WH') return 1;
+      return b.surplus - a.surplus;
+    });
+
+    // Calculate how much we should allocate from each branch
+    let remaining = quantity;
+    const finalAllocation = [];
+
+    for (const rec of recommendations) {
+      if (remaining <= 0) break;
+      const allocQty = Math.min(rec.surplus, remaining);
+      if (allocQty > 0) {
+        finalAllocation.push({
+          ...rec,
+          suggestedQty: allocQty,
+        });
+        remaining -= allocQty;
+      }
+    }
+
+    return {
+      medicineId,
+      toBranchId,
+      requestedQuantity: quantity,
+      allocatedQuantity: quantity - remaining,
+      shortfall: remaining,
+      recommendations: finalAllocation,
+    };
+  }
+
   /**
    * Tạo phiếu chuyển kho liên chi nhánh trực tiếp (Direct Branch-to-Branch Stock Transfer)
    */
@@ -1533,6 +1821,7 @@ export class PurchaseService {
           if (batch) {
             stockBefore = batch.stock;
             batch.stock += item.actualQty;
+            batch.importPrice = item.unitPrice; // Cập nhật giá nhập
             batch.expDate = item.expDate;
             await batch.save({ session });
           } else {
@@ -1542,6 +1831,7 @@ export class PurchaseService {
               batchNo: item.batchNo,
               expDate: item.expDate,
               stock: item.actualQty,
+              importPrice: item.unitPrice, // Lưu giá nhập
               status: 'ACTIVE'
             });
             await batch.save({ session });

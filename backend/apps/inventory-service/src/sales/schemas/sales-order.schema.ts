@@ -8,6 +8,9 @@ export class SalesOrderBatchItem {
 
   @Prop({ type: Number, required: true })
   quantity: number;
+
+  @Prop({ type: Number, required: true, default: 0 })
+  importPrice: number;
 }
 export const SalesOrderBatchItemSchema = SchemaFactory.createForClass(SalesOrderBatchItem);
 

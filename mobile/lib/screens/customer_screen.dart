@@ -707,14 +707,32 @@ class _CustomerScreenState extends State<CustomerScreen>
     }
   }
 
-  // Handle billing confirmation
-  void _processCheckout() {
+  Future<void> _processCheckout() async {
     if (_fullnameController.text.isEmpty ||
         _phoneController.text.isEmpty ||
         _addressController.text.isEmpty) {
       _showToast('Vui lòng điền đầy đủ thông tin giao hàng!', Colors.orange);
       return;
     }
+
+    final orderData = {
+      'customerName': _fullnameController.text,
+      'phone': _phoneController.text,
+      'address': _addressController.text,
+      'paymentMethod': _paymentMethod,
+      'items': _cart.map((item) => {
+        'medicineId': item['id'],
+        'name': item['name'],
+        'price': item['price'],
+        'quantity': item['qty']
+      }).toList(),
+      'totalAmount': _totalAmount,
+      'type': 'ONLINE_ORDER'
+    };
+
+    await ApiService.createOrder(orderData);
+
+    if (!mounted) return;
 
     showDialog(
       context: context,

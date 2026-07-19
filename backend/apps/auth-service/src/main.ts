@@ -37,30 +37,35 @@ async function bootstrap() {
       );
 
       // --- SEED DUMMY ACCOUNTS ---
-      const userModel = app.get<Model<User>>(getModelToken(User.name));
-      const dummyUsers = [
-        { email: 'admin@vinapharmacy.com', role: UserRole.ADMIN, fullName: 'Admin Hệ Thống' },
-        { email: 'director@vinapharmacy.com', role: UserRole.HEAD_BRANCH, fullName: 'Giám Đốc Chi Nhánh' },
-        { email: 'warehouse@vinapharmacy.com', role: UserRole.WAREHOUSE, fullName: 'Quản Lý Kho' },
-        { email: 'manager@vinapharmacy.com', role: UserRole.BRANCH, fullName: 'Quản Lý Cơ Sở' },
-        { email: 'pharmacist@vinapharmacy.com', role: UserRole.PHARMACIST, fullName: 'Dược Sĩ Bán Hàng' },
-        { email: 'user@vinapharmacy.com', role: UserRole.USER, fullName: 'Khách Hàng' },
-      ];
+      if (process.env.NODE_ENV !== 'production') {
+        const userModel = app.get<Model<User>>(getModelToken(User.name));
+        const dummyUsers = [
+          { email: 'admin@vinapharmacy.com', role: UserRole.ADMIN, fullName: 'Admin Hệ Thống' },
+          { email: 'director@vinapharmacy.com', role: UserRole.HEAD_BRANCH, fullName: 'Giám Đốc Chi Nhánh' },
+          { email: 'warehouse@vinapharmacy.com', role: UserRole.WAREHOUSE, fullName: 'Quản Lý Kho' },
+          { email: 'manager@vinapharmacy.com', role: UserRole.BRANCH, fullName: 'Quản Lý Cơ Sở' },
+          { email: 'pharmacist@vinapharmacy.com', role: UserRole.PHARMACIST, fullName: 'Dược Sĩ Bán Hàng' },
+          { email: 'user@vinapharmacy.com', role: UserRole.USER, fullName: 'Khách Hàng' },
+        ];
 
-      const passwordHash = await bcrypt.hash('123456', 10);
+        const passwordHash = await bcrypt.hash('123456', 10);
 
-      for (const dummy of dummyUsers) {
-        const exists = await userModel.findOne({ email: dummy.email });
-        if (!exists) {
-          await userModel.create({
-            ...dummy,
-            passwordHash,
-            isEmailVerified: true,
-          });
-          console.log(`🌱 [Seed] Đã tạo tài khoản test: ${dummy.email} / Mật khẩu: 123456`);
+        for (const dummy of dummyUsers) {
+          const exists = await userModel.findOne({ email: dummy.email });
+          if (!exists) {
+            await userModel.create({
+              ...dummy,
+              passwordHash,
+              isEmailVerified: true,
+            });
+            console.log(`🌱 [Seed] Đã tạo tài khoản test: ${dummy.email} / Mật khẩu: 123456`);
+          }
         }
+      } else {
+        console.log('🛡️ [Seed] Bỏ qua seed tài khoản test trong môi trường PRODUCTION.');
       }
       // ---------------------------
+
 
       await app.listen();
       console.log('🚀 Auth Microservice khởi động thành công!');

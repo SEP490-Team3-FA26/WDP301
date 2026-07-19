@@ -97,8 +97,32 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
 
     _loadMedicines(reset: true);
     _loadGoodsReceipts();
+    _loadExpirationReport();
     _startHealthCheck();
     _runForecast(_forecastPeriod);
+  }
+
+  Future<void> _loadExpirationReport() async {
+    try {
+      final report = await ApiService.getExpirationReport();
+      if (mounted) {
+        setState(() {
+          _expiredBatches.clear();
+          for (var item in report) {
+            _expiredBatches.add({
+              'medicineName': item['medicineName'] ?? item['name'] ?? 'Thuốc',
+              'batchNo': item['batchNo'] ?? 'Lô KD',
+              'expDate': item['expDate'] ?? '2026-12-31',
+              'stock': item['stock'] ?? 0,
+              'unit': item['unit'] ?? 'Hộp',
+              'status': item['status'] ?? 'EXPIRED',
+            });
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading expiration report: $e");
+    }
   }
 
   @override

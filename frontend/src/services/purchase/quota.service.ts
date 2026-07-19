@@ -12,10 +12,11 @@ export interface QuotaData {
 }
 
 export interface QuotaSummary {
+  cycle: string;
   totalBudget: number;
-  usedBudget: number;
-  remainingBudget: number;
-  branchesAllocated: number;
+  totalUsed: number;
+  totalRemaining: number;
+  branchCount: number;
 }
 
 export const quotaService = {

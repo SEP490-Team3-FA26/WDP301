@@ -97,6 +97,16 @@ export class SalesController {
     }
   }
 
+  @MessagePattern('inventory.profit.report')
+  async getProfitReportData(@Payload() data: { branchId: string; period: string; date: string }) {
+    try {
+      return await this.salesService.getProfitReportData(data.branchId, data.period, data.date);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy báo cáo lợi nhuận');
+    }
+  }
+
   @MessagePattern('inventory.sale.performance')
   async getInventoryPerformance(@Payload() data: { branchId: string; startDate: string; endDate: string }) {
     try {

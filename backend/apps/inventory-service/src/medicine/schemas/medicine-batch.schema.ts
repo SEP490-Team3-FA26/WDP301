@@ -18,6 +18,9 @@ export class MedicineBatch extends Document {
   @Prop({ type: Number, required: true, default: 0, min: 0 })
   stock: number;
 
+  @Prop({ type: Number, required: true, default: 0, min: 0 })
+  importPrice: number;
+
   @Prop({ type: String, default: 'ACTIVE', enum: ['ACTIVE', 'EXPIRED'] })
   status: string;
 }

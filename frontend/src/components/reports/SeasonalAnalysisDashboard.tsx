@@ -152,12 +152,12 @@ export function SeasonalAnalysisDashboard() {
         const getGrowth = (item: any) => {
           if (!item.salesHistory) return 0;
           const histVals = Object.values(item.salesHistory);
-          const histSum = histVals.reduce((sum: number, val: any) => {
-            const qty = typeof val === 'object' && val !== null ? val.quantity : Number(val || 0);
+          const histSum = histVals.reduce<number>((sum: number, val: any) => {
+            const qty = typeof val === 'object' && val !== null ? (val as any).quantity : Number(val || 0);
             return sum + qty;
           }, 0);
           const histAvg = histSum / Math.max(1, histVals.length);
-          return item.forecast_m1 - histAvg;
+          return (item.forecast_m1 || 0) - histAvg;
         };
         return getGrowth(b) - getGrowth(a);
       })

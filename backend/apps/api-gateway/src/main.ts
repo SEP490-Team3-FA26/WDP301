@@ -90,7 +90,7 @@ async function bootstrap() {
       const path = require('path');
       const express = require('express');
       expressApp.use('/public', express.static(path.join(process.cwd(), 'public')));
-      
+
       // Legacy health check
       expressApp.get('/health', (_req: Request, res: Response) => {
         res.status(200).json({
@@ -152,7 +152,7 @@ async function bootstrap() {
       SwaggerModule.setup('api/docs', app, document);
 
       const port = process.env.PORT || 4000;
-      
+
       // Khởi tạo Kafka Consumer cho API Gateway
       app.connectMicroservice({
         transport: Transport.KAFKA,
@@ -166,7 +166,7 @@ async function bootstrap() {
         },
       });
       await app.startAllMicroservices();
-      
+
       await app.listen(port);
       console.log(`\n🚀 API Gateway running at: http://localhost:${port}`);
       console.log(`📚 Swagger Docs at:        http://localhost:${port}/api/docs\n`);

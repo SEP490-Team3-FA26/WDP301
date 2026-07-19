@@ -49,6 +49,26 @@ export class PurchaseController {
     }
   }
 
+  @MessagePattern('inventory.pr.update')
+  async updatePurchaseRequisition(@Payload() data: any) {
+    try {
+      return await this.purchaseService.updatePurchaseRequisition(data.id, data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật nội dung PR');
+    }
+  }
+
+  @MessagePattern('inventory.pr.delete')
+  async deletePurchaseRequisition(@Payload() data: { id: string }) {
+    try {
+      return await this.purchaseService.deletePurchaseRequisition(data.id);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi xóa PR');
+    }
+  }
+
   // ===========================================================================================
   // BƯỚC 2: APPROVAL & CONSOLIDATION
   // ===========================================================================================
@@ -244,6 +264,16 @@ export class PurchaseController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi tạo phiếu chuyển kho');
+    }
+  }
+
+  @MessagePattern('inventory.transfer.recommend')
+  async recommendStockTransfer(@Payload() data: { medicineId: string; toBranchId: string; quantity: number }) {
+    try {
+      return await this.purchaseService.recommendStockTransfer(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tính toán gợi ý điều phối');
     }
   }
 

@@ -818,16 +818,40 @@ class _PharmacistScreenState extends State<PharmacistScreen> with TickerProvider
     );
   }
 
-  void _showToastInvoiceSuccess() {
+  Future<void> _showToastInvoiceSuccess() async {
+    final orderData = {
+      'items': _cart.map((item) => {
+        'medicineId': item['id'],
+        'name': item['name'],
+        'price': item['price'],
+        'quantity': item['qty'],
+      }).toList(),
+      'totalAmount': _totalAmount,
+      'paymentMethod': 'CASH',
+      'type': 'POS_SALE'
+    };
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Thanh toán và xuất hóa đơn POS thành công!', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.green,
+        content: Text('Đang xử lý đơn hàng và xuất hóa đơn POS...', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Color(0xFF0288D1),
         behavior: SnackBarBehavior.floating,
       ),
     );
-    setState(() {
-      _cart.clear();
-    });
+
+    await ApiService.createOrder(orderData);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thanh toán và xuất hóa đơn POS thành công!', style: TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      setState(() {
+        _cart.clear();
+      });
+    }
   }
 }
