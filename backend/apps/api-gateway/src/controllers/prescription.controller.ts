@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Param, Inject, OnModuleInit, UseInterceptors, UploadedFile, Body, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Param, Inject, OnModuleInit, UseInterceptors, UploadedFile, Body, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('api/prescriptions')
+@UseGuards(JwtAuthGuard)
 export class PrescriptionController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -37,10 +39,19 @@ export class PrescriptionController implements OnModuleInit {
         formData.append('patient_id', patientId);
       }
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
       const response = await fetch('http://ai-service:8000/api/prescription', {
         method: 'POST',
+        headers: {
+          'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
+        },
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -66,4 +77,5 @@ export class PrescriptionController implements OnModuleInit {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.get', { code });
   }
 }
+
 

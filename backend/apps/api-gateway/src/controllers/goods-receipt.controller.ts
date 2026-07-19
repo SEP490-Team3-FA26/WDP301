@@ -179,7 +179,18 @@ export class GoodsReceiptController implements OnModuleInit {
   @Get(':id/items/:itemId/inspection')
   async getInspectionRecord(@Param('id') id: string, @Param('itemId') itemId: string) {
     try {
-      const response = await fetch(`http://ai-service:8000/api/ai/receipts/${id}/items/${itemId}/inspection`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+      const response = await fetch(`http://ai-service:8000/api/ai/receipts/${id}/items/${itemId}/inspection`, {
+        headers: {
+          'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         return await response.json();
       }
@@ -188,6 +199,7 @@ export class GoodsReceiptController implements OnModuleInit {
       return { success: false, message: 'Failed to fetch inspection record.' };
     }
   }
+
 
   // Inspection Endpoints
   @Post('inspections')

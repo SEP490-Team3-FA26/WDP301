@@ -10,6 +10,11 @@ export interface PurchaseRequisitionPayload {
   reason: string;
   items: PurchaseRequisitionItem[];
   branchName: string;
+  isUrgent?: boolean;
+  isAiGenerated?: boolean;
+  aiConfidence?: number;
+  aiReason?: string;
+  aiAnalysisVersion?: string;
 }
 
 export const purchaseRequisitionService = {
@@ -35,6 +40,26 @@ export const purchaseRequisitionService = {
       action,
       rejectionReason,
     });
+    return response.data;
+  },
+
+  async updatePurchaseRequisitionStatus(id: string, status: string, extraData?: any) {
+    const response = await api.patch(`/api/purchase-requisitions/${id}/status`, { status, ...extraData });
+    return response.data;
+  },
+
+  async updatePurchaseRequisitionsStatus(prIds: string[], status: string, extraData?: any) {
+    const response = await api.patch('/api/purchase-requisitions/status-bulk', { prIds, status, ...extraData });
+    return response.data;
+  },
+
+  async updatePurchaseRequisition(id: string, payload: any) {
+    const response = await api.patch(`/api/purchase-requisitions/${id}`, payload);
+    return response.data;
+  },
+
+  async deletePurchaseRequisition(id: string) {
+    const response = await api.delete(`/api/purchase-requisitions/${id}`);
     return response.data;
   }
 };

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Query, Param, Body, Inject, OnModuleInit, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Query, Param, Body, Inject, OnModuleInit, UseGuards, Delete, Req } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { AppWebsocketGateway } from '../websocket/websocket.gateway';
@@ -22,6 +22,8 @@ export class PurchaseRequisitionController implements OnModuleInit {
       'inventory.pr.get_by_id',
       'inventory.pr.process_urgent',
       'inventory.pr.update_status',
+      'inventory.pr.update',
+      'inventory.pr.delete',
     ]);
   }
 
@@ -36,7 +38,10 @@ export class PurchaseRequisitionController implements OnModuleInit {
     eventType: 'CREATE',
     entityType: 'PurchaseRequisition',
   })
-  async createPurchaseRequisition(@Body() data: any) {
+  async createPurchaseRequisition(@Body() data: any, @Req() req: any) {
+    if (req.user && req.user.branchId) {
+      data.branchId = req.user.branchId;
+    }
     const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.create', data);
 
     console.log('📋 PR Created - Full Result:', JSON.stringify(result, null, 2));
@@ -182,6 +187,28 @@ export class PurchaseRequisitionController implements OnModuleInit {
           rejectionReason: notificationPayload.rejectionReason,
         }).catch(err => console.error('Failed to persist PR_REJECTED notification:', err));
       }
+    }
+
+    return result;
+  }
+
+  @Patch(':id')
+  async updatePurchaseRequisition(@Param('id') id: string, @Body() data: any) {
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.update', { id, ...data });
+
+    if (this.websocketGateway.server) {
+      this.websocketGateway.server.emit('pr_updated', { id });
+    }
+
+    return result;
+  }
+
+  @Delete(':id')
+  async deletePurchaseRequisition(@Param('id') id: string) {
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.pr.delete', { id });
+
+    if (this.websocketGateway.server) {
+      this.websocketGateway.server.emit('pr_updated', { id });
     }
 
     return result;
