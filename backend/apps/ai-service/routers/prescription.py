@@ -56,6 +56,36 @@ async def recommend_prescription(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+from pydantic import BaseModel
+
+class SymptomRequest(BaseModel):
+    symptoms: str
+
+@router.post("/api/ai/symptom-consult")
+async def symptom_consult(req: SymptomRequest):
+    start_time = time.time()
+    try:
+        # Step 1: RAG - Lấy context y tế từ Qdrant Vector DB
+        context = await retrieve_medical_context(req.symptoms)
+        
+        # Step 2: LLM - Kê đơn
+        prescription = await generate_prescription(req.symptoms, context)
+        
+        # Step 3: DB Validation - Kiểm tra tồn kho
+        drug_names = [drug.get("name") for drug in prescription.get("recommended_drugs", []) if drug.get("name")]
+        inventory_status = await validate_drugs_in_inventory(drug_names)
+        
+        return {
+            "success": True,
+            "prescription": prescription,
+            "inventory_status": inventory_status,
+            "rag_context_used": bool(context),
+            "processing_time_sec": round(time.time() - start_time, 2)
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 @router.get("/api/ai/medicines")

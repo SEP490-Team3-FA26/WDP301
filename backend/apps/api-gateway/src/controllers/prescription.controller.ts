@@ -56,6 +56,34 @@ export class PrescriptionController implements OnModuleInit {
     }
   }
 
+  @Post('symptom-consult')
+  async textConsult(@Body('symptoms') symptoms: string) {
+    if (!symptoms) {
+      throw new HttpException('Vui lòng cung cấp triệu chứng', HttpStatus.BAD_REQUEST);
+    }
+    try {
+      const response = await fetch('http://ai-service:8000/api/ai/symptom-consult', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ symptoms }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new HttpException(`Lỗi từ AI Service: ${errorText}`, HttpStatus.BAD_GATEWAY);
+      }
+
+      return await response.json();
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Lỗi kết nối hoặc xử lý từ AI Service',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get()
   async listPrescriptions() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.list', {});
