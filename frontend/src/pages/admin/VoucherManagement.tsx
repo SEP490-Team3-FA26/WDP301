@@ -23,6 +23,7 @@ export function VoucherManagement() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
 
   // Modals & form state
   const [showModal, setShowModal] = useState(false);
@@ -165,14 +166,39 @@ export function VoucherManagement() {
   };
 
   const handleToggleActive = async (v: any) => {
+    if (updatingIds.has(v._id)) return;
+
+    // Đánh dấu voucher đang được xử lý để khóa click
+    setUpdatingIds((prev) => {
+      const next = new Set(prev);
+      next.add(v._id);
+      return next;
+    });
+
+    const originalStatus = v.isActive;
+    
+    // Cập nhật state local ngay lập tức (optimistic update) để UI thay đổi mượt mà
+    setVouchers((prev) =>
+      prev.map((item) => (item._id === v._id ? { ...item, isActive: !item.isActive } : item))
+    );
+
     try {
-      await voucherService.updateVoucher(v._id, { isActive: !v.isActive });
-      setSuccessMsg(`Đã ${!v.isActive ? "kích hoạt" : "vô hiệu hóa"} voucher thành công!`);
-      await fetchVouchers();
-      setTimeout(() => setSuccessMsg(null), 3000);
+      await voucherService.updateVoucher(v._id, { isActive: !originalStatus });
+      // Không cần gọi fetchVouchers() giúp giảm tải API và tăng tốc độ phản hồi
     } catch (err: any) {
+      // Hoàn tác lại trạng thái cũ nếu API xảy ra lỗi
+      setVouchers((prev) =>
+        prev.map((item) => (item._id === v._id ? { ...item, isActive: originalStatus } : item))
+      );
       setErrorMsg(err.response?.data?.message || err.message || "Lỗi thao tác.");
       setTimeout(() => setErrorMsg(null), 5000);
+    } finally {
+      // Mở khóa click sau khi hoàn tất API
+      setUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(v._id);
+        return next;
+      });
     }
   };
 
@@ -212,12 +238,14 @@ export function VoucherManagement() {
         </div>
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={fetchVouchers}
             className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-sm transition shadow-sm"
           >
             Tải lại dữ liệu
           </button>
           <button
+            type="button"
             onClick={handleOpenAdd}
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition shadow-md flex items-center gap-1.5"
           >
@@ -366,23 +394,45 @@ export function VoucherManagement() {
                         )}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-3">
                           <button
-                            onClick={() => handleToggleActive(v)}
-                            className={`p-1.5 rounded-lg transition ${v.isActive ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-400 hover:bg-slate-100"}`}
+                            type="button"
+                            disabled={updatingIds.has(v._id)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleToggleActive(v);
+                            }}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 ${
+                              v.isActive ? "bg-emerald-500" : "bg-slate-200"
+                            } ${updatingIds.has(v._id) ? "opacity-50 pointer-events-none" : ""}`}
                             title={v.isActive ? "Nhấn để tạm dừng" : "Nhấn để kích hoạt"}
                           >
-                            {v.isActive ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                            <span
+                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                v.isActive ? "translate-x-4" : "translate-x-0"
+                              }`}
+                            />
                           </button>
                           <button
-                            onClick={() => handleOpenEdit(v)}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleOpenEdit(v);
+                            }}
                             className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition"
                             title="Sửa thông tin"
                           >
                             <Edit2 size={15} />
                           </button>
                           <button
-                            onClick={() => handleDelete(v._id)}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDelete(v._id);
+                            }}
                             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
                             title="Vô hiệu hóa vĩnh viễn"
                           >

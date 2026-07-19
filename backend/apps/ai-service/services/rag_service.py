@@ -1,77 +1,106 @@
 import os
-from qdrant_client import QdrantClient
+
 import httpx
+from qdrant_client import QdrantClient
+
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "medical_knowledge")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+EMBEDDING_MODEL = "embed-multilingual-light-v3.0"
+EMBEDDING_SIZE = 384
+
+
+class RAGServiceUnavailable(RuntimeError):
+    """Raised when vector retrieval is not configured or unavailable."""
+
 
 try:
-    # Use synchronous client for simple retrieve
     qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
-except:
+except Exception:
     qdrant = None
 
+
 async def get_embedding(text: str) -> list[float]:
-    """
-    Tạo embedding bằng Cohere API (model: embed-multilingual-light-v3.0, size: 384)
-    """
+    """Create a Cohere query vector compatible with the indexed documents."""
     if not COHERE_API_KEY:
-        print("Warning: COHERE_API_KEY is not configured in env.")
-        return [0.0] * 384
-        
+        raise RAGServiceUnavailable("COHERE_API_KEY is not configured")
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.cohere.com/v2/embed",
                 headers={
                     "Authorization": f"Bearer {COHERE_API_KEY}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 json={
                     "texts": [text],
-                    "model": "embed-multilingual-light-v3.0",
+                    "model": EMBEDDING_MODEL,
                     "input_type": "search_query",
-                    "embedding_types": ["float"]
+                    "embedding_types": ["float"],
+                    "truncate": "END",
                 },
-                timeout=10.0
+                timeout=20.0,
             )
             response.raise_for_status()
-            data = response.json()
-            return [float(x) for x in data["embeddings"]["float"][0]]
-    except Exception as e:
-        print(f"Error calling Cohere API: {e}")
-        return [0.0] * 384
+            vector = [
+                float(value)
+                for value in response.json()["embeddings"]["float"][0]
+            ]
+    except RAGServiceUnavailable:
+        raise
+    except Exception as exc:
+        raise RAGServiceUnavailable(f"Cohere embedding request failed: {exc}") from exc
+
+    if len(vector) != EMBEDDING_SIZE or not any(vector):
+        raise RAGServiceUnavailable(
+            f"Cohere returned an invalid embedding; expected {EMBEDDING_SIZE} dimensions"
+        )
+    return vector
+
 
 async def retrieve_medical_context(query: str, top_k: int = 3) -> str:
-    """
-    Lấy ngữ cảnh y khoa từ Qdrant
-    """
-    if not qdrant:
-        return ""
-        
+    """Retrieve medical context exclusively from the vectorized Qdrant DB."""
+    if qdrant is None:
+        raise RAGServiceUnavailable("Qdrant client could not be initialized")
+
     try:
+        if not qdrant.collection_exists(QDRANT_COLLECTION):
+            raise RAGServiceUnavailable(
+                f'Qdrant collection "{QDRANT_COLLECTION}" does not exist; index medicines first'
+            )
+
+        point_count = qdrant.count(QDRANT_COLLECTION, exact=True).count
+        if point_count == 0:
+            raise RAGServiceUnavailable(
+                f'Qdrant collection "{QDRANT_COLLECTION}" is empty; index medicines first'
+            )
+
         query_vector = await get_embedding(query)
         results = qdrant.search(
-            collection_name="medical_knowledge",
+            collection_name=QDRANT_COLLECTION,
             query_vector=query_vector,
             limit=top_k,
-            score_threshold=0.5
+            score_threshold=0.35,
+            with_payload=True,
         )
-        
-        if not results:
-            return ""
-            
-        context_parts = []
-        for hit in results:
-            drug = hit.payload
-            context_parts.append(
-                f"**{drug.get('name', 'N/A')}** ({drug.get('active_ingredient', 'N/A')})\n"
-                f"- Chỉ định: {drug.get('indications', 'N/A')}\n"
-                f"- Liều dùng: {drug.get('default_dosage', 'N/A')}\n"
-                f"- Chống chỉ định: {drug.get('contraindications', 'N/A')}\n"
-                f"- Tương tác thuốc: {drug.get('drug_interactions', 'N/A')}"
-            )
-        return "\n\n".join(context_parts)
-    except Exception as e:
-        print(f"RAG Error: {e}")
-        return ""
+    except RAGServiceUnavailable:
+        raise
+    except Exception as exc:
+        raise RAGServiceUnavailable(f"Qdrant vector search failed: {exc}") from exc
+
+    context_parts = []
+    for hit in results:
+        drug = hit.payload or {}
+        context_parts.append(
+            f"**{drug.get('name', 'N/A')}** ({drug.get('active_ingredient', 'N/A')})\n"
+            f"- Độ tương đồng: {hit.score:.4f}\n"
+            f"- Tồn kho: {drug.get('stock_quantity', 'N/A')}\n"
+            f"- Chỉ định: {drug.get('indications', 'N/A')}\n"
+            f"- Liều dùng: {drug.get('default_dosage', 'N/A')}\n"
+            f"- Chống chỉ định: {drug.get('contraindications', 'N/A')}\n"
+            f"- Tương tác thuốc: {drug.get('drug_interactions', 'N/A')}"
+        )
+
+    return "\n\n".join(context_parts)

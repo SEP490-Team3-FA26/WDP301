@@ -42,8 +42,8 @@ export const stockTransferService = {
     return response.data;
   },
 
-  async createStockTransfer(prId: string, shippedBy: string): Promise<any> {
-    const response = await api.post('/api/stock-transfers', { prId, shippedBy });
+  async createStockTransfer(prId: string, fromBranchId: string, shippedBy: string): Promise<any> {
+    const response = await api.post('/api/stock-transfers', { prId, fromBranchId, shippedBy });
     return response.data;
   },
 

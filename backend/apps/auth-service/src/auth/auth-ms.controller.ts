@@ -112,6 +112,21 @@ export class AuthMsController {
   }
 
   /**
+   * Topic: auth.change.password
+   */
+  @MessagePattern('auth.change.password')
+  async handleChangePassword(@Payload() data: string) {
+    try {
+      const { userId, oldPassword, newPassword } = typeof data === 'string' ? JSON.parse(data) : data;
+      console.log(`📨 [Auth MS] Yêu cầu đổi mật khẩu cho user: ${userId}`);
+      return await this.authService.changePassword(userId, oldPassword, newPassword);
+    } catch (error) {
+      console.error(`❌ [Auth MS] Lỗi đổi mật khẩu:`, error.message);
+      return { error: true, message: error.message, statusCode: error.status || 400 };
+    }
+  }
+
+  /**
    * Topic: auth.get.user.by.id
    * Lấy thông tin user theo ID (dùng cho profile)
    */
