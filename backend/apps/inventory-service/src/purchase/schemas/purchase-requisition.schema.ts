@@ -70,6 +70,18 @@ export class PurchaseRequisition extends Document {
 
   @Prop({ type: Date })
   warehouseSubmittedAt: Date;
+
+  @Prop({ type: Boolean, default: false })
+  isAiGenerated: boolean;
+
+  @Prop({ type: Number })
+  aiConfidence?: number;
+
+  @Prop({ type: String })
+  aiReason?: string;
+
+  @Prop({ type: String })
+  aiAnalysisVersion?: string;
 }
 
 export const PurchaseRequisitionSchema = SchemaFactory.createForClass(PurchaseRequisition);

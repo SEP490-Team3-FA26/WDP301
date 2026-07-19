@@ -83,13 +83,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (connectionMode !== 'polling') return;
 
-    // TODO: Enable polling when backend /api/notifications endpoints are ready
-    console.log('⚠️  Polling disabled: Backend notification endpoints not implemented yet');
-    console.log('ℹ️  Will use localStorage persistence only');
-    
-    return; // Temporarily disabled
-    
-    /* POLLING CODE - Enable after backend ready
     console.log('🔄 Starting notification polling...');
     
     const pollNotifications = async () => {
@@ -135,7 +128,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       console.log('🛑 Stopping notification polling');
       clearInterval(intervalId);
     };
-    */
   }, [connectionMode, lastPolledTimestamp]);
 
   // Listen to socket events (real-time)
@@ -321,11 +313,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  // Load notifications from server on mount (disabled until backend ready)
+  // Load notifications from server on mount
   useEffect(() => {
-    // TODO: Enable when backend /api/notifications endpoints are ready
-    // refreshNotifications();
-    console.log('ℹ️  Server notification loading disabled (backend endpoints not ready)');
+    const token = localStorage.getItem('token');
+    if (token) {
+      refreshNotifications();
+    }
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;

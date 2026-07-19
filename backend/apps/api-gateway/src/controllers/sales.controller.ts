@@ -3,12 +3,15 @@ import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AuditLogAction } from '../decorators/audit-log.decorator';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Controller('api/sales')
 @UseGuards(JwtAuthGuard)
 export class SalesController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   async onModuleInit() {
@@ -30,7 +33,20 @@ export class SalesController implements OnModuleInit {
     entityType: 'SalesOrder',
   })
   async createSalesOrder(@Body() data: any) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.sale.create', data);
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.sale.create', data);
+    
+    // Evict seasonal analysis cache on sales changes
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const branch = data.branchId || 'all';
+      await this.cacheManager.del(`reports:seasonal-analysis:${branch}:${currentMonth}`);
+      await this.cacheManager.del(`reports:seasonal-analysis:all:${currentMonth}`);
+      console.log(`🗑️ [Cache Evict] Evicted seasonal analysis cache for branch ${branch}`);
+    } catch (err) {
+      console.error('Lỗi xóa cache trong SalesController:', err);
+    }
+
+    return result;
   }
 
   @Get()

@@ -31,6 +31,7 @@ export function useSocket(namespace: string = '') {
       });
     }
 
+
     const socket = globalSockets[namespace];
     socketRef.current = socket;
     setIsConnected(socket.connected);

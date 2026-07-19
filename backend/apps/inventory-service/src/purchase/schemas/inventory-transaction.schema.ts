@@ -35,6 +35,9 @@ export class InventoryTransaction extends Document {
 
   @Prop({ type: String })
   notes: string;
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const InventoryTransactionSchema = SchemaFactory.createForClass(InventoryTransaction);
