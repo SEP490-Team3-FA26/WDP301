@@ -628,18 +628,6 @@ export class ReportController implements OnModuleInit {
           );
         }
 
-        // Lọc các thuốc chỉ báo đặc hiệu cho Cảm cúm / Sốt xuất huyết / Bệnh đường hô hấp
-        const outbreakKeywords = ['sốt', 'cúm', 'hạ sốt', 'kháng sinh', 'hô hấp', 'ho', 'siro', 'oresol', 'paracetamol', 'amoxicillin', 'decolgen', 'efferalgan', 'hapacol', 'klamentin', 'panadol', 'cefuroxim', 'strepsils', 'eugica'];
-        
-        const fluDengueMeds = enrichedMedList.filter((m: any) => {
-          const text = `${m.name} ${m.category}`.toLowerCase();
-          return outbreakKeywords.some(kw => text.includes(kw));
-        });
-
-        const indicatorDrugs = fluDengueMeds.length > 0 
-          ? fluDengueMeds.map((m: any) => m.name).slice(0, 4)
-          : ['Paracetamol 500mg', 'Decolgen Forte', 'Amoxicillin 500mg', 'Dung dịch bù nước Oresol'];
-
         aiResult = {
           generated_at: new Date().toISOString(),
           llm_model: 'hybrid-ai-rules',
