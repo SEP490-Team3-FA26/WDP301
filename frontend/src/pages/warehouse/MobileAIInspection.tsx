@@ -5,7 +5,7 @@ import {
   AlertTriangle, Loader2, Save, RefreshCw, SendHorizonal, ArrowLeft
 } from "lucide-react";
 import { motion } from "motion/react";
-import { goodsReceiptService } from "../../services/goodsReceipt.service";
+import { goodsReceiptService } from "../../services/purchase/goodsReceipt.service";
 
 export function MobileAIInspection() {
   const [searchParams] = useSearchParams();
@@ -77,7 +77,7 @@ export function MobileAIInspection() {
   const handleSubmitReport = async () => {
     setLoading(true);
     try {
-      await goodsReceiptService.submitInspectionReport(inspectionRecord._id);
+      await goodsReceiptService.submitInspectionReport(inspectionRecord._id, "Mobile AI Inspection completed");
       setMsg({ type: "success", text: "Đã gửi báo cáo kiểm đếm lên HQ chờ duyệt!" });
       setTimeout(() => {
         navigate("/warehouse/inventory/import?tab=incoming_orders");

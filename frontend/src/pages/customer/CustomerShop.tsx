@@ -477,8 +477,8 @@ export function CustomerShop() {
                       key={medId}
                       med={med}
                       added={!!addedItems[medId]}
-                      onClick={() => setSelectedMedicineForModal(med)}
-                      onAddToCart={(m, qty, _unit) => handleAddToCart(m, qty)}
+                      onClick={() => { setSelectedMedicineForModal(med); }}
+                      onAddToCart={(m, qty, _unit) => { handleAddToCart(m, qty); }}
                     />
                   );
                 })}

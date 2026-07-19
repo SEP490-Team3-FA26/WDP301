@@ -237,7 +237,7 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems, e
                     key={med.id || med._id} 
                     med={med} 
                     added={items.some(i => i.medicineId === (med.id || med._id))} 
-                    onAddToCart={(m, q) => addItem(m.id || m._id, q)} 
+                    onAddToCart={(m, q, _unit) => { addItem(m.id || m._id, q); }} 
                     onClick={() => {}} 
                   />
                 ))

@@ -42,5 +42,20 @@ export const goodsReceiptService = {
   async rejectGoodsReceipt(id: string, action: "reinspect" | "cancel", reason: string) {
     const response = await api.post(`/api/goods-receipts/${id}/reject`, { action, reason });
     return response.data;
+  },
+
+  async createInspectionRecord(grnId: string, performedBy: string) {
+    const response = await api.post('/api/goods-receipts/inspections', { grnId, performedBy });
+    return response.data;
+  },
+
+  async verifyInspectionItem(recordId: string, medicineId: string, actualQty: number) {
+    const response = await api.post('/api/goods-receipts/inspections/verify', { recordId, medicineId, actualQty });
+    return response.data;
+  },
+
+  async submitInspectionReport(recordId: string, notes: string) {
+    const response = await api.post('/api/goods-receipts/inspections/submit', { recordId, notes });
+    return response.data;
   }
 };

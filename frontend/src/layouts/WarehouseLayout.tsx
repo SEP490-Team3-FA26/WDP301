@@ -1,5 +1,5 @@
 import { BaseDashboardLayout } from "./BaseDashboardLayout";
-import { LayoutDashboard, PackageSearch, Settings, Sparkles, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, PackageSearch, Settings, Sparkles, ShieldCheck, Link2 } from "lucide-react";
 
 export function WarehouseLayout() {
   const warehouseNavItems = [
@@ -23,6 +23,7 @@ export function WarehouseLayout() {
       ]
     },
     { name: "Nhật ký hệ thống", href: "/warehouse/audit-logs", icon: <ShieldCheck size={20} /> },
+    { name: "Chuỗi cung ứng (Real-time)", href: "/warehouse/supply-chain", icon: <Link2 size={20} /> },
     { name: "AI Insights", href: "/warehouse/ai-insights", icon: <Sparkles size={20} /> },
   ];
 

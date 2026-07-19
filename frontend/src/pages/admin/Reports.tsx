@@ -4,6 +4,7 @@ import {
   TrendingUp, ShoppingBag, Users, DollarSign, Activity, 
   AlertTriangle, Clock, RefreshCw, Building2, Sparkles
 } from "lucide-react";
+import { ProfitAnalyticsDashboard } from "../../components/reports/ProfitAnalyticsDashboard";
 import { ReportHistoryTable } from "../../components/reports/ReportHistoryTable";
 import { ReportCreateModal } from "../../components/reports/ReportCreateModal";
 import { Tabs } from "../../components/ui/Tabs";
@@ -47,7 +48,7 @@ function KpiCard({ title, value, description, icon, colorClass, bgClass }: KpiCa
 
 export function Reports() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "inventory" | "reports" | "trends">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "inventory" | "reports" | "trends" | "profit">("overview");
   
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -315,6 +316,9 @@ export function Reports() {
           <SalesAnalyticsDashboard />
         </Suspense>
       )}
+
+      {/* Profit Dashboard */}
+      {activeTab === "profit" && isAdmin && <ProfitAnalyticsDashboard />}
 
       {/* 3. Inventory Performance Dashboard (Lazy loaded) */}
       {activeTab === "inventory" && (isAdmin || isBranch) && (

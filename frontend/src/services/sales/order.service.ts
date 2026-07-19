@@ -44,8 +44,10 @@ export interface SalePayload {
 export interface PayOSLinkPayload {
   patientName: string;
   patientPhone: string;
+  patientEmail?: string;
   totalAmount: number;
   voucherCode?: string;
+  redeemedPoints?: number;
   items: {
     medicineId: string;
     name: string;

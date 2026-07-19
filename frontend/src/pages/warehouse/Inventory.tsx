@@ -205,7 +205,7 @@ export function Inventory() {
           classification: selectedClassification || undefined
         });
         setInventory(result.data);
-        setTotal(result.total);
+        setTotal(result.pagination?.total || 0);
       } catch (error) {
         console.error("Error fetching inventory:", error);
       } finally {

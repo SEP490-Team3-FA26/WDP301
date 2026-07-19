@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 class BranchScreen extends StatefulWidget {
   const BranchScreen({super.key});
@@ -216,14 +217,32 @@ class _BranchScreenState extends State<BranchScreen> {
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               ElevatedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Đã gửi yêu cầu cấp hàng thuốc ${alert['name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                      backgroundColor: const Color(0xFF2E7D32),
+                                    const SnackBar(
+                                      content: Text('Đang gửi yêu cầu nhập hàng PR lên Ban Quản Lý...', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      backgroundColor: Color(0xFF2E7D32),
                                       behavior: SnackBarBehavior.floating,
                                     ),
                                   );
+
+                                  await ApiService.createPurchaseRequisition({
+                                    'branchName': 'Cơ sở 10 - Quận 10',
+                                    'reason': 'Cấp bách: Thuốc ${alert['name']} đã hết/sắp hết kho',
+                                    'items': [
+                                      {'medicineName': alert['name'], 'qty': 100}
+                                    ]
+                                  });
+
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Đã gửi thành công phiếu yêu cầu cấp hàng ${alert['name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        backgroundColor: Colors.green,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF2E7D32),

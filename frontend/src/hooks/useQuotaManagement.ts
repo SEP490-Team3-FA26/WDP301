@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { quotaService, QuotaData, QuotaSummary } from '../services/purchase/quota.service';
 import { branchService } from '../services/admin/branch.service';
 
@@ -77,7 +77,7 @@ export function useQuotaManagement() {
       ]);
 
       setSummary(sumData);
-      setQuotas(Array.isArray(listData) ? listData : (Array.isArray(listData?.data) ? listData.data : []));
+      setQuotas(Array.isArray(listData) ? listData : (Array.isArray((listData as any)?.data) ? (listData as any).data : []));
     } catch (err: any) {
       console.error(err);
       setError(err.response?.data?.message || err.message || "Không thể tải dữ liệu hạn mức");
