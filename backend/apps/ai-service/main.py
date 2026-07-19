@@ -11,13 +11,15 @@ load_dotenv()
 
 app = FastAPI(title="AI Prescription Service", version="1.0.0")
 
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[frontend_url] if frontend_url else ["*"],
+    allow_credentials=True if frontend_url else False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 app.include_router(prescription.router)
 

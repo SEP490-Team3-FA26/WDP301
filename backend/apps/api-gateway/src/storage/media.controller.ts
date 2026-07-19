@@ -6,17 +6,21 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { S3StorageService } from '../storage/s3-storage.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 
 @ApiTags('📦 Media (S3)')
 @Controller('api/media')
+@UseGuards(JwtAuthGuard)
 export class MediaController {
+
   constructor(private readonly storage: S3StorageService) {}
 
   /** Upload 1 ảnh lên S3, trả về { key, url } (url là presigned, hết hạn sau 1h). */

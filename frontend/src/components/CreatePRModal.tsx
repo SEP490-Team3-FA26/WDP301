@@ -3,12 +3,15 @@ import { Plus, X, AlertTriangle, Loader2, ClipboardList, Package, Trash2, Send, 
 import { motion, AnimatePresence } from "motion/react";
 import { ShopFilterSidebar } from "./ShopFilterSidebar";
 import { MedicineCard } from "./MedicineCard";
+import { purchaseRequisitionService } from "../services/purchase/purchaseRequisition.service";
 
-export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems }: { medicines: any[]; onClose: () => void; onSuccess: (msg: string) => void; prefillPrItems?: any[] }) {
-  const [branchName, setBranchName] = useState("Chi nhánh Quận 1");
-  const [reason, setReason] = useState("");
-  const [isUrgent, setIsUrgent] = useState(false);
-  const [items, setItems] = useState<{ medicineId: string; quantity: number }[]>([]);
+export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems, editPr }: { medicines: any[]; onClose: () => void; onSuccess: (msg: string) => void; prefillPrItems?: any[]; editPr?: any }) {
+  const [branchName, setBranchName] = useState(editPr?.branchName || "Chi nhánh Quận 1");
+  const [reason, setReason] = useState(editPr?.reason || "");
+  const [isUrgent, setIsUrgent] = useState(editPr?.isUrgent || false);
+  const [items, setItems] = useState<{ medicineId: string; quantity: number }[]>(
+    editPr ? editPr.items.map((i: any) => ({ medicineId: i.medicineId, quantity: i.requestedQuantity })) : []
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -122,24 +125,29 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems }:
     setErr(null);
     try {
       const isAiGenerated = prefillPrItems && prefillPrItems.length > 0 && prefillPrItems[0].isAiGenerated;
-      const res = await fetch("/api/purchase-requisitions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      if (editPr) {
+        const resData = await purchaseRequisitionService.updatePurchaseRequisition(editPr._id, {
           branchName,
           reason,
           isUrgent,
-          items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity })),
+          items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity, unit: "Hộp" })),
           isAiGenerated: isAiGenerated || false,
           aiConfidence: isAiGenerated ? prefillPrItems[0].aiConfidence : undefined,
           aiReason: isAiGenerated ? prefillPrItems[0].aiReason : undefined,
           aiAnalysisVersion: isAiGenerated ? prefillPrItems[0].aiAnalysisVersion : undefined,
-        }),
-      });
-      const resData = await res.json();
-      onSuccess(resData.message || "Gửi yêu cầu thành công!");
+        });
+        onSuccess(resData.message || "Cập nhật yêu cầu thành công!");
+      } else {
+        const resData = await purchaseRequisitionService.createPurchaseRequisition({
+          branchName,
+          reason,
+          isUrgent,
+          items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity, unit: "Hộp" })),
+        });
+        onSuccess(resData.message || "Gửi yêu cầu thành công!");
+      }
     } catch (e: any) {
-      setErr(e.response?.data?.message || "Lỗi tạo yêu cầu");
+      setErr(e.response?.data?.message || "Lỗi xử lý yêu cầu");
     } finally {
       setIsSubmitting(false);
     }
@@ -161,8 +169,8 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems }:
               <Send size={20} />
             </div>
             <div>
-              <h2 className="font-extrabold text-slate-900 text-lg">Tạo Yêu Cầu Nhập Thuốc Mới</h2>
-              <p className="text-xs font-semibold text-blue-700">Bước 1 — Gửi Purchase Requisition (PR) lên Trụ sở</p>
+              <h2 className="font-extrabold text-slate-900 text-lg">{editPr ? "Cập Nhật Yêu Cầu Nhập Thuốc" : "Tạo Yêu Cầu Nhập Thuốc Mới"}</h2>
+              <p className="text-xs font-semibold text-blue-700">{editPr ? "Chỉnh sửa thông tin yêu cầu mua hàng (PR)" : "Bước 1 — Gửi Purchase Requisition (PR) lên Trụ sở"}</p>
             </div>
           </div>
           <button
@@ -362,7 +370,7 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems }:
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm disabled:bg-slate-300 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg disabled:shadow-none"
               >
                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                {isSubmitting ? "Đang gửi..." : "Gửi yêu cầu nhập thuốc"}
+                {isSubmitting ? "Đang lưu..." : (editPr ? "Lưu thay đổi" : "Gửi yêu cầu nhập thuốc")}
               </button>
             </div>
           </div>

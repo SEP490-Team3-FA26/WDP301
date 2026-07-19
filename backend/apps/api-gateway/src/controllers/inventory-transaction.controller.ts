@@ -1,12 +1,15 @@
-import { Controller, Get, Query, Inject, OnModuleInit, Param } from '@nestjs/common';
+import { Controller, Get, Query, Inject, OnModuleInit, Param, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('api/inventory-transactions')
+@UseGuards(JwtAuthGuard)
 export class InventoryTransactionController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
   ) {}
+
 
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
