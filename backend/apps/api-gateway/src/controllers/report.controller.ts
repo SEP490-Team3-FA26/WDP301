@@ -586,7 +586,17 @@ export class ReportController implements OnModuleInit {
           );
         }
 
-        const indicatorDrugs = topMeds.map((m: any) => m.name).slice(0, 4);
+        // Lọc các thuốc chỉ báo đặc hiệu cho Cảm cúm / Sốt xuất huyết / Bệnh đường hô hấp
+        const outbreakKeywords = ['sốt', 'cúm', 'hạ sốt', 'kháng sinh', 'hô hấp', 'ho', 'siro', 'oresol', 'paracetamol', 'amoxicillin', 'decolgen', 'efferalgan', 'hapacol', 'klamentin', 'panadol', 'cefuroxim', 'strepsils', 'eugica'];
+        
+        const fluDengueMeds = enrichedMedList.filter((m: any) => {
+          const text = `${m.name} ${m.category}`.toLowerCase();
+          return outbreakKeywords.some(kw => text.includes(kw));
+        });
+
+        const indicatorDrugs = fluDengueMeds.length > 0 
+          ? fluDengueMeds.map((m: any) => m.name).slice(0, 4)
+          : ['Paracetamol 500mg', 'Decolgen Forte', 'Amoxicillin 500mg', 'Dung dịch bù nước Oresol'];
 
         aiResult = {
           generated_at: new Date().toISOString(),
@@ -617,7 +627,7 @@ export class ReportController implements OnModuleInit {
             {
               potential_disease: 'Cảm cúm mùa / Sốt xuất huyết (Dengue-related)',
               risk_level: 'HIGH',
-              indicator_drugs: indicatorDrugs.length > 0 ? indicatorDrugs : ['Paracetamol 500mg', 'Decolgen Forte', 'Oresol'],
+              indicator_drugs: indicatorDrugs,
               analysis: `Giai đoạn chuyển mùa tại vùng ${weatherRegion === 'North' ? 'Miền Bắc' : weatherRegion === 'Central' ? 'Miền Trung' : 'Miền Nam'} làm gia tăng 35% nguy cơ nhiễm trùng đường hô hấp và muỗi truyền sốt xuất huyết.`,
               recommendation: 'Khuyến nghị các cơ sở chi nhánh tăng tồn kho thuốc hạ sốt, kháng sinh đường hô hấp và dung dịch bù điện giải.'
             }
