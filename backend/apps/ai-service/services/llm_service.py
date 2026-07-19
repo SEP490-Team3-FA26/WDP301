@@ -166,3 +166,179 @@ async def generate_demand_forecast(dataset: list, period_days: int) -> dict:
         return json.loads(content)
     except json.JSONDecodeError:
         return {"error": "Lỗi phân tích JSON dự báo từ LLM", "raw_content": content}
+
+SEASONAL_SYSTEM_PROMPT = """Bạn là Chuyên gia Phân tích Dược phẩm & AI Y tế tại Việt Nam.
+Nhiệm vụ của bạn là nhận xét, giải thích và đưa ra khuyến nghị tồn kho dựa trên lịch sử bán hàng 12 tháng qua, thời tiết vùng miền và kết quả dự báo thống kê đã tính sẵn.
+
+NGUYÊN TẮC BẮT BUỘC:
+1. KHÔNG được phép tự vẽ ra dịch bệnh (như sốt xuất huyết, cúm) nếu không có bằng chứng tăng trưởng doanh số đồng thời từ các thuốc chỉ báo đặc hiệu (Ví dụ: Chỉ được thảo luận khả năng dịch sốt xuất huyết bùng phát nếu có sự tăng vọt đồng thời của Paracetamol, dung dịch bù nước ORS, và thuốc xịt chống muỗi).
+2. Diễn đạt an toàn: Không dùng từ khẳng định dịch bùng phát. Sử dụng các cụm từ như "Có khả năng tương quan đến nhu cầu phòng dịch/chữa bệnh mùa mưa (Potential dengue-related demand)" hoặc "Phát hiện doanh số tăng đột biến bất thường (Abnormal Sales Spike)".
+3. Mọi phân tích giải thích khuyến nghị (explainability) bắt buộc phải trích nguồn dữ liệu thực tế: "Evidence: SalesOrder - Last X days - Branch Y - Qty Z".
+4. Đánh giá chất lượng diễn giải định tính bằng Explainability Confidence (High, Medium, Low, Very Low). Mức High (>=90%) chỉ được chọn khi xu hướng mùa lặp lại rõ ràng trong lịch sử bán hàng và khớp với dịch tễ học thực tế.
+5. Tuyệt đối chỉ trả về dữ liệu JSON hợp lệ khớp chính xác với Schema dưới đây, không có văn bản giải thích thừa.
+
+DỮ LIỆU ĐẦU VÀO:
+- Vùng miền khí hậu: {weather_region}
+- Mùa hiện tại: {current_season}
+- Tháng hiện tại: {current_month}
+
+BẮT BUỘC TRẢ VỀ JSON HỢP LỆ THEO SCHEMA SAU:
+{
+  "summary": "Tóm tắt xu hướng chung và cảnh báo tương quan nhu cầu nổi bật của vùng miền",
+  "seasonal_trends": [
+    {
+      "category": "Danh mục thuốc",
+      "trend": "INCREASING | DECREASING | STABLE",
+      "possible_reasons": ["Lý do khả dĩ"],
+      "evidence": "Nguồn dữ liệu đối chiếu cụ thể"
+    }
+  ],
+  "potential_outbreaks": [
+    {
+      "potential_disease": "Tên bệnh/nhu cầu liên quan (VD: Dengue-related)",
+      "risk_level": "HIGH | MEDIUM | LOW",
+      "indicator_drugs": ["Tên thuốc tăng đột biến"],
+      "analysis": "Phân tích biến động doanh số đột biến gần đây",
+      "recommendation": "Khuyến nghị hành động"
+    }
+  ],
+  "stock_recommendations": [
+    {
+      "medicineId": "ID thuốc",
+      "name": "Tên thuốc",
+      "suggestedAction": "Tăng tồn kho | Giữ nguyên | Giảm tồn kho",
+      "suggestedQty": 50,
+      "priority": "CRITICAL | HIGH | MEDIUM | LOW",
+      "explainability_confidence": 95,
+      "explainability_confidence_level": "High",
+      "explainability": "Giải thích chi tiết kèm số liệu chứng minh gốc"
+    }
+  ]
+}"""
+
+async def analyze_seasonal_trends(dataset: list, weather_region: str, current_season: str, current_month: str) -> dict:
+    """
+    Phân tích xu hướng bán hàng theo mùa / dịch bệnh tích hợp dự báo thống kê (Hybrid AI)
+    """
+    from services.forecaster import LinearRegressionForecaster, MovingAverageForecaster
+    from datetime import datetime
+    
+    lr_forecaster = LinearRegressionForecaster()
+    ma_forecaster = MovingAverageForecaster()
+    
+    # 1. Chạy dự báo thống kê trước cho từng thuốc trong dataset
+    enriched_dataset = []
+    for item in dataset:
+        sales_history = item.get("salesHistory", {})
+        
+        # Trích xuất số lượng thực tế từ lịch sử bán hàng để dự báo
+        qty_history = {}
+        for k, v in sales_history.items():
+            if isinstance(v, dict):
+                qty_history[k] = float(v.get("quantity", 0))
+            else:
+                qty_history[k] = float(v or 0)
+        
+        # Chọn chiến lược dự báo (Linear Regression nếu đủ >= 4 điểm dữ liệu bán, ngược lại dùng Moving Average)
+        history_points = len([v for v in qty_history.values() if v > 0])
+        if history_points >= 4:
+            forecaster = lr_forecaster
+        else:
+            forecaster = ma_forecaster
+            
+        result = forecaster.forecast(qty_history)
+        
+        item_copy = dict(item)
+        item_copy["forecast_m1"] = result.forecast_m1
+        item_copy["forecast_m2"] = result.forecast_m2
+        item_copy["forecast_m3"] = result.forecast_m3
+        item_copy["ci_lower"] = result.ci_lower
+        item_copy["ci_upper"] = result.ci_upper
+        item_copy["forecast_confidence"] = result.confidence
+        
+        # Công thức tính doanh thu thất thoát tiềm năng (Potential Lost Revenue) tích hợp các biến số vận hành
+        forecast_net = result.forecast_m1 + item.get("safetyStock", 50)
+        expected_supply = item.get("currentStock", 0) + item.get("expectedIncoming", 0)
+        shortage = max(0.0, forecast_net - expected_supply)
+        item_copy["potential_lost_revenue"] = round(shortage * item.get("price", 0), 2)
+        
+        enriched_dataset.append(item_copy)
+        
+    # 2. Chuẩn bị Prompt và gửi dữ liệu đã làm giàu qua LLM giải thích định tính
+    # Rút gọn dataset gửi cho LLM để tránh rate limit / token limit (chỉ gửi top 40 thuốc có nguy cơ hoặc doanh số cao nhất)
+    dataset_to_llm = []
+    active_items = []
+    for item in enriched_dataset:
+        sales_sum = sum(v.get("quantity", 0) if isinstance(v, dict) else (v or 0) for v in item.get("salesHistory", {}).values())
+        if sales_sum > 0 or item.get("currentStock", 0) > 0:
+            active_items.append((item, sales_sum))
+            
+    # Sắp xếp theo thứ tự ưu tiên: Doanh thu thất thoát giảm dần, sau đó đến doanh số bán giảm dần
+    active_items.sort(key=lambda x: (x[0].get("potential_lost_revenue", 0), x[1]), reverse=True)
+    
+    # Lấy tối đa 20 thuốc quan trọng nhất để phân tích bằng LLM nhằm tối ưu Token Usage
+    top_items = active_items[:20]
+    
+    for item, sales_sum in top_items:
+        dataset_to_llm.append({
+            "medicineId": item.get("medicineId"),
+            "name": item.get("name"),
+            "category": item.get("category"),
+            "currentStock": item.get("currentStock"),
+            "expectedIncoming": item.get("expectedIncoming"),
+            "safetyStock": item.get("safetyStock"),
+            "reorderPoint": item.get("reorderPoint"),
+            "leadTime": item.get("leadTime"),
+            "moq": item.get("moq"),
+            "salesHistory": item.get("salesHistory"),
+            "forecast_m1": item.get("forecast_m1"),
+            "forecast_m2": item.get("forecast_m2"),
+            "forecast_m3": item.get("forecast_m3"),
+            "ci_lower": item.get("ci_lower"),
+            "ci_upper": item.get("ci_upper"),
+            "forecast_confidence": item.get("forecast_confidence")
+        })
+            
+    system_prompt = SEASONAL_SYSTEM_PROMPT.replace(
+        "{weather_region}", weather_region
+    ).replace(
+        "{current_season}", current_season
+    ).replace(
+        "{current_month}", current_month
+    )
+    
+    user_prompt = f"Dưới đây là tập dữ liệu thống kê doanh số bán hàng và dự báo:\n{json.dumps(dataset_to_llm, ensure_ascii=False)}"
+    
+    try:
+        response = await client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        llm_json = json.loads(content)
+    except Exception as e:
+        print(f"Lỗi gọi LLM giải thích xu hướng: {e}")
+        llm_json = {
+            "summary": "Không thể kết xuất giải thích định tính từ LLM. Hiển thị dự báo thống kê.",
+            "seasonal_trends": [],
+            "potential_outbreaks": [],
+            "stock_recommendations": []
+        }
+        
+    # 3. Kết hợp kết quả phân tích thống kê và giải thích định tính
+    return {
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "llm_model": "llama-3.3-70b-versatile",
+        "analysis_version": "v1.2.0",
+        "summary": llm_json.get("summary", ""),
+        "seasonal_trends": llm_json.get("seasonal_trends", []),
+        "potential_outbreaks": llm_json.get("potential_outbreaks", []),
+        "stock_recommendations": llm_json.get("stock_recommendations", []),
+        "enriched_dataset": enriched_dataset
+    }

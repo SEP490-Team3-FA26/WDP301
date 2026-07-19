@@ -11,6 +11,7 @@ import { Medicine } from '../medicine/schemas/medicine.schema';
 import { MedicineBatch } from '../medicine/schemas/medicine-batch.schema';
 import { subscribeToKafkaTopics, sendKafkaMessage } from '../../../api-gateway/src/common/kafka.helper';
 import { QuotaService } from '../quota/quota.service';
+import { firstValueFrom } from 'rxjs';
 
 import { InspectionRecord } from './schemas/inspection-record.schema';
 

@@ -20,4 +20,9 @@ export class ReportsController {
   async getForecastDataset(@Payload() data: { periodDays?: number; branchId?: string }) {
     return await this.reportsService.getForecastDataset(data?.periodDays, data?.branchId);
   }
+
+  @MessagePattern('inventory.reports.seasonal_trends')
+  async getSeasonalDataset(@Payload() data: { branchId?: string; monthsCount?: number }) {
+    return await this.reportsService.getSeasonalDataset(data?.branchId, data?.monthsCount);
+  }
 }

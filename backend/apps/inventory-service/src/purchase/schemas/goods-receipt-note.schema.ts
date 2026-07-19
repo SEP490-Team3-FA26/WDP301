@@ -45,6 +45,9 @@ export class GoodsReceiptNote extends Document {
 
   @Prop({ type: String }) // Optional user ID of the receiver
   receivedBy: string;
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const GoodsReceiptNoteSchema = SchemaFactory.createForClass(GoodsReceiptNote);

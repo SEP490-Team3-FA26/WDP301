@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req, UseGuards, Inject, OnModuleInit, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Query, Req, UseGuards, Inject, OnModuleInit, InternalServerErrorException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -6,6 +6,8 @@ import { S3StorageService } from '../storage/s3-storage.service';
 import { ReportService } from '../services/report.service';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { randomUUID } from 'crypto';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @ApiTags('📊 Reports')
 @ApiBearerAuth()
@@ -17,6 +19,7 @@ export class ReportController implements OnModuleInit {
     @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
     private readonly storage: S3StorageService,
     private readonly reportService: ReportService,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   async onModuleInit() {
@@ -26,6 +29,8 @@ export class ReportController implements OnModuleInit {
       'inventory.report.create',
       'inventory.report.list',
       'inventory.reports.forecast_dataset',
+      'inventory.medicine.stats',
+      'inventory.reports.seasonal_trends',
     ]);
   }
 
@@ -49,6 +54,78 @@ export class ReportController implements OnModuleInit {
     return reports;
   }
 
+  @Get('dashboard/summary')
+  @ApiOperation({ summary: 'Lấy dữ liệu tóm tắt Dashboard tổng hợp' })
+  @ApiQuery({ name: 'branchId', required: false })
+  async getDashboardSummary(
+    @Query('branchId') branchId?: string,
+    @Req() req?: any,
+  ) {
+    const user = req.user;
+    let targetBranchId = branchId;
+
+    if (user.role !== 'admin' && user.role !== 'head_branch') {
+      if (branchId && branchId !== user.branchId) {
+        throw new ForbiddenException('Bạn không có quyền truy cập dữ liệu của chi nhánh khác');
+      }
+      targetBranchId = user.branchId;
+    } else {
+      if (!targetBranchId) {
+        targetBranchId = user.branchId || 'all';
+      }
+    }
+
+    const reportDate = new Date().toISOString().split('T')[0];
+
+    try {
+      const [revenueData, inventoryStats] = await Promise.all([
+        sendKafkaMessage(this.inventoryClient, 'inventory.sale.report', {
+          branchId: targetBranchId,
+          period: 'month',
+          date: reportDate,
+        }),
+        sendKafkaMessage(this.inventoryClient, 'inventory.medicine.stats', {
+          branchId: targetBranchId,
+        }),
+      ]);
+
+      if (!revenueData || revenueData.error) {
+        throw new InternalServerErrorException(revenueData?.message || 'Không thể lấy dữ liệu báo cáo doanh thu');
+      }
+
+      if (!inventoryStats || inventoryStats.error) {
+        throw new InternalServerErrorException(inventoryStats?.message || 'Không thể lấy thống kê tồn kho');
+      }
+
+      const totalRevenue = revenueData.summary?.netRevenue || 0;
+      const totalOrders = revenueData.orders?.length || 0;
+      const avgOrder = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+
+      return {
+        success: true,
+        data: {
+          revenue: {
+            netRevenue: totalRevenue,
+            totalOrders,
+            avgOrder,
+          },
+          inventory: {
+            totalMedicines: inventoryStats.totalMedicines || 0,
+            totalStock: inventoryStats.totalStock || 0,
+            totalValue: inventoryStats.totalValue || 0,
+            lowStockCount: inventoryStats.lowStockCount || 0,
+            outOfStockCount: inventoryStats.outOfStockCount || 0,
+            expiredCount: inventoryStats.expiredCount || 0,
+            soonToExpireCount: inventoryStats.soonToExpireCount || 0,
+          }
+        }
+      };
+    } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
+      throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi lấy dữ liệu tóm tắt Dashboard');
+    }
+  }
+
   @Get('revenue/analytics')
   @ApiOperation({ summary: 'Lấy dữ liệu phân tích doanh thu (JSON only, không tạo PDF)' })
   @ApiQuery({ name: 'period', required: true, enum: ['day', 'week', 'month', 'quarter'] })
@@ -64,6 +141,9 @@ export class ReportController implements OnModuleInit {
     let targetBranchId = branchId;
 
     if (user.role !== 'admin' && user.role !== 'head_branch') {
+      if (branchId && branchId !== user.branchId) {
+        throw new ForbiddenException('Bạn không có quyền truy cập dữ liệu của chi nhánh khác');
+      }
       if (!user.branchId) {
         throw new BadRequestException('Tài khoản của bạn chưa được liên kết với chi nhánh nào');
       }
@@ -112,6 +192,9 @@ export class ReportController implements OnModuleInit {
 
     // Enforce branch boundaries if not admin/hq
     if (user.role !== 'admin' && user.role !== 'head_branch') {
+      if (branchId && branchId !== user.branchId) {
+        throw new ForbiddenException('Bạn không có quyền truy cập dữ liệu của chi nhánh khác');
+      }
       if (!user.branchId) {
         throw new BadRequestException('Tài khoản của bạn chưa được liên kết với chi nhánh nào');
       }
@@ -205,6 +288,9 @@ export class ReportController implements OnModuleInit {
     let targetBranchId = branchId;
 
     if (user.role !== 'admin' && user.role !== 'head_branch') {
+      if (branchId && branchId !== user.branchId) {
+        throw new ForbiddenException('Bạn không có quyền truy cập dữ liệu của chi nhánh khác');
+      }
       targetBranchId = user.branchId;
     }
 
@@ -252,7 +338,6 @@ export class ReportController implements OnModuleInit {
         throw new InternalServerErrorException(rawDataset?.message || 'Không thể lấy dữ liệu phân tích kho');
       }
 
-      // 2. Gọi AI Service để chạy dự báo
       let aiUrl = 'http://ai-service:8000/api/ai/forecast';
       try {
         const response = await fetch(aiUrl, {
@@ -264,9 +349,7 @@ export class ReportController implements OnModuleInit {
         if (response.ok) {
           return await response.json();
         }
-        
-        const errorText = await response.text();
-        throw new Error(errorText);
+        throw new Error(await response.text());
       } catch (err) {
         aiUrl = 'http://localhost:8000/api/ai/forecast';
         const response = await fetch(aiUrl, {
@@ -274,7 +357,7 @@ export class ReportController implements OnModuleInit {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ dataset: rawDataset, periodDays: days }),
         });
-        
+
         if (response.ok) {
           return await response.json();
         }
@@ -282,6 +365,157 @@ export class ReportController implements OnModuleInit {
       }
     } catch (error) {
       throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi tạo dự báo nhu cầu bằng AI');
+    }
+  }
+
+  @Get('seasonal-analysis')
+  @ApiOperation({ summary: 'Phân tích xu hướng bán hàng theo mùa và nguy cơ dịch bệnh bằng AI' })
+  @ApiQuery({ name: 'branchId', required: false, description: 'Chi nhánh cần phân tích' })
+  async getSeasonalAnalysis(
+    @Query('branchId') branchId?: string,
+    @Req() req?: any,
+  ) {
+    const user = req.user;
+    let targetBranchId = branchId;
+    if (user.role !== 'admin' && user.role !== 'head_branch') {
+      targetBranchId = user.branchId;
+    }
+
+    const target = targetBranchId || 'all';
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const cacheKey = `reports:seasonal-analysis:${target}:${currentMonth}`;
+
+    try {
+      // 1. Kiểm tra Redis Cache phân tán
+      const cachedData = await this.cacheManager.get(cacheKey);
+      if (cachedData) {
+        console.log(`⚡ [Cache Hit] Lấy phân tích xu hướng mùa cho chi nhánh ${target} từ Redis`);
+        return {
+          success: true,
+          cache_hit: true,
+          data: cachedData,
+        };
+      }
+
+      console.log(`❌ [Cache Miss] Chạy phân tích xu hướng mùa cho chi nhánh ${target}`);
+
+      // 2. Lấy dữ liệu bán hàng 12 tháng từ inventory service
+      const rawDataset = await sendKafkaMessage(this.inventoryClient, 'inventory.reports.seasonal_trends', {
+        branchId: targetBranchId,
+        monthsCount: 12,
+      });
+
+      if (!rawDataset || rawDataset.error) {
+        throw new InternalServerErrorException(rawDataset?.message || 'Không thể lấy dữ liệu bán hàng lịch sử');
+      }
+
+      // 3. Lấy thông tin chi nhánh để xác định vùng thời tiết
+      let branchAddress = '';
+      if (targetBranchId && targetBranchId !== 'all') {
+        try {
+          const branches = await sendKafkaMessage(this.userClient, 'user.branch.list', {});
+          if (Array.isArray(branches)) {
+            const found = branches.find((b: any) => b.branchCode === targetBranchId);
+            if (found) {
+              branchAddress = found.address || found.name || '';
+            }
+          }
+        } catch (err) {
+          // non-blocking
+        }
+      }
+
+      // Xác định vùng địa lý
+      let weatherRegion: 'North' | 'Central' | 'South' = 'South';
+      const text = branchAddress.toLowerCase();
+      if (text.includes('hà nội') || text.includes('hn') || text.includes('quảng ninh') || text.includes('hải phòng') || text.includes('bắc')) {
+        weatherRegion = 'North';
+      } else if (text.includes('đà nẵng') || text.includes('huế') || text.includes('quảng nam') || text.includes('khánh hòa') || text.includes('trung')) {
+        weatherRegion = 'Central';
+      }
+
+      // Xác định mùa khí hậu dựa theo vùng miền
+      const monthNum = new Date().getMonth() + 1; // 1 - 12
+      let currentSeason = 'Rainy';
+      if (weatherRegion === 'North') {
+        if (monthNum >= 2 && monthNum <= 4) currentSeason = 'Spring';
+        else if (monthNum >= 5 && monthNum <= 7) currentSeason = 'Summer';
+        else if (monthNum >= 8 && monthNum <= 10) currentSeason = 'Autumn';
+        else currentSeason = 'Winter';
+      } else if (weatherRegion === 'Central') {
+        if (monthNum >= 9 && monthNum <= 12) currentSeason = 'Rainy';
+        else currentSeason = 'Dry';
+      } else {
+        if (monthNum >= 5 && monthNum <= 11) currentSeason = 'Rainy';
+        else currentSeason = 'Dry';
+      }
+
+      // 4. Gọi Python AI Service để thực hiện dự báo và phân tích
+      let aiUrl = 'http://ai-service:8000/api/ai/seasonal-analysis';
+      let aiResponse;
+      try {
+        aiResponse = await fetch(aiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataset: rawDataset, weatherRegion, currentSeason, currentMonth }),
+        });
+      } catch (err) {
+        aiUrl = 'http://localhost:8000/api/ai/seasonal-analysis';
+        aiResponse = await fetch(aiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataset: rawDataset, weatherRegion, currentSeason, currentMonth }),
+        });
+      }
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        throw new Error(errorText || 'Không thể kết nối đến AI Service');
+      }
+
+      const aiResult = await aiResponse.json();
+
+      // 5. Lưu vào cache Redis với TTL 24 giờ
+      await this.cacheManager.set(cacheKey, aiResult, 24 * 3600 * 1000);
+
+      return {
+        success: true,
+        cache_hit: false,
+        data: aiResult,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi phân tích xu hướng bán hàng bằng AI');
+    }
+  }
+
+  @Post('seasonal-analysis/evict')
+  @ApiOperation({ summary: 'Xóa cache phân tích xu hướng bán hàng của chi nhánh' })
+  @ApiQuery({ name: 'branchId', required: false })
+  async evictSeasonalCache(
+    @Query('branchId') branchId?: string,
+    @Req() req?: any,
+  ) {
+    const user = req.user;
+    let targetBranchId = branchId;
+    if (user.role !== 'admin' && user.role !== 'head_branch') {
+      targetBranchId = user.branchId;
+    }
+
+    const target = targetBranchId || 'all';
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const cacheKey = `reports:seasonal-analysis:${target}:${currentMonth}`;
+
+    try {
+      await this.cacheManager.del(cacheKey);
+      if (target !== 'all') {
+        await this.cacheManager.del(`reports:seasonal-analysis:all:${currentMonth}`);
+      }
+      return {
+        success: true,
+        message: `Đã xóa thành công cache phân tích của chi nhánh ${target}`,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message || 'Lỗi khi xóa cache');
     }
   }
 }
