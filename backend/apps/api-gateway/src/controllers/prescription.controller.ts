@@ -55,11 +55,14 @@ export class PrescriptionController implements OnModuleInit {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new HttpException(`Lỗi từ AI Service: ${errorText}`, HttpStatus.BAD_GATEWAY);
+        throw new HttpException(`Lỗi từ AI Service: ${errorText}`, response.status);
       }
 
       return await response.json();
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         error.message || 'Lỗi kết nối hoặc xử lý từ AI Service',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -77,5 +80,3 @@ export class PrescriptionController implements OnModuleInit {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.get', { code });
   }
 }
-
-

@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { Mic, Square, Sparkles, AlertTriangle, CheckCircle, ShoppingCart, Volume2, Info, ArrowRight, HeartPulse, Brain } from "lucide-react";
+import { Mic, Square, Sparkles, AlertTriangle, CheckCircle, ShoppingCart, Volume2, Info, ArrowRight, HeartPulse, Brain, RotateCcw, LoaderCircle, X } from "lucide-react";
 import { prescriptionService } from "../../services/sales/prescription.service";
 import { cartService } from "../../services/sales/cart.service";
 
 export function AIConsultant() {
   const [recording, setRecording] = useState(false);
+  const [requestingMicrophone, setRequestingMicrophone] = useState(false);
   const [timer, setTimer] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);``
   
   // Results
   const [result, setResult] = useState<any>(null);
@@ -22,33 +23,65 @@ export function AIConsultant() {
   };
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<any>(null);
+  const timerRef = useRef(0);
 
   // Timer counter
   useEffect(() => {
     if (recording) {
       intervalRef.current = setInterval(() => {
-        setTimer((prev) => prev + 1);
+        setTimer((prev) => {
+          const next = prev + 1;
+          timerRef.current = next;
+          return next;
+        });
       }, 1000);
     } else {
       clearInterval(intervalRef.current);
-      setTimer(0);
     }
     return () => clearInterval(intervalRef.current);
   }, [recording]);
 
+  useEffect(() => {
+    return () => {
+      clearInterval(intervalRef.current);
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
   const startRecording = async () => {
+    if (requestingMicrophone || loading || recording) return;
+
     setError("");
     setResult(null);
     setAudioBlob(null);
     setSuccessMessage("");
+    setAlertModal(null);
+    setTimer(0);
+    timerRef.current = 0;
     audioChunksRef.current = [];
+    setRequestingMicrophone(true);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Groq Whisper supports webm, mp3, wav. Webm is standard and widely supported in modern browsers
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      mediaStreamRef.current = stream;
+
+      const supportedMimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
+        .find((type) => MediaRecorder.isTypeSupported(type));
+      const mediaRecorder = supportedMimeType
+        ? new MediaRecorder(stream, { mimeType: supportedMimeType })
+        : new MediaRecorder(stream);
       
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -57,11 +90,27 @@ export function AIConsultant() {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        setAudioBlob(audioBlob);
+        const recordedBlob = new Blob(audioChunksRef.current, {
+          type: mediaRecorder.mimeType || "audio/webm",
+        });
+
+        if (timerRef.current < 1 || recordedBlob.size < 1000) {
+          setAudioBlob(null);
+          setError("Đoạn ghi âm quá ngắn. Vui lòng nói ít nhất 1–2 giây rồi nhấn dừng.");
+        } else {
+          setAudioBlob(recordedBlob);
+        }
         
-        // Stop all tracks to release microphone
         stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+      };
+
+      mediaRecorder.onerror = () => {
+        setRecording(false);
+        setAudioBlob(null);
+        setError("Không thể hoàn tất bản ghi. Vui lòng thử ghi âm lại.");
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
       };
 
       mediaRecorderRef.current = mediaRecorder;
@@ -69,7 +118,14 @@ export function AIConsultant() {
       setRecording(true);
     } catch (err: any) {
       console.error(err);
-      setError("Không thể truy cập Microphone của trình duyệt. Vui lòng cấp quyền micro!");
+      const denied = err?.name === "NotAllowedError" || err?.name === "SecurityError";
+      setError(
+        denied
+          ? "Quyền microphone đang bị chặn. Hãy cho phép microphone trên thanh địa chỉ rồi thử lại."
+          : "Không tìm thấy hoặc không thể mở microphone. Vui lòng kiểm tra thiết bị âm thanh."
+      );
+    } finally {
+      setRequestingMicrophone(false);
     }
   };
 
@@ -95,7 +151,8 @@ export function AIConsultant() {
       setResult(data);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Lỗi khi kết nối tới Trợ lý AI.");
+      const apiMessage = err.response?.data?.message;
+      setError(apiMessage || err.message || "Lỗi khi kết nối tới Trợ lý AI.");
     } finally {
       setLoading(false);
     }
@@ -118,6 +175,7 @@ export function AIConsultant() {
           const invMatch = availableList.find((av: any) => av.name.toLowerCase() === drug.name.toLowerCase());
           if (invMatch && invMatch.stock > 0) {
             const medId = invMatch.id || invMatch._id;
+            if (!medId) return;
             const existing = cart.find((it: any) => it.id === medId || it._id === medId);
             if (existing) {
               if (existing.quantity < invMatch.stock) {
@@ -155,6 +213,7 @@ export function AIConsultant() {
           const invMatch = availableList.find((av: any) => av.name.toLowerCase() === drug.name.toLowerCase());
           if (invMatch && invMatch.stock > 0) {
             const medId = invMatch.id || invMatch._id;
+            if (!medId) continue;
             try {
               await cartService.addToCart(medId, 1);
               addedCount++;
@@ -236,24 +295,57 @@ export function AIConsultant() {
               </>
             )}
             <button
+              type="button"
               onClick={recording ? stopRecording : startRecording}
-              className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center shadow-xl transition-all duration-300 active:scale-95 cursor-pointer border ${
+              disabled={requestingMicrophone || loading}
+              aria-label={recording ? "Dừng ghi âm" : "Bắt đầu ghi âm"}
+              className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center shadow-xl transition-all duration-300 active:scale-95 border focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300/50 disabled:cursor-wait disabled:opacity-70 ${
                 recording 
-                  ? "bg-rose-500 border-rose-400 text-white shadow-rose-900/50 hover:bg-rose-600" 
-                  : "bg-gradient-to-tr from-blue-600 to-indigo-600 border-blue-500 text-white hover:shadow-blue-500/20 shadow-lg"
+                  ? "bg-rose-500 border-rose-400 text-white shadow-rose-900/50 hover:bg-rose-600 cursor-pointer"
+                  : "bg-gradient-to-tr from-blue-600 to-indigo-600 border-blue-500 text-white hover:shadow-blue-500/30 hover:scale-105 shadow-lg cursor-pointer"
               }`}
             >
-              {recording ? <Square size={28} className="fill-white animate-pulse" /> : <Mic size={32} />}
+              {requestingMicrophone ? (
+                <LoaderCircle size={30} className="animate-spin" />
+              ) : recording ? (
+                <Square size={28} className="fill-white" />
+              ) : (
+                <Mic size={32} />
+              )}
             </button>
           </div>
 
+          {recording && (
+            <div className="flex h-7 items-center justify-center gap-1" aria-hidden="true">
+              {[12, 20, 28, 18, 24, 14, 22].map((height, index) => (
+                <span
+                  key={index}
+                  className="w-1 rounded-full bg-rose-400 animate-pulse"
+                  style={{ height, animationDelay: `${index * 90}ms` }}
+                />
+              ))}
+            </div>
+          )}
+
           {/* Status and timer */}
-          <div className="flex flex-col items-center gap-1.5">
+          <div className="flex flex-col items-center gap-2">
             <span className={`text-2xl font-black font-mono tracking-wider ${recording ? "text-rose-400 animate-pulse" : "text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]"}`}>
               {formatTime(timer)}
             </span>
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-555">
-              {recording ? "Hệ thống đang ghi âm..." : audioBlob ? "Ghi âm thành công" : "Nhấn nút để bắt đầu nói"}
+            <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
+              recording
+                ? "bg-rose-500/15 text-rose-300 border border-rose-500/20"
+                : audioBlob
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
+                  : "bg-slate-800 text-slate-400 border border-slate-700"
+            }`}>
+              {requestingMicrophone
+                ? "Đang mở microphone..."
+                : recording
+                  ? "Đang ghi • Nhấn nút đỏ để dừng"
+                  : audioBlob
+                    ? "Đã ghi âm • Sẵn sàng phân tích"
+                    : "Nhấn nút để bắt đầu nói"}
             </span>
           </div>
 
@@ -269,14 +361,26 @@ export function AIConsultant() {
 
           {/* Submit action button */}
           {audioBlob && !recording && (
-            <button
-              onClick={sendToAI}
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white py-3.5 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0"
-            >
-              <Sparkles size={14} className={loading ? "animate-spin" : "animate-pulse"} />
-              {loading ? "Đang gửi lên Trợ lý AI..." : "Phân tích và gợi ý thuốc"}
-            </button>
+            <div className="grid w-full grid-cols-[auto_1fr] gap-2">
+              <button
+                type="button"
+                onClick={startRecording}
+                disabled={loading || requestingMicrophone}
+                className="rounded-2xl border border-slate-700 bg-slate-800 px-4 py-3.5 text-slate-200 transition hover:border-slate-600 hover:bg-slate-700 disabled:opacity-50 cursor-pointer"
+                aria-label="Ghi âm lại"
+              >
+                <RotateCcw size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={sendToAI}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white py-3.5 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <Sparkles size={14} className={loading ? "animate-spin" : "animate-pulse"} />
+                {loading ? "Đang phân tích..." : "Phân tích và gợi ý thuốc"}
+              </button>
+            </div>
           )}
         </div>
 
@@ -452,6 +556,14 @@ export function AIConsultant() {
                                     const medId = stockInfo.id || stockInfo._id;
                                     const token = localStorage.getItem("token");
 
+                                    if (!medId) {
+                                      showAlert(
+                                        "Thuốc đã được đề xuất nhưng chưa đồng bộ mã kho. Vui lòng phân tích lại hoặc liên hệ dược sĩ.",
+                                        "Chưa đồng bộ mã thuốc"
+                                      );
+                                      return;
+                                    }
+
                                     if (!token) {
                                       const guestCartStr = localStorage.getItem("guest_cart");
                                       let cart = guestCartStr ? JSON.parse(guestCartStr) : [];
@@ -520,13 +632,30 @@ export function AIConsultant() {
 
       {/* Premium Generic Alert Modal */}
       {alertModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col items-center text-center animate-scale-up">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 backdrop-blur-[3px] p-4 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ai-alert-title"
+          onClick={() => setAlertModal(null)}
+        >
+          <div
+            className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col items-center text-center animate-scale-up"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setAlertModal(null)}
+              className="absolute right-4 top-4 rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+              aria-label="Đóng thông báo"
+            >
+              <X size={18} />
+            </button>
             <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#0d6efd] flex items-center justify-center mb-5 border border-blue-100 shadow-inner animate-pulse">
               <Info size={28} />
             </div>
             
-            <h3 className="text-md font-black text-slate-800 tracking-tight mb-2">
+            <h3 id="ai-alert-title" className="text-md font-black text-slate-800 tracking-tight mb-2">
               {alertModal.title || "Thông báo"}
             </h3>
             <p className="text-slate-500 text-xs font-semibold leading-relaxed max-w-xs mb-6">

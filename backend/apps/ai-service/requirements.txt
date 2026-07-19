@@ -3,7 +3,9 @@ fastapi==0.110.0
 uvicorn[standard]==0.29.0
 python-multipart==0.0.9
 qdrant-client==1.8.0
-groq>=0.9.0
+# Async audio transcription support is required by services/stt_service.py.
+# Pin the version so an old cached image cannot silently install an incompatible SDK.
+groq==0.13.1
 httpx==0.27.2
 python-dotenv==1.0.1
 pydantic==2.6.4

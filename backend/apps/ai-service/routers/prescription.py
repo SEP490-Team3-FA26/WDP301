@@ -1,7 +1,16 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Header, Depends, status
 from services.stt_service import transcribe_audio
-from services.llm_service import generate_prescription, check_drug_interactions
-from services.rag_service import retrieve_medical_context, get_embedding, qdrant
+from services.llm_service import (
+    check_drug_interactions,
+    generate_prescription,
+    normalize_transcript_for_retrieval,
+)
+from services.rag_service import (
+    RAGServiceUnavailable,
+    retrieve_medical_context,
+    get_embedding,
+    qdrant,
+)
 from services.db_service import validate_drugs_in_inventory
 import time
 import os
@@ -42,13 +51,16 @@ async def recommend_prescription(
         # Step 1: STT - Nhận diện giọng nói
         transcribed_text = await transcribe_audio(audio)
         
-        # Step 2: RAG - Lấy context y tế từ Qdrant Vector DB
-        context = await retrieve_medical_context(transcribed_text)
+        # Step 2: Chuẩn hóa lỗi STT trước khi truy vấn vector DB.
+        rag_query = await normalize_transcript_for_retrieval(transcribed_text)
+
+        # Step 3: RAG - Lấy context y tế từ Qdrant Vector DB
+        context = await retrieve_medical_context(rag_query)
         
-        # Step 3: LLM - Kê đơn
-        prescription = await generate_prescription(transcribed_text, context)
+        # Step 4: LLM - Kê đơn
+        prescription = await generate_prescription(rag_query, context)
         
-        # Step 4: DB Validation - Kiểm tra tồn kho
+        # Step 5: DB Validation - Kiểm tra tồn kho
         drug_names = [drug.get("name") for drug in prescription.get("recommended_drugs", []) if drug.get("name")]
         inventory_status = await validate_drugs_in_inventory(drug_names)
         
@@ -56,11 +68,14 @@ async def recommend_prescription(
         return {
             "success": True,
             "transcribed_text": transcribed_text,
+            "rag_query": rag_query,
             "prescription": prescription,
             "inventory_status": inventory_status,
             "rag_context_used": bool(context),
             "processing_time_sec": round(time.time() - start_time, 2)
         }
+    except RAGServiceUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

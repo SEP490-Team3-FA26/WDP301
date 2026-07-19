@@ -49,17 +49,25 @@ async def validate_drugs_in_inventory(drug_names: list[str]) -> dict:
             # Use name as the key (exact match)
             if name:
                 available_drugs[name] = {
+                    "id": str(row.get("_id")),
                     "name": name,
                     "stock": stock,
-                    "price": price
+                    "price": price,
+                    "category": row.get("category") or details.get("Danh mục") or "Chưa phân loại",
+                    "unit": row.get("unit") or "Hộp",
+                    "image": row.get("image") or row.get("image_url") or "",
                 }
         
         return {
             "available": [
                 {
+                    "id": available_drugs[name]["id"],
                     "name": name, 
                     "stock": available_drugs[name]["stock"], 
-                    "price": available_drugs[name]["price"]
+                    "price": available_drugs[name]["price"],
+                    "category": available_drugs[name]["category"],
+                    "unit": available_drugs[name]["unit"],
+                    "image": available_drugs[name]["image"],
                 } 
                 for name in drug_names if name in available_drugs
             ],

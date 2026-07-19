@@ -2,6 +2,7 @@ import os
 import sys
 import uuid
 import re
+import time
 from pymongo import MongoClient
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
@@ -17,29 +18,45 @@ COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 
 def get_embeddings_cohere(texts: list[str]) -> list[list[float]]:
     if not COHERE_API_KEY:
-        print("Warning: COHERE_API_KEY is not configured in env.")
-        return [[0.0] * 384] * len(texts)
-    try:
-        response = httpx.post(
-            "https://api.cohere.com/v2/embed",
-            headers={
-                "Authorization": f"Bearer {COHERE_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "texts": texts,
-                "model": "embed-multilingual-light-v3.0",
-                "input_type": "search_document",
-                "embedding_types": ["float"]
-            },
-            timeout=30.0
-        )
-        response.raise_for_status()
-        data = response.json()
-        return [[float(x) for x in emb] for emb in data["embeddings"]["float"]]
-    except Exception as e:
-        print(f"Error calling Cohere API: {e}")
-        return [[0.0] * 384] * len(texts)
+        raise RuntimeError("COHERE_API_KEY is not configured")
+    for attempt in range(5):
+        try:
+            response = httpx.post(
+                "https://api.cohere.com/v2/embed",
+                headers={
+                    "Authorization": f"Bearer {COHERE_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "texts": texts,
+                    "model": "embed-multilingual-light-v3.0",
+                    "input_type": "search_document",
+                    "embedding_types": ["float"],
+                    "truncate": "END"
+                },
+                timeout=30.0
+            )
+            if response.status_code == 429:
+                retry_after = int(response.headers.get("retry-after", 20 * (attempt + 1)))
+                print(f"Cohere rate limit reached; retrying in {retry_after}s...")
+                time.sleep(retry_after)
+                continue
+            response.raise_for_status()
+            data = response.json()
+            return [[float(x) for x in emb] for emb in data["embeddings"]["float"]]
+        except httpx.HTTPStatusError as e:
+            detail = e.response.text[:500]
+            raise RuntimeError(
+                f"Cohere embedding request failed ({e.response.status_code}): {detail}"
+            ) from e
+        except httpx.HTTPError as e:
+            if attempt == 4:
+                raise RuntimeError(f"Cohere embedding request failed: {e}") from e
+            wait_seconds = 5 * (attempt + 1)
+            print(f"Cohere network error; retrying in {wait_seconds}s...")
+            time.sleep(wait_seconds)
+
+    raise RuntimeError("Cohere embedding request failed after rate-limit retries")
 
 def clean_price(price_raw):
     if not price_raw:
@@ -53,6 +70,10 @@ def clean_price(price_raw):
 def main():
     MONGODB_URI = os.getenv("MONGODB_URI") or os.getenv("MONGODB_CONNECTION_STRING")
     QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+
+    if not COHERE_API_KEY:
+        print("Missing COHERE_API_KEY in env!")
+        sys.exit(1)
     
     if not MONGODB_URI:
         print("Missing MONGODB_URI / MONGODB_CONNECTION_STRING in env!")
@@ -93,7 +114,8 @@ def main():
     )
     
     print("Indexing MongoDB medicines into Qdrant in batches...")
-    batch_size = 100
+    # Cohere Embed v2 accepts at most 96 texts per request.
+    batch_size = 90
     batch = []
     total_indexed = 0
     
@@ -115,9 +137,9 @@ def main():
                 ind_short = (indications or "")[:400]
                 contra_short = (contraindications or "")[:400]
                 text = f"{name} ({active_ingredient}). Chỉ định: {ind_short}. Chống chỉ định: {contra_short}."
-                texts.append(f"query: {text}")
+                texts.append(text)
                 
-                price_raw = details.get("Giá bán") or details.get("price")
+                price_raw = details.get("Giá bán") or details.get("price") or batch_item.get("price")
                 price = clean_price(price_raw)
                 category = batch_item.get("category") or details.get("Danh mục") or "Chưa phân loại"
                 image_url = batch_item.get("image") or batch_item.get("image_url") or ""
@@ -133,7 +155,7 @@ def main():
                     "drug_classification": batch_item.get("drug_classification") or "COMMON_SUPPLEMENT",
                     "price": price,
                     "image_url": image_url,
-                    "stock_quantity": batch_item.get("stock") or 100,
+                    "stock_quantity": batch_item.get("stock") if batch_item.get("stock") is not None else 0,
                     "status": batch_item.get("status") or "In Stock",
                     "expiry_date": batch_item.get("expiry_date") or "2026-12-31",
                     "unit": batch_item.get("unit") or "Hộp"
@@ -155,6 +177,8 @@ def main():
             if total_indexed % 1000 == 0:
                 print(f"Indexed {total_indexed} medicines...")
             batch = []
+            # Keep trial-account token throughput below Cohere's rate limit.
+            time.sleep(12)
             
     if batch:
         # Prepare texts and metadata for remaining
@@ -171,9 +195,9 @@ def main():
             ind_short = (indications or "")[:400]
             contra_short = (contraindications or "")[:400]
             text = f"{name} ({active_ingredient}). Chỉ định: {ind_short}. Chống chỉ định: {contra_short}."
-            texts.append(f"query: {text}")
+            texts.append(text)
             
-            price_raw = details.get("Giá bán") or details.get("price")
+            price_raw = details.get("Giá bán") or details.get("price") or batch_item.get("price")
             price = clean_price(price_raw)
             category = batch_item.get("category") or details.get("Danh mục") or "Chưa phân loại"
             image_url = batch_item.get("image") or batch_item.get("image_url") or ""
@@ -189,7 +213,7 @@ def main():
                 "drug_classification": batch_item.get("drug_classification") or "COMMON_SUPPLEMENT",
                 "price": price,
                 "image_url": image_url,
-                "stock_quantity": batch_item.get("stock") or 100,
+                "stock_quantity": batch_item.get("stock") if batch_item.get("stock") is not None else 0,
                 "status": batch_item.get("status") or "In Stock",
                 "expiry_date": batch_item.get("expiry_date") or "2026-12-31",
                 "unit": batch_item.get("unit") or "Hộp"
