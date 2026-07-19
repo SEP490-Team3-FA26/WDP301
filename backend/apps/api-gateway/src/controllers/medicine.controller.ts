@@ -25,6 +25,7 @@ export class MedicineController implements OnModuleInit {
       'inventory.medicine.get_filters',
       'inventory.medicine.stats',
       'inventory.medicine.expiration_report',
+      'inventory.medicine.handle_expiration_action',
       'inventory.medicine.low_stock_report',
       'inventory.medicine.dropdown_list',
       'inventory.medicine.get_alternatives',
@@ -51,6 +52,19 @@ export class MedicineController implements OnModuleInit {
   @ApiOperation({ summary: 'Lấy báo cáo hết hạn của các lô hàng' })
   async getExpirationReport() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.expiration_report', {});
+  }
+
+  @Post('expiration-action')
+  @ApiOperation({ summary: 'Xử lý đề xuất xử lý thuốc sắp hết hạn (Xuất hủy, Trả NCC, Giảm giá)' })
+  async handleExpirationAction(@Body() body: {
+    batchId: string;
+    action: 'DISPOSE' | 'RETURN_SUPPLIER' | 'DISCOUNT';
+    quantity: number;
+    notes?: string;
+    discountPrice?: number;
+    performedBy?: string;
+  }) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.handle_expiration_action', body);
   }
 
   @Get('low-stock-report')
