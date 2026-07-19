@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Plus, BarChart3, FileText } from "lucide-react";
+import { Plus, BarChart3, FileText, TrendingUp } from "lucide-react";
 import { SalesAnalyticsDashboard } from "../../components/reports/SalesAnalyticsDashboard";
+import { ProfitAnalyticsDashboard } from "../../components/reports/ProfitAnalyticsDashboard";
 import { ReportHistoryTable } from "../../components/reports/ReportHistoryTable";
 import { ReportCreateModal } from "../../components/reports/ReportCreateModal";
 
 export function Reports() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"analytics" | "reports">("analytics");
+  const [activeTab, setActiveTab] = useState<"analytics" | "reports" | "profit">("analytics");
   
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -89,6 +90,17 @@ export function Reports() {
             Phân tích bán hàng (BI)
           </button>
           <button
+            onClick={() => setActiveTab("profit")}
+            className={`px-5 py-3 font-bold text-sm flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "profit"
+                ? "border-[#0057cd] text-[#0057cd]"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <TrendingUp size={18} />
+            Phân tích Lợi nhuận (BI)
+          </button>
+          <button
             onClick={() => setActiveTab("reports")}
             className={`px-5 py-3 font-bold text-sm flex items-center gap-2 border-b-2 transition-all ${
               activeTab === "reports"
@@ -104,6 +116,9 @@ export function Reports() {
 
       {/* Analytics Dashboard */}
       {activeTab === "analytics" && isAdmin && <SalesAnalyticsDashboard />}
+
+      {/* Profit Dashboard */}
+      {activeTab === "profit" && isAdmin && <ProfitAnalyticsDashboard />}
 
       {/* Reports History List */}
       {(activeTab === "reports" || !isAdmin) && <ReportHistoryTable reports={reports} />}

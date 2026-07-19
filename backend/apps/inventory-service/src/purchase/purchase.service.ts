@@ -478,6 +478,7 @@ export class PurchaseService {
       // Cập nhật hoặc tạo mới MedicineBatch
       if (batch) {
         batch.stock += item.quantity;
+        batch.importPrice = item.unitPrice; // Cập nhật giá nhập mới nhất
         batch.status = batch.expDate < new Date() ? 'EXPIRED' : 'ACTIVE';
         await batch.save();
       } else {
@@ -487,6 +488,7 @@ export class PurchaseService {
           batchNo: item.batchNo,
           expDate: new Date(item.expDate),
           stock: item.quantity,
+          importPrice: item.unitPrice,
           status: new Date(item.expDate) < new Date() ? 'EXPIRED' : 'ACTIVE',
         });
         await batch.save();
