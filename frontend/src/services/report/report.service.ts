@@ -31,10 +31,14 @@ export const reportService = {
       return null;
     }
   },
-  getSeasonalAnalysis: async (branchId?: string) => {
+  getSeasonalAnalysis: async (branchId?: string, year?: string, month?: string) => {
     try {
-      const url = branchId && branchId !== 'all' ? `/api/reports/seasonal-analysis?branchId=${branchId}` : `/api/reports/seasonal-analysis`;
-      const res = await api.get(url);
+      const params = new URLSearchParams();
+      if (branchId && branchId !== 'all') params.append('branchId', branchId);
+      if (year && year !== 'all') params.append('year', year);
+      if (month && month !== 'all') params.append('month', month);
+      
+      const res = await api.get(`/api/reports/seasonal-analysis?${params.toString()}`);
       return res.data;
     } catch (error) {
       console.error("Lỗi khi lấy phân tích xu hướng mùa/dịch bệnh:", error);
