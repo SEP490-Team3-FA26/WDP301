@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { notifyAuthTokenChanged } from '../../utils/authEvents';
 
 const api = axios.create({
   baseURL: '', // Relative URL to resolve via dev server proxy or same origin
@@ -27,6 +28,7 @@ api.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('userRole');
+      notifyAuthTokenChanged();
       // Redirect to login page if the user is not already there
       if (!window.location.pathname.startsWith('/auth/login')) {
         window.location.href = '/auth/login';
