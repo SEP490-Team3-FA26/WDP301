@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Clock } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../services/core/api';
 
 export function CustomerOrders() {
   const [orders, setOrders] = useState<any[]>([]);

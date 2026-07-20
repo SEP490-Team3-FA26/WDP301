@@ -1,9 +1,38 @@
 import os
 from groq import AsyncGroq
 import json
+import re
 
 api_key = os.getenv("GROQ_API_KEY") or os.getenv("EXPO_PUBLIC_GROQ_API_KEY")
 client = AsyncGroq(api_key=api_key)
+
+RETRIEVAL_NORMALIZATION_PROMPT = """Bạn làm nhiệm vụ làm sạch bản ghi âm tiếng Việt cho tìm kiếm y tế.
+Hãy sửa các lỗi nhận dạng giọng nói rõ ràng và rút gọn thành các triệu chứng/ngữ cảnh y tế có trong lời nói.
+Không thêm triệu chứng không được gợi ý bởi transcript, không chẩn đoán và không đề xuất thuốc.
+Trả về JSON hợp lệ duy nhất theo schema: {"search_query":"..."}."""
+
+
+async def normalize_transcript_for_retrieval(transcript: str) -> str:
+    """Turn noisy STT output into a concise query for vector retrieval."""
+    if not transcript.strip():
+        return transcript
+
+    try:
+        response = await client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": RETRIEVAL_NORMALIZATION_PROMPT},
+                {"role": "user", "content": transcript},
+            ],
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+        normalized = json.loads(response.choices[0].message.content or "{}")
+        search_query = str(normalized.get("search_query") or "").strip()
+        return search_query[:500] if search_query else transcript
+    except Exception as exc:
+        print(f"Transcript normalization failed: {exc}")
+        return transcript
 
 MEDICAL_SYSTEM_PROMPT = """Bạn là Dược sĩ AI chuyên nghiệp tại Việt Nam. 
 Bạn có kiến thức sâu về dược lý, tương tác thuốc, và phác đồ điều trị.
@@ -55,7 +84,41 @@ async def generate_prescription(transcript: str, context: str) -> dict:
     
     content = response.choices[0].message.content
     try:
-        return json.loads(content)
+        prescription = json.loads(content)
+
+        # The inventory uses exact product names. Map harmless LLM shortening
+        # (for example "Panactol 500mg") back to the exact Qdrant payload name,
+        # and reject any drug that is not present in the retrieved context.
+        context_names = re.findall(r"\*\*(.+?)\*\*\s*\(", context or "")
+        canonical_drugs = []
+        rejected_names = []
+        for drug in prescription.get("recommended_drugs", []):
+            proposed_name = str(drug.get("name") or "").strip()
+            proposed_folded = proposed_name.casefold()
+            exact_name = next(
+                (
+                    name for name in context_names
+                    if name.casefold() == proposed_folded
+                    or name.casefold().startswith(proposed_folded)
+                    or proposed_folded.startswith(name.casefold())
+                ),
+                None,
+            )
+            if exact_name:
+                drug["name"] = exact_name
+                canonical_drugs.append(drug)
+            elif proposed_name:
+                rejected_names.append(proposed_name)
+
+        prescription["recommended_drugs"] = canonical_drugs
+        if rejected_names:
+            safety_note = "Đã loại thuốc không khớp chính xác dữ liệu vector."
+            current_warning = str(prescription.get("warnings") or "").strip()
+            prescription["warnings"] = " ".join(
+                part for part in (current_warning, safety_note) if part
+            )
+
+        return prescription
     except json.JSONDecodeError:
         return {"error": "Lỗi phân tích JSON từ LLM", "raw_content": content}
 

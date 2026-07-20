@@ -9,6 +9,14 @@ class ApiService {
   static const String baseUrl = kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
   static const String fallbackUrl = 'http://localhost:4000';
 
+  // JWT token stored globally after login
+  static String currentToken = '';
+
+  static Map<String, String> get _authHeaders => {
+    'Content-Type': 'application/json',
+    if (currentToken.isNotEmpty) 'Authorization': 'Bearer $currentToken',
+  };
+
   // Hardcoded initial fallback list if DB/network is offline
   static final List<Map<String, dynamic>> localMockMedicines = [
     {
@@ -549,200 +557,6 @@ class ApiService {
     }
   }
 
-  // Get User Profile using JWT token
-  static Future<Map<String, dynamic>?> getProfile(String token) async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/auth/profile'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-    } catch (_) {
-      try {
-        final response = await http.get(
-          Uri.parse('$fallbackUrl/api/auth/profile'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection'),
-      );
-      request.files.add(await http.MultipartFile.fromPath(
-        'file',
-        filePath,
-        contentType: mediaType,
-      ));
-      
-      var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
-      var response = await http.Response.fromStream(streamedResponse);
-      
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      } else {
-        throw Exception("AI Service returned code ${response.statusCode}: ${response.body}");
-      }
-    } catch (_) {
-      try {
-        // Fallback to direct FastAPI port for local emulator testing
-        final localAiUrl = baseUrl.contains('10.0.2.2') ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
-        var request = http.MultipartRequest(
-          'POST',
-          Uri.parse('$localAiUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection'),
-        );
-        request.files.add(await http.MultipartFile.fromPath(
-          'file',
-          filePath,
-          contentType: mediaType,
-        ));
-        
-        var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
-        var response = await http.Response.fromStream(streamedResponse);
-        
-        if (response.statusCode == 200) {
-          return jsonDecode(response.body) as Map<String, dynamic>;
-        } else {
-          throw Exception("AI Service returned code ${response.statusCode}: ${response.body}");
-        }
-      } catch (e) {
-        debugPrint("AI GRN inspection failed: $e");
-        rethrow;
-      }
-    }
-  }
-
-  // UC-19: Verify Actual Count and override AI Count
-  static Future<bool> verifyReceiptItemCount({
-    required String inspectionRecordId,
-    required int actualQty,
-    required String userId,
-  }) async {
-    final body = jsonEncode({
-      'actualQty': actualQty,
-      'verifiedBy': userId,
-    });
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/ai/inspections/$inspectionRecordId/verify'),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      ).timeout(const Duration(seconds: 5));
-      return response.statusCode == 200;
-    } catch (_) {
-      try {
-        final localAiUrl = baseUrl.contains('10.0.2.2') ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
-        final response = await http.post(
-          Uri.parse('$localAiUrl/api/ai/inspections/$inspectionRecordId/verify'),
-          headers: {'Content-Type': 'application/json'},
-          body: body,
-        ).timeout(const Duration(seconds: 5));
-        return response.statusCode == 200;
-      } catch (e) {
-        debugPrint("Failed to verify count: $e");
-        return false;
-      }
-    }
-  }
-
-  // UC-19: Approve Goods Receipt
-  static Future<bool> approveGoodsReceipt(String receiptId) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/goods-receipts/$receiptId/approve'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
-      return response.statusCode == 200;
-    } catch (_) {
-      try {
-        final response = await http.post(
-          Uri.parse('$fallbackUrl/api/goods-receipts/$receiptId/approve'),
-          headers: {'Content-Type': 'application/json'},
-        ).timeout(const Duration(seconds: 10));
-        return response.statusCode == 200;
-      } catch (e) {
-        debugPrint("Failed to approve GRN: $e");
-        return false;
-      }
-    }
-  }
-
-  static final List<Map<String, dynamic>> localMockGoodsReceipts = [
-    {
-      '_id': 'GRN-001',
-      'poId': 'PO-001',
-      'supplier': 'ABC Pharma',
-      'status': 'DRAFT',
-      'items': [
-        {
-          '_id': 'ITEM-001',
-          'medicineId': 'MED-001',
-          'expectedQty': 10,
-          'actualQty': 0,
-          'unit': 'Hộp',
-          'status': 'PENDING'
-        }
-      ]
-    }
-  ];
-
-  // UC-19: Fetch all Goods Receipt Notes from database
-  static Future<List<dynamic>> getGoodsReceipts() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/goods-receipts'),
-      ).timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as List<dynamic>;
-      }
-    } catch (e) {
-      debugPrint("Failed to fetch dynamic goods receipts: $e");
-    }
-    return localMockGoodsReceipts;
-  }
-
-  // UC-19: Fetch single medicine details by ID
-  static Future<Map<String, dynamic>?> getMedicineById(String id) async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/medicines/$id'),
-      ).timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-    } catch (e) {
-      debugPrint("Failed to fetch medicine $id details: $e");
-    }
-    return null;
-  }
-
-  // UC-19: Submit inspection report
-  static Future<bool> submitInspection(String receiptId) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/goods-receipts/$receiptId/submit-inspection'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
-      return response.statusCode == 200;
-    } catch (_) {
-      try {
-        final response = await http.post(
-          Uri.parse('$fallbackUrl/api/goods-receipts/$receiptId/submit-inspection'),
-          headers: {'Content-Type': 'application/json'},
-        ).timeout(const Duration(seconds: 10));
-        return response.statusCode == 200;
-      } catch (e) {
-        debugPrint("Failed to submit inspection: $e");
-        return false;
-      }
-    }
-  }
 
   // Get User Profile using JWT token
   static Future<Map<String, dynamic>?> getProfile(String token) async {
@@ -888,16 +702,35 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/orders'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _authHeaders,
         body: jsonEncode(orderData),
       ).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
+      debugPrint('createOrder status: ${response.statusCode} body: ${response.body}');
     } catch (e) {
       debugPrint("Failed to create order: $e");
     }
     return {'success': true, 'orderId': 'ORD-${DateTime.now().millisecondsSinceEpoch}', 'message': 'Đơn hàng đã được tạo thành công!'};
+  }
+
+  // Create PayOS payment link for QR/Card online payment
+  static Future<Map<String, dynamic>?> createPayOSLink(Map<String, dynamic> orderData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/orders/payos-link'),
+        headers: _authHeaders,
+        body: jsonEncode(orderData),
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body}');
+    } catch (e) {
+      debugPrint("Failed to create PayOS link: $e");
+    }
+    return null;
   }
 
   // Fetch Expiration Report for Warehouse Screen
@@ -958,5 +791,69 @@ class ApiService {
       } catch (_) {}
     }
     return services;
+  }
+
+  // UC-34: Get voice-activated AI consultation recommendation (Web-safe: text-based)
+  static Future<Map<String, dynamic>?> getVoicePrescription(String audioPath) async {
+    // audioPath is unused on web; the endpoint accepts multipart audio
+    // For Web builds, fall back gracefully
+    try {
+      final url = Uri.parse('$baseUrl/api/prescriptions/recommend');
+      var request = http.MultipartRequest('POST', url);
+      if (currentToken.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $currentToken';
+      }
+      request.files.add(await http.MultipartFile.fromPath('audio', audioPath));
+      var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      var response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {
+      try {
+        final url = Uri.parse('$fallbackUrl/api/prescriptions/recommend');
+        var request = http.MultipartRequest('POST', url);
+        if (currentToken.isNotEmpty) {
+          request.headers['Authorization'] = 'Bearer $currentToken';
+        }
+        request.files.add(await http.MultipartFile.fromPath('audio', audioPath));
+        var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+        var response = await http.Response.fromStream(streamedResponse);
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint("Voice prescription API failed: $e");
+      }
+    }
+    return null;
+  }
+
+  // UC-34: Text-based AI symptom consultation (works on Flutter Web)
+  static Future<Map<String, dynamic>?> getTextPrescription(String symptoms) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/prescriptions/symptom-consult'),
+        headers: _authHeaders,
+        body: jsonEncode({'symptoms': symptoms}),
+      ).timeout(const Duration(seconds: 20));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {
+      try {
+        final response = await http.post(
+          Uri.parse('$fallbackUrl/api/prescriptions/symptom-consult'),
+          headers: _authHeaders,
+          body: jsonEncode({'symptoms': symptoms}),
+        ).timeout(const Duration(seconds: 20));
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint("Text prescription API failed: $e");
+      }
+    }
+    return null;
   }
 }

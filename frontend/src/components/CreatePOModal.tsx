@@ -3,6 +3,7 @@ import { X, AlertTriangle, CheckCircle2, PackagePlus, Loader2, Search, Trash2 } 
 import { motion, AnimatePresence } from "motion/react";
 import { ShopFilterSidebar } from "./ShopFilterSidebar";
 import { MedicineCard } from "./MedicineCard";
+import api from "../services/core/api";
 
 export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillPrItems?: any[]; onClose: () => void; onSuccess: () => void }) {
   const [medicines, setMedicines] = useState<any[]>([]);
@@ -53,12 +54,16 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
   // Fetch full medicines for filtering
   useEffect(() => {
     Promise.all([
-      fetch('/api/medicines?limit=500').then(res => res.json()),
-      fetch('/api/suppliers').then(res => res.json())
+      api.get('/api/medicines?limit=500').then(res => res.data),
+      api.get('/api/suppliers').then(res => res.data)
     ]).then(([medData, supData]) => {
-      setMedicines(medData.data || []);
-      setSuppliers(supData || []);
-    }).catch(err => console.error(err));
+      setMedicines(Array.isArray(medData?.data) ? medData.data : []);
+      setSuppliers(Array.isArray(supData) ? supData : []);
+    }).catch(err => {
+      console.error("Lỗi khi tải dữ liệu thuốc/nhà cung cấp:", err);
+      setMedicines([]);
+      setSuppliers([]);
+    });
   }, []);
 
   const fetchMedicineById = async (id: string) => {
@@ -304,7 +309,7 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
                     key={med.id || med._id} 
                     med={med} 
                     added={cart.some(i => i.id === (med.id || med._id))} 
-                    onAddToCart={(m, q) => handleAddMedicine(m, q)} 
+                    onAddToCart={(m, q, _unit) => { handleAddMedicine(m, q); }} 
                     onClick={() => {}} 
                   />
                 ))

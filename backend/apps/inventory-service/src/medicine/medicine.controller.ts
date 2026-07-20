@@ -99,6 +99,16 @@ export class MedicineController {
     }
   }
 
+  @MessagePattern('inventory.medicine.handle_expiration_action')
+  async handleExpirationAction(@Payload() data: any) {
+    try {
+      return await this.medicineService.handleExpirationAction(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi xử lý hành động hết hạn');
+    }
+  }
+
   @MessagePattern('inventory.medicine.get_by_ids')
   async getMedicinesByIds(@Payload() data: { ids: string[] }) {
     try {
@@ -176,6 +186,26 @@ export class MedicineController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi tìm thuốc thay thế');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.safe_stock_chain')
+  async getSafeStockChain(@Payload() query: any) {
+    try {
+      return await this.medicineService.getSafeStockChain(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy báo cáo tồn kho an toàn');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.detect_anomalies')
+  async getAnomalyDetection(@Payload() query: any) {
+    try {
+      return await this.medicineService.getAnomalyDetection(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi phát hiện bất thường tồn kho');
     }
   }
 }

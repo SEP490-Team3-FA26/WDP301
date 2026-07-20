@@ -10,6 +10,7 @@ import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @ApiTags('💊 Medicines')
 @Controller('api/medicines')
+@UseGuards(JwtAuthGuard)
 export class MedicineController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -24,10 +25,13 @@ export class MedicineController implements OnModuleInit {
       'inventory.medicine.get_filters',
       'inventory.medicine.stats',
       'inventory.medicine.expiration_report',
+      'inventory.medicine.handle_expiration_action',
       'inventory.medicine.low_stock_report',
       'inventory.medicine.dropdown_list',
       'inventory.medicine.get_alternatives',
       'inventory.medicine.update_price',
+      'inventory.medicine.safe_stock_chain',
+      'inventory.medicine.detect_anomalies',
       'inventory.medicine.branch_list',
     ]);
   }
@@ -50,6 +54,19 @@ export class MedicineController implements OnModuleInit {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.expiration_report', {});
   }
 
+  @Post('expiration-action')
+  @ApiOperation({ summary: 'Xử lý đề xuất xử lý thuốc sắp hết hạn (Xuất hủy, Trả NCC, Giảm giá)' })
+  async handleExpirationAction(@Body() body: {
+    batchId: string;
+    action: 'DISPOSE' | 'RETURN_SUPPLIER' | 'DISCOUNT';
+    quantity: number;
+    notes?: string;
+    discountPrice?: number;
+    performedBy?: string;
+  }) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.handle_expiration_action', body);
+  }
+
   @Get('low-stock-report')
   @ApiOperation({ summary: 'Lấy báo cáo các loại thuốc sắp hết hàng hoặc hết hàng' })
   async getLowStockReport() {
@@ -60,6 +77,49 @@ export class MedicineController implements OnModuleInit {
   @ApiOperation({ summary: 'Lấy danh sách tối giản của các loại thuốc phục vụ cho dropdown' })
   async getMedicinesDropdown() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.dropdown_list', {});
+  }
+
+  // UC-30: Tồn kho thời gian thực toàn chuỗi + Thuật toán tồn kho an toàn
+  @Get('safe-stock-chain')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[UC-30] Xem tồn kho thời gian thực toàn chuỗi + phân tích an toàn' })
+  @ApiQuery({ name: 'serviceLevel', required: false, type: Number, description: 'Mức phục vụ: 0.90/0.95/0.98/0.99', example: 0.95 })
+  @ApiQuery({ name: 'periodDays', required: false, type: Number, description: 'Kỳ phân tích (ngày)', example: 30 })
+  @ApiQuery({ name: 'branchId', required: false, type: String, description: 'Lọc theo chi nhánh' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getSafeStockChain(
+    @Query('serviceLevel') serviceLevel?: number,
+    @Query('periodDays') periodDays?: number,
+    @Query('branchId') branchId?: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.safe_stock_chain', {
+      serviceLevel: serviceLevel ? Number(serviceLevel) : 0.95,
+      periodDays: periodDays ? Number(periodDays) : 30,
+      branchId: branchId || undefined,
+      page: Number(page),
+      limit: Number(limit),
+    });
+  }
+
+  // UC-37: Phát hiện bất thường tồn kho (Z-Score / 3-Sigma Thống Kê Thuần Túy)
+  @Get('anomaly-detection')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[UC-37] Phát hiện bất thường tồn kho bằng Z-Score / 3-Sigma' })
+  @ApiQuery({ name: 'periodDays', required: false, type: Number, description: 'Kỳ phân tích (ngày)', example: 60 })
+  @ApiQuery({ name: 'zScoreThreshold', required: false, type: Number, description: 'Ngưỡng Z-Score (mặc định: 3)', example: 3 })
+  async getAnomalyDetection(
+    @Query('periodDays') periodDays?: number,
+    @Query('zScoreThreshold') zScoreThreshold?: number,
+  ) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.detect_anomalies', {
+      periodDays: periodDays ? Number(periodDays) : 60,
+      zScoreThreshold: zScoreThreshold ? Number(zScoreThreshold) : 3,
+    });
   }
 
   @Get(':id')
@@ -77,7 +137,6 @@ export class MedicineController implements OnModuleInit {
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Cập nhật trạng thái / tồn kho của thuốc' })
-  @UseGuards(JwtAuthGuard)
   @AuditLogAction({
     actionCode: 'MEDICINE_STATUS_UPDATE',
     actionName: 'Cập nhật trạng thái thuốc',
@@ -95,7 +154,6 @@ export class MedicineController implements OnModuleInit {
 
   @Patch(':id/price-tiers')
   @ApiOperation({ summary: 'Cập nhật bảng giá sỉ bậc thang của thuốc' })
-  @UseGuards(JwtAuthGuard)
   @AuditLogAction({
     actionCode: 'MEDICINE_PRICE_TIERS_UPDATE',
     actionName: 'Cập nhật giá sỉ thuốc',
@@ -111,7 +169,7 @@ export class MedicineController implements OnModuleInit {
   }
 
   @Patch(':id/price')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cập nhật giá bán chung của thuốc' })
@@ -186,7 +244,7 @@ export class MedicineController implements OnModuleInit {
   @ApiQuery({ name: 'country', required: false, type: String })
   @ApiQuery({ name: 'brand', required: false, type: String })
   @ApiQuery({ name: 'indication', required: false, type: String })
-  @ApiQuery({ name: 'branchOrigin', required: false, type: String })
+  @ApiQuery({ name: 'brandOrigin', required: false, type: String })
   @ApiQuery({ name: 'branchStockOnly', required: false, type: Boolean })
   async getBranchMedicines(
     @Param('branchId') branchId: string,
@@ -232,13 +290,20 @@ export class MedicineController implements OnModuleInit {
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
       const response = await fetch('http://ai-service:8000/api/ai/interactions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
         },
         body: JSON.stringify({ medicines }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new HttpException('Failed to check interactions from AI Service', HttpStatus.BAD_GATEWAY);
@@ -249,4 +314,6 @@ export class MedicineController implements OnModuleInit {
       throw new HttpException(error.message || 'Lỗi khi gọi AI Service', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
 }
+

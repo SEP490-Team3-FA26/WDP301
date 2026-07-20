@@ -98,7 +98,7 @@ export function BranchInventory() {
         branchStockOnly: true
       });
       setInventory(result.data || []);
-      setTotal(result.total || 0);
+      setTotal(result.pagination?.total || 0);
     } catch (error) {
       console.error("Lỗi tải tồn kho chi nhánh:", error);
     } finally {
