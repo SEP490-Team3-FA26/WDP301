@@ -99,6 +99,16 @@ export class MedicineController {
     }
   }
 
+  @MessagePattern('inventory.medicine.handle_expiration_action')
+  async handleExpirationAction(@Payload() data: any) {
+    try {
+      return await this.medicineService.handleExpirationAction(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi xử lý hành động hết hạn');
+    }
+  }
+
   @MessagePattern('inventory.medicine.get_by_ids')
   async getMedicinesByIds(@Payload() data: { ids: string[] }) {
     try {

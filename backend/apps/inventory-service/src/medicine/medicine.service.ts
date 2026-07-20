@@ -694,9 +694,9 @@ export class MedicineService implements OnModuleInit {
       const batches = await this.batchModel.find({
         stock: { $gt: 0 },
         expDate: { $lte: ninetyDaysFromNow }
-      }).select('medicineId batchNo expDate stock status').lean().exec();
+      }).select('medicineId batchNo expDate stock status branchId').lean().exec();
       const medIds = [...new Set(batches.map(b => b.medicineId))];
-      const medicines = await this.medicineModel.find({ _id: { $in: medIds } }).select('name category unit').lean().exec();
+      const medicines = await this.medicineModel.find({ _id: { $in: medIds } }).select('name category unit price').lean().exec();
       const medMap = new Map(medicines.map(m => [m._id.toString(), m]));
 
       const report = batches
@@ -721,6 +721,8 @@ export class MedicineService implements OnModuleInit {
             expDate: expDate.toISOString().split('T')[0],
             stock: b.stock,
             status: status,
+            price: med ? med.price : 0,
+            branchId: b.branchId || 'CENTRAL_WH'
           };
         })
         .filter(item => item.status === 'EXPIRED' || item.status === 'SOON_TO_EXPIRE')
@@ -732,6 +734,150 @@ export class MedicineService implements OnModuleInit {
       throw new RpcException(error.message || 'Lỗi lấy báo cáo hết hạn');
     }
   }
+
+  async handleExpirationAction(data: {
+    batchId: string;
+    action: 'DISPOSE' | 'RETURN_SUPPLIER' | 'DISCOUNT';
+    quantity: number;
+    notes?: string;
+    discountPrice?: number;
+    performedBy?: string;
+  }) {
+    try {
+      const { batchId, action, quantity, notes, discountPrice, performedBy } = data;
+      this.logger.log(`Handling expiration action: ${action} for batch ${batchId}`);
+
+      const batch = await this.batchModel.findById(batchId).exec();
+      if (!batch) {
+        throw new RpcException('Không tìm thấy lô thuốc này');
+      }
+
+      const medicine = await this.medicineModel.findById(batch.medicineId).exec();
+      if (!medicine) {
+        throw new RpcException('Không tìm thấy dược phẩm tương ứng');
+      }
+
+      if (action === 'DISPOSE') {
+        const actualDeduct = Math.min(batch.stock, quantity);
+        if (actualDeduct <= 0) {
+          throw new RpcException('Số lượng hủy không hợp lệ hoặc lô hàng đã hết');
+        }
+
+        const stockBefore = batch.stock;
+        batch.stock -= actualDeduct;
+        if (batch.stock === 0) {
+          batch.status = 'EXPIRED';
+        }
+        await batch.save();
+
+        const txn = new this.txnModel({
+          type: 'DISPOSE',
+          medicineId: batch.medicineId,
+          medicineName: medicine.name,
+          batchNo: batch.batchNo,
+          quantityChange: -actualDeduct,
+          stockBefore,
+          stockAfter: batch.stock,
+          referenceType: 'EXPIRED_DISPOSAL',
+          performedBy: performedBy || 'Quản lý',
+          notes: notes || 'Xuất hủy thuốc hết hạn/cận hạn',
+        });
+        await txn.save();
+
+        await this.syncMedicineStock(batch.medicineId);
+
+        return {
+          success: true,
+          message: `Đã xuất hủy thành công ${actualDeduct} đơn vị của lô ${batch.batchNo}.`,
+          data: batch
+        };
+
+      } else if (action === 'RETURN_SUPPLIER') {
+        const actualDeduct = Math.min(batch.stock, quantity);
+        if (actualDeduct <= 0) {
+          throw new RpcException('Số lượng trả hàng không hợp lệ hoặc lô hàng đã hết');
+        }
+
+        const stockBefore = batch.stock;
+        batch.stock -= actualDeduct;
+        if (batch.stock === 0) {
+          batch.status = 'EXPIRED';
+        }
+        await batch.save();
+
+        const txn = new this.txnModel({
+          type: 'ADJUSTMENT',
+          medicineId: batch.medicineId,
+          medicineName: medicine.name,
+          batchNo: batch.batchNo,
+          quantityChange: -actualDeduct,
+          stockBefore,
+          stockAfter: batch.stock,
+          referenceType: 'SUPPLIER_RETURN',
+          performedBy: performedBy || 'Quản lý',
+          notes: notes || 'Gửi trả nhà cung cấp do cận hạn/hết hạn',
+        });
+        await txn.save();
+
+        await this.syncMedicineStock(batch.medicineId);
+
+        return {
+          success: true,
+          message: `Đã xuất trả nhà cung cấp thành công ${actualDeduct} đơn vị của lô ${batch.batchNo}.`,
+          data: batch
+        };
+
+      } else if (action === 'DISCOUNT') {
+        if (!discountPrice || discountPrice <= 0) {
+          throw new RpcException('Giá khuyến mãi không hợp lệ');
+        }
+
+        const oldPrice = medicine.price;
+        medicine.price = discountPrice;
+        await medicine.save();
+
+        const txn = new this.txnModel({
+          type: 'ADJUSTMENT',
+          medicineId: batch.medicineId,
+          medicineName: medicine.name,
+          batchNo: batch.batchNo,
+          quantityChange: 0,
+          stockBefore: batch.stock,
+          stockAfter: batch.stock,
+          referenceType: 'PRICE_DISCOUNT',
+          performedBy: performedBy || 'Quản lý',
+          notes: notes || `Thiết lập giá khuyến mãi cận hạn: ${oldPrice?.toLocaleString('vi-VN')}đ -> ${discountPrice?.toLocaleString('vi-VN')}đ`,
+        });
+        await txn.save();
+
+        return {
+          success: true,
+          message: `Đã áp dụng giảm giá thành công cho thuốc ${medicine.name}: ${oldPrice?.toLocaleString('vi-VN')}đ -> ${discountPrice?.toLocaleString('vi-VN')}đ`,
+          data: medicine
+        };
+      } else {
+        throw new RpcException('Hành động không hợp lệ');
+      }
+    } catch (err) {
+      throw new RpcException(err.message || 'Lỗi xử lý đề xuất hết hạn');
+    }
+  }
+
+  private async syncMedicineStock(medicineId: string) {
+    const activeBatches = await this.batchModel.find({
+      medicineId,
+      status: 'ACTIVE',
+      stock: { $gt: 0 }
+    }).exec();
+    const totalStock = activeBatches.reduce((sum, b) => sum + b.stock, 0);
+    await this.medicineModel.findByIdAndUpdate(medicineId, {
+      $set: {
+        stock: totalStock,
+        status: totalStock > 0 ? 'In Stock' : 'Out of Stock'
+      }
+    }).exec();
+  }
+
 
   async getMedicinesByIds(ids: string[]) {
     try {

@@ -28,6 +28,7 @@ import { ChangePasswordDto } from '../dto/change-password.dto';
 import { VerifyTwoFactorDto, AuthenticateTwoFactorDto } from '../dto/two-factor.dto';
 import { VerifyEmailDto, ResendVerificationDto } from '../dto/verify-email.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { JwtService } from '@nestjs/jwt';
 
 @ApiTags('🔐 Authentication')
 @Controller('api/auth')
@@ -38,6 +39,7 @@ export class AuthController implements OnModuleInit {
   constructor(
     @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private readonly jwtService: JwtService,
   ) { }
 
   /**
@@ -129,6 +131,43 @@ export class AuthController implements OnModuleInit {
 
     // Redirect về Frontend kèm JWT Token
     return res.redirect(`${frontendUrl}/login?token=${result.access_token}`);
+  }
+
+  // ============================================================
+  // POST /api/auth/demo-token — Tạo token demo cho môi trường Dev/Test
+  // ============================================================
+  @Post('demo-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Tạo token JWT giả lập cho demo/test' })
+  async demoToken(@Body('role') roleStr: string) {
+    const mockUserId = '65f01234567890abcdef1234';
+    const role = roleStr?.toLowerCase() || 'customer';
+    
+    let mappedRole = 'user';
+    if (role === 'admin') mappedRole = 'admin';
+    else if (role === 'head_branch' || role === 'headbranch') mappedRole = 'head_branch';
+    else if (role === 'warehouse') mappedRole = 'warehouse';
+    else if (role === 'pharmacist') mappedRole = 'pharmacist';
+
+    const payload = {
+      sub: mockUserId,
+      email: `${role}@example.com`,
+      role: mappedRole,
+      fullName: `Demo ${roleStr || 'Customer'}`,
+      branchId: 'BR-001',
+    };
+
+    const token = this.jwtService.sign(payload);
+    return {
+      access_token: token,
+      user: {
+        id: mockUserId,
+        email: payload.email,
+        fullName: payload.fullName,
+        role: mappedRole,
+        branchId: 'BR-001',
+      }
+    };
   }
 
   // ============================================================

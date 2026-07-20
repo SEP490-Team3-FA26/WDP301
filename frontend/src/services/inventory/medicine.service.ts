@@ -118,6 +118,18 @@ export const medicineService = {
   async getMedicinesDropdown() {
     const response = await api.get('/api/medicines/dropdown');
     return response.data;
+  },
+
+  async handleExpirationAction(payload: {
+    batchId: string;
+    action: 'DISPOSE' | 'RETURN_SUPPLIER' | 'DISCOUNT';
+    quantity: number;
+    notes?: string;
+    discountPrice?: number;
+    performedBy?: string;
+  }) {
+    const response = await api.post('/api/medicines/expiration-action', payload);
+    return response.data;
   }
 };
 
