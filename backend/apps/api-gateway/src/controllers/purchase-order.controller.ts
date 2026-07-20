@@ -36,7 +36,16 @@ export class PurchaseOrderController implements OnModuleInit {
     entityType: 'PurchaseOrder',
   })
   async createAutoRoutedPurchaseOrders(@Body() data: AutoRoutePoDto) {
-    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.po.auto_route', data);
+    // ValidationPipe transforms the request body into an AutoRoutePoDto instance.
+    // Convert it back to a plain object so ClientKafka serializes it as JSON
+    // instead of the string "[object Object]".
+    const payload = {
+      items: data.items,
+      prIds: data.prIds,
+      ...(data.createdBy ? { createdBy: data.createdBy } : {}),
+    };
+
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.po.auto_route', payload);
     
     console.log('📦 PO Created - Full Result:', JSON.stringify(result, null, 2));
     
@@ -97,7 +106,15 @@ export class PurchaseOrderController implements OnModuleInit {
     entityType: 'PurchaseOrder',
   })
   async approveAndPayPurchaseOrder(@Body() data: ApprovePayPoDto) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.approve_pay', data);
+    const payload = {
+      poId: data.poId,
+      action: data.action,
+      ...(data.approvedBy ? { approvedBy: data.approvedBy } : {}),
+      ...(data.rejectionReason ? { rejectionReason: data.rejectionReason } : {}),
+      ...(data.paymentType ? { paymentType: data.paymentType } : {}),
+    };
+
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.approve_pay', payload);
   }
 
   @Post('reject-delivery')
@@ -109,7 +126,12 @@ export class PurchaseOrderController implements OnModuleInit {
     entityType: 'PurchaseOrder',
   })
   async rejectPurchaseOrderDelivery(@Body() data: RejectPoDeliveryDto) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.reject_delivery', data);
+    const payload = {
+      poId: data.poId,
+      ...(data.reason ? { reason: data.reason } : {}),
+    };
+
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.reject_delivery', payload);
   }
 
   @Get()
@@ -124,6 +146,9 @@ export class PurchaseOrderController implements OnModuleInit {
 
   @Post(':id/receive')
   async receivePurchaseOrder(@Param('id') id: string, @Body() data: ReceivePoDto) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.receive', { id, ...data });
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.receive', {
+      id,
+      receivedBy: data.receivedBy,
+    });
   }
 }

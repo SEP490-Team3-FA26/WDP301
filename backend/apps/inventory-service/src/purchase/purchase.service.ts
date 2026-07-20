@@ -624,17 +624,58 @@ export class PurchaseService {
       throw new RpcException({ message: `Đơn hàng đang ở trạng thái "${po.status}", chưa được phép tiếp nhận (yêu cầu SHIPPING hoặc PARTIAL_RECEIVED)` });
     }
 
+    if (!Array.isArray(data.items) || data.items.length === 0) {
+      throw new RpcException({ message: 'Phiếu nhập kho phải có ít nhất một sản phẩm' });
+    }
+
     let totalAmount = 0;
     const items = data.items.map((item: any) => {
-      totalAmount += item.quantity * item.unitPrice;
+      const poItem = po.items.find(poItem => poItem.medicineId === item.medicineId);
+      if (!poItem) {
+        throw new RpcException({ message: `Sản phẩm ${item.medicineId} không thuộc đơn hàng PO này` });
+      }
+
+      const quantity = Number(
+        item.quantity ?? item.expectedQty ?? item.quantityReceived ?? poItem.quantity
+      );
+      const unitPrice = Number(poItem.unitPrice);
+      const batchNo = String(item.batchNo ?? '').trim();
+      const expDateValue = item.expDate ?? item.expiryDate;
+      const expDate = new Date(expDateValue);
+
+      if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity <= 0) {
+        throw new RpcException({ message: `Số lượng nhập của sản phẩm ${item.medicineId} phải là số nguyên dương` });
+      }
+      const remainingQuantity = poItem.quantity - (poItem.receivedQuantity || 0);
+      if (quantity > remainingQuantity) {
+        throw new RpcException({
+          message: `Số lượng nhập của sản phẩm ${item.medicineId} vượt quá số lượng còn lại (${remainingQuantity})`,
+        });
+      }
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        throw new RpcException({ message: `Đơn giá của sản phẩm ${item.medicineId} không hợp lệ` });
+      }
+      if (!batchNo) {
+        throw new RpcException({ message: `Vui lòng nhập số lô cho sản phẩm ${item.medicineId}` });
+      }
+      if (!expDateValue || Number.isNaN(expDate.getTime())) {
+        throw new RpcException({ message: `Hạn sử dụng của sản phẩm ${item.medicineId} không hợp lệ` });
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (expDate <= today) {
+        throw new RpcException({ message: `Hạn sử dụng của sản phẩm ${item.medicineId} phải sau ngày hôm nay` });
+      }
+
+      totalAmount += quantity * unitPrice;
       return {
         medicineId: item.medicineId,
-        batchNo: item.batchNo,
-        expDate: new Date(item.expDate),
-        quantity: item.quantity,
+        batchNo,
+        expDate,
+        quantity,
         actualQty: null,
         status: 'PENDING',
-        unitPrice: item.unitPrice
+        unitPrice,
       };
     });
 
@@ -833,6 +874,17 @@ export class PurchaseService {
       grn.discrepancyReason = discrepancyReason;
     }
     await grn.save();
+
+    // Keep the inspection record synchronized with the completed GRN/PO.
+    await this.inspectionModel.updateMany(
+      { grnId: grn._id.toString(), status: { $in: ['PENDING_VERIFICATION', 'WAITING'] } },
+      {
+        $set: {
+          status: 'APPROVE',
+          approvedBy: grn.receivedBy || 'Hệ thống',
+        },
+      },
+    ).exec();
 
     return {
       success: true,
@@ -1723,6 +1775,18 @@ export class PurchaseService {
     
     if (grn.status !== 'INSPECTING') {
       throw new RpcException({ message: `GRN đang ở trạng thái ${grn.status}, không thể mở phiên kiểm đếm` });
+    }
+
+    const existingRecord = await this.inspectionModel.findOne({
+      grnId,
+      status: { $in: ['PENDING_VERIFICATION', 'WAITING'] },
+    }).exec();
+    if (existingRecord) {
+      return {
+        success: true,
+        message: 'Tiếp tục phiên kiểm đếm hiện có',
+        data: existingRecord,
+      };
     }
 
     const items = [];

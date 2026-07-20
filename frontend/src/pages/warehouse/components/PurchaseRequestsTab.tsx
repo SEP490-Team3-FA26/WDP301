@@ -1,28 +1,31 @@
 import React, { useState, useEffect } from "react";
 import { Search, X, Package, Loader2, Calendar, Eye, ShoppingCart, SendHorizonal } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { StatusBadge, PR_STATUS } from "./WarehouseConstants";
+import { StatusBadge, PO_STATUS, PR_STATUS } from "./WarehouseConstants";
 import { purchaseRequisitionService } from "../../../services/purchase/purchaseRequisition.service";
+import { purchaseOrderService } from "../../../services/purchase/purchaseOrder.service";
 
 export function PurchaseRequestsTab({
   suppliers,
+  refreshKey,
   onMsg,
   onOpenCreate,
 }: {
   suppliers: any[];
+  refreshKey: number;
   onMsg: (m: { type: "success" | "error"; text: string } | null) => void;
   onOpenCreate: () => void;
 }) {
   const [prList, setPrList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("WAREHOUSE_SUBMITTED");
+  const [statusFilter, setStatusFilter] = useState("PENDING_APPROVAL");
   const [selectedPrs, setSelectedPrs] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [detailPr, setDetailPr] = useState<any>(null);
 
   const STATUS_TABS = [
-    { key: "WAREHOUSE_SUBMITTED", label: "Chờ Admin duyệt" },
+    { key: "PENDING_APPROVAL", label: "Chờ Admin duyệt" },
     { key: "CONSOLIDATED", label: "Đã tạo PO" },
     { key: "DRAFT", label: "Bản nháp" },
   ];
@@ -30,7 +33,9 @@ export function PurchaseRequestsTab({
   const fetchData = async () => {
     setLoading(true);
     try {
-      const data = await purchaseRequisitionService.getPurchaseRequisitions(statusFilter);
+      const data = statusFilter === "PENDING_APPROVAL"
+        ? await purchaseOrderService.getPurchaseOrders("PENDING_APPROVAL")
+        : await purchaseRequisitionService.getPurchaseRequisitions(statusFilter);
       setPrList(Array.isArray(data?.data || data) ? (data.data || data) : []);
     } catch (err) {
       console.error(err);
@@ -38,10 +43,17 @@ export function PurchaseRequestsTab({
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); }, [statusFilter]);
+  useEffect(() => { fetchData(); }, [statusFilter, refreshKey]);
+
+  const showingPurchaseOrders = statusFilter === "PENDING_APPROVAL";
+  const getSupplierName = (supplierId: string) =>
+    suppliers.find(s => (s._id || s.id) === supplierId)?.name || supplierId || "—";
 
   const filtered = prList.filter(pr =>
-    (pr.prCode || "").toLowerCase().includes(search.toLowerCase())
+    (showingPurchaseOrders
+      ? `PO-${pr._id?.slice(-6) || ""} ${getSupplierName(pr.supplierId)}`
+      : pr.prCode || ""
+    ).toLowerCase().includes(search.toLowerCase())
   );
 
   const handleSendToAdmin = async (prIds: string[]) => {
@@ -75,7 +87,7 @@ export function PurchaseRequestsTab({
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm mã PR..."
+            placeholder={showingPurchaseOrders ? "Tìm mã PO hoặc NCC..." : "Tìm mã PR..."}
             className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <button onClick={onOpenCreate}
@@ -100,11 +112,9 @@ export function PurchaseRequestsTab({
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center py-16 gap-3 text-slate-400">
             <ShoppingCart size={36} />
-            <p className="text-sm font-semibold">Không có yêu cầu mua hàng nào.</p>
-            <button onClick={onOpenCreate}
-              className="px-4 py-2 bg-violet-600 text-white text-sm font-bold rounded-xl mt-1 flex items-center gap-2">
-              <ShoppingCart size={14} /> Tạo Đơn Nhập Hàng mới
-            </button>
+            <p className="text-sm font-semibold">
+              {showingPurchaseOrders ? "Không có đơn nhập hàng nào chờ Admin duyệt." : "Không có yêu cầu mua hàng nào."}
+            </p>
           </div>
         ) : (
           <table className="w-full text-sm text-left">
@@ -117,10 +127,11 @@ export function PurchaseRequestsTab({
                       onChange={e => setSelectedPrs(e.target.checked ? filtered.map((p: any) => p._id) : [])} />
                   </th>
                 )}
-                <th className="px-4 py-3">Mã PR</th>
+                <th className="px-4 py-3">{showingPurchaseOrders ? "Mã PO" : "Mã PR"}</th>
                 <th className="px-4 py-3">Ngày tạo</th>
-                <th className="px-4 py-3">Lý do</th>
+                <th className="px-4 py-3">{showingPurchaseOrders ? "Nhà cung cấp" : "Lý do"}</th>
                 <th className="px-4 py-3 text-center">SP</th>
+                {showingPurchaseOrders && <th className="px-4 py-3 text-right">Tổng tiền</th>}
                 <th className="px-4 py-3 text-center">Trạng thái</th>
                 <th className="px-4 py-3 text-right">Hành động</th>
               </tr>
@@ -136,14 +147,25 @@ export function PurchaseRequestsTab({
                           ? prev.filter(x => x !== pr._id) : [...prev, pr._id])} />
                     </td>
                   )}
-                  <td className="px-4 py-3 font-bold text-slate-900 font-mono text-xs">{pr.prCode}</td>
+                  <td className="px-4 py-3 font-bold text-slate-900 font-mono text-xs">
+                    {showingPurchaseOrders ? `PO-${pr._id?.slice(-6).toUpperCase()}` : pr.prCode}
+                  </td>
                   <td className="px-4 py-3 text-slate-600">
                     <Calendar size={12} className="inline mr-1 text-slate-400" />
                     {new Date(pr.createdAt).toLocaleDateString("vi-VN")}
                   </td>
-                  <td className="px-4 py-3 text-slate-600 max-w-[200px] truncate">{pr.reason || "—"}</td>
+                  <td className="px-4 py-3 text-slate-600 max-w-[200px] truncate">
+                    {showingPurchaseOrders ? getSupplierName(pr.supplierId) : pr.reason || "—"}
+                  </td>
                   <td className="px-4 py-3 text-center font-bold">{pr.items?.length || 0}</td>
-                  <td className="px-4 py-3 text-center"><StatusBadge map={PR_STATUS} status={pr.status} /></td>
+                  {showingPurchaseOrders && (
+                    <td className="px-4 py-3 text-right font-black text-violet-700">
+                      {(pr.totalAmount || 0).toLocaleString("vi-VN")}đ
+                    </td>
+                  )}
+                  <td className="px-4 py-3 text-center">
+                    <StatusBadge map={showingPurchaseOrders ? PO_STATUS : PR_STATUS} status={pr.status} />
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1.5">
                       {pr.status === "DRAFT" && (
@@ -174,22 +196,28 @@ export function PurchaseRequestsTab({
               className="relative bg-white rounded-2xl shadow-2xl w-10/12 max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-violet-50 shrink-0">
                 <div>
-                  <h3 className="font-black text-slate-900 font-mono">{detailPr.prCode}</h3>
-                  <p className="text-xs mt-0.5"><StatusBadge map={PR_STATUS} status={detailPr.status} /></p>
+                  <h3 className="font-black text-slate-900 font-mono">
+                    {showingPurchaseOrders ? `PO-${detailPr._id?.slice(-6).toUpperCase()}` : detailPr.prCode}
+                  </h3>
+                  <p className="text-xs mt-0.5"><StatusBadge map={showingPurchaseOrders ? PO_STATUS : PR_STATUS} status={detailPr.status} /></p>
                 </div>
                 <button onClick={() => setDetailPr(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"><X size={18} /></button>
               </div>
               <div className="p-5 space-y-3 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-3 text-sm bg-slate-50 p-3 rounded-xl border border-slate-200">
-                  <div className="col-span-2"><span className="text-slate-500 font-bold text-xs block">Lý do</span><span className="font-semibold text-slate-800">{detailPr.reason || "—"}</span></div>
+                  <div className="col-span-2">
+                    <span className="text-slate-500 font-bold text-xs block">{showingPurchaseOrders ? "Nhà cung cấp" : "Lý do"}</span>
+                    <span className="font-semibold text-slate-800">{showingPurchaseOrders ? getSupplierName(detailPr.supplierId) : detailPr.reason || "—"}</span>
+                  </div>
                   <div><span className="text-slate-500 font-bold text-xs block">Ngày tạo</span><span className="font-semibold text-slate-800">{new Date(detailPr.createdAt).toLocaleString("vi-VN")}</span></div>
+                  {showingPurchaseOrders && <div><span className="text-slate-500 font-bold text-xs block">Tổng tiền</span><span className="font-semibold text-violet-700">{(detailPr.totalAmount || 0).toLocaleString("vi-VN")}đ</span></div>}
                 </div>
                 <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><Package size={14} className="text-violet-600" />Sản phẩm ({detailPr.items?.length || 0})</h4>
                 <div className="space-y-2">
                   {detailPr.items?.map((it: any, i: number) => (
                     <div key={i} className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
                       <span className="font-semibold text-slate-800 text-sm">{it.medicineName || it.medicineId}</span>
-                      <span className="font-bold text-violet-700 text-sm">×{it.requestedQuantity} {it.unit || "Hộp"}</span>
+                      <span className="font-bold text-violet-700 text-sm">×{showingPurchaseOrders ? it.quantity : it.requestedQuantity} {it.unit || "Hộp"}</span>
                     </div>
                   ))}
                 </div>

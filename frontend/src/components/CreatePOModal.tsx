@@ -219,26 +219,22 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
     setIsSubmitting(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/purchase-orders/auto-route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
-          prIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
-        })
+      await api.post('/api/purchase-orders/auto-route', {
+        items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
+        prIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
       });
-      const resData = await res.json();
-      if (res.ok) {
-        setSubmitSuccess(true);
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 1800);
-      } else {
-        setErrorMsg(resData?.message || resData?.error || 'Lỗi không xác định từ máy chủ');
-      }
-    } catch (e) {
-      setErrorMsg('Lỗi kết nối. Vui lòng kiểm tra máy chủ đang chạy.');
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 1800);
+    } catch (e: any) {
+      const responseData = e?.response?.data;
+      setErrorMsg(
+        responseData?.message ||
+        responseData?.error ||
+        'Lỗi kết nối. Vui lòng kiểm tra máy chủ đang chạy.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -271,10 +267,10 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
 
         {/* Body */}
         <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-          
+
           {/* Left Column: Filter Sidebar */}
           <div className="w-full md:w-64 lg:w-72 border-r border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 p-5">
-            <ShopFilterSidebar 
+            <ShopFilterSidebar
               selectedTargetGroup={selectedTargetGroup} setSelectedTargetGroup={setSelectedTargetGroup}
               selectedPriceRange={selectedPriceRange} setSelectedPriceRange={setSelectedPriceRange}
               selectedFlavour={selectedFlavour} setSelectedFlavour={setSelectedFlavour}
@@ -296,7 +292,7 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
               <input type="text" placeholder="Tìm kiếm thuốc (tên, mã)..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm" />
             </div>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-max">
               {filteredMedicines.length === 0 ? (
                 <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-400">
@@ -305,12 +301,12 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
                 </div>
               ) : (
                 filteredMedicines.map(med => (
-                  <MedicineCard 
-                    key={med.id || med._id} 
-                    med={med} 
-                    added={cart.some(i => i.id === (med.id || med._id))} 
-                    onAddToCart={(m, q, _unit) => { handleAddMedicine(m, q); }} 
-                    onClick={() => {}} 
+                  <MedicineCard
+                    key={med.id || med._id}
+                    med={med}
+                    added={cart.some(i => i.id === (med.id || med._id))}
+                    onAddToCart={(m, q, _unit) => { handleAddMedicine(m, q); }}
+                    onClick={() => { }}
                   />
                 ))
               )}
@@ -361,7 +357,7 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
                               <span className="text-[10px] font-semibold text-slate-500 block truncate" title={getSupplierName(item.supplierId)}>{getSupplierName(item.supplierId)}</span>
                             </td>
                             <td className="px-4 py-3 align-top">
-                              <input 
+                              <input
                                 type="number" value={item.unitPrice} onChange={e => updateItemPrice(item.id, parseInt(e.target.value) || 0)}
                                 className="w-full text-right text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-blue-500 hide-arrow"
                               />
@@ -420,9 +416,9 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
                   ${cart.length > 0 && !isSubmitting && !isGdpExpired ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}
                 `}
               >
-                {isSubmitting ? <><Loader2 size={18} className="animate-spin" /> Đang xử lý...</> 
-                : submitSuccess ? <><CheckCircle2 size={18} /> Thành công!</> 
-                : <><CheckCircle2 size={18} /> Tạo Đơn Nhập Hàng</>}
+                {isSubmitting ? <><Loader2 size={18} className="animate-spin" /> Đang xử lý...</>
+                  : submitSuccess ? <><CheckCircle2 size={18} /> Thành công!</>
+                    : <><CheckCircle2 size={18} /> Tạo Đơn Nhập Hàng</>}
               </button>
             </div>
           </div>
