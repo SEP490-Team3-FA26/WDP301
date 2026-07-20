@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ShoppingCart, BrainCircuit, HeartPulse, Menu, X, LogOut, ShieldAlert, User, MapPin, ClipboardList, ChevronDown } from "lucide-react";
 import api from "../services/core/api";
+import { notifyAuthTokenChanged } from "../utils/authEvents";
 
 export function CustomerLayout() {
   const location = useLocation();
@@ -27,6 +28,7 @@ export function CustomerLayout() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userRole");
+    notifyAuthTokenChanged();
     navigate("/auth/login");
   };
 

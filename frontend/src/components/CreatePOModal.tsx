@@ -68,9 +68,8 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
 
   const fetchMedicineById = async (id: string) => {
     try {
-      const res = await fetch(`/api/medicines/${id}`);
-      if (!res.ok) return null;
-      return await res.json();
+      const res = await api.get(`/api/medicines/${id}`);
+      return res.data;
     } catch { return null; }
   };
 
@@ -219,26 +218,17 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
     setIsSubmitting(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/purchase-orders/auto-route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
-          prIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
-        })
+      await api.post('/api/purchase-orders/auto-route', {
+        items: cart.map(i => ({ medicineId: i.id, quantity: i.quantity, unitPrice: i.unitPrice })),
+        prIds: [...new Set(cart.flatMap(i => i.prIds || []))].filter(Boolean)
       });
-      const resData = await res.json();
-      if (res.ok) {
-        setSubmitSuccess(true);
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 1800);
-      } else {
-        setErrorMsg(resData?.message || resData?.error || 'Lỗi không xác định từ máy chủ');
-      }
-    } catch (e) {
-      setErrorMsg('Lỗi kết nối. Vui lòng kiểm tra máy chủ đang chạy.');
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 1800);
+    } catch (e: any) {
+      setErrorMsg(e.response?.data?.message || e.response?.data?.error || 'Lỗi kết nối. Vui lòng kiểm tra máy chủ đang chạy.');
     } finally {
       setIsSubmitting(false);
     }

@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Mail, Lock, Building2, PackageSearch, Store, Pill, ShieldCheck, CheckCircle2, Users } from "lucide-react";
 import { authService } from "../../services/auth/auth.service";
 import { requestNotificationPermission } from "../../utils/notificationPermission";
+import { notifyAuthTokenChanged } from "../../utils/authEvents";
 
 export function Login() {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ export function Login() {
     if (token) {
       localStorage.setItem("token", token);
       localStorage.setItem("userRole", "user"); // Mặc định role user từ google login
+      notifyAuthTokenChanged();
       navigate('/customer');
     }
 
@@ -73,6 +75,7 @@ export function Login() {
       // Lưu JWT Token và Role
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("userRole", data.user.role);
+      notifyAuthTokenChanged();
 
       // Request notification permission (don't block login)
       requestNotificationPermission().catch(err => {
