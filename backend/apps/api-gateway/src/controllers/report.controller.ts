@@ -20,7 +20,7 @@ export class ReportController implements OnModuleInit {
     private readonly storage: S3StorageService,
     private readonly reportService: ReportService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
