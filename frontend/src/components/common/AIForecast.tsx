@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import api from "../../services/core/api";
 import { 
   Sparkles, 
@@ -15,10 +15,13 @@ import {
   Calendar,
   Layers,
   ArrowDownToLine,
-  Search
+  Search,
+  Filter,
+  RotateCcw
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
+import { Pagination } from "../Pagination";
 
 interface ForecastItem {
   medicineId: string;
@@ -26,6 +29,7 @@ interface ForecastItem {
   category: string;
   unit: string;
   currentStock: number;
+  totalSold?: number;
   averageDailySales: number;
   expectedIncoming: number;
   suggestedOrderQty: number;
@@ -45,7 +49,15 @@ export function AIForecast() {
   const [error, setError] = useState<string | null>(null);
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  // Filtering & Search states
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUrgency, setSelectedUrgency] = useState<string>("ALL");
+  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(15);
 
   const fetchForecast = async (pDays: number) => {
     setLoading(true);
@@ -55,7 +67,6 @@ export function AIForecast() {
       const res = await api.get(`/api/reports/ai-forecast?periodDays=${pDays}`);
       const data = res.data;
       
-      // Đảm bảo dữ liệu đúng định dạng
       if (data && data.recommendations) {
         setForecast(data);
       } else if (data && data.data && data.data.recommendations) {
@@ -74,16 +85,66 @@ export function AIForecast() {
     fetchForecast(period);
   }, [period]);
 
-  const handleSelectAll = (filteredItems: ForecastItem[]) => {
-    const allFilteredIds = filteredItems.map(item => item.medicineId);
-    const allSelected = allFilteredIds.every(id => selectedIds.includes(id));
+  // Extract unique categories dynamically for filter dropdown
+  const availableCategories = useMemo(() => {
+    if (!forecast?.recommendations) return [];
+    const set = new Set<string>();
+    forecast.recommendations.forEach(item => {
+      if (item.category) set.add(item.category.trim());
+    });
+    return Array.from(set).sort();
+  }, [forecast]);
+
+  // Filter recommendations based on Search + Urgency + Category
+  const filteredRecommendations = useMemo(() => {
+    if (!forecast?.recommendations) return [];
+    return forecast.recommendations.filter(item => {
+      // Search text match
+      const matchesSearch = 
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.medicineId.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // Urgency match
+      const matchesUrgency = selectedUrgency === "ALL" || item.urgency === selectedUrgency;
+
+      // Category match
+      const matchesCategory = selectedCategory === "ALL" || item.category.trim() === selectedCategory.trim();
+
+      return matchesSearch && matchesUrgency && matchesCategory;
+    });
+  }, [forecast, searchQuery, selectedUrgency, selectedCategory]);
+
+  // Reset page to 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedUrgency, selectedCategory, itemsPerPage]);
+
+  // Calculate paginated items
+  const totalItems = filteredRecommendations.length;
+  const isShowAll = itemsPerPage === -1;
+  const totalPages = isShowAll ? 1 : Math.ceil(totalItems / itemsPerPage) || 1;
+
+  const paginatedRecommendations = useMemo(() => {
+    if (isShowAll) return filteredRecommendations;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredRecommendations.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredRecommendations, currentPage, itemsPerPage, isShowAll]);
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setSelectedUrgency("ALL");
+    setSelectedCategory("ALL");
+    setCurrentPage(1);
+  };
+
+  const handleSelectAll = (itemsToSelect: ForecastItem[]) => {
+    const itemIds = itemsToSelect.map(item => item.medicineId);
+    const allSelected = itemIds.every(id => selectedIds.includes(id));
     if (allSelected) {
-      setSelectedIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
+      setSelectedIds(prev => prev.filter(id => !itemIds.includes(id)));
     } else {
-      setSelectedIds(prev => {
-        const union = new Set([...prev, ...allFilteredIds]);
-        return Array.from(union);
-      });
+      setSelectedIds(prev => Array.from(new Set([...prev, ...itemIds])));
     }
   };
 
@@ -113,8 +174,6 @@ export function AIForecast() {
     }));
 
     const prefillStr = encodeURIComponent(JSON.stringify(prefillData));
-    
-    // Điều hướng sang Warehouse Hub, tự động mở modal tạo PO
     navigate(`/warehouse/inventory/import?tab=purchase_requests&openCreatePO=true&prefill=${prefillStr}`);
   };
 
@@ -139,11 +198,6 @@ export function AIForecast() {
       default: return urgency;
     }
   };
-
-  const filteredRecommendations = forecast?.recommendations.filter(item =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.category.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
 
   return (
     <div className="flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-y-auto">
@@ -221,7 +275,7 @@ export function AIForecast() {
               <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shrink-0 text-yellow-300">
                 <Sparkles size={20} className="animate-pulse" />
               </div>
-              <div>
+              <div className="flex-1">
                 <h3 className="font-black text-base flex items-center gap-1.5">
                   Đánh giá toàn cảnh từ AI (AI Insights)
                 </h3>
@@ -229,34 +283,113 @@ export function AIForecast() {
                   {forecast.summary}
                 </p>
               </div>
+              <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/20 text-xs font-bold shrink-0">
+                Tổng số dược phẩm: <span className="text-yellow-300 font-black">{forecast.recommendations.length.toLocaleString('vi-VN')}</span>
+              </div>
             </div>
 
             {/* Table Panel */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-              {/* Toolbar */}
-              <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-slate-50/50">
-                <div className="relative w-full sm:max-w-xs">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                    <Search size={16} />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Tìm tên thuốc hoặc danh mục..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-purple-500 shadow-sm"
-                  />
+              {/* Filter Toolbar */}
+              <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+                  {/* Search input */}
+                  <div className="relative w-full md:w-72">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                      <Search size={16} />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Tìm tên thuốc, mã hoặc danh mục..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-purple-500 shadow-sm"
+                    />
+                  </div>
+
+                  {/* Filters & Actions */}
+                  <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    {/* Urgency Filter */}
+                    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
+                      <Filter size={14} className="text-slate-400" />
+                      <select
+                        value={selectedUrgency}
+                        onChange={(e) => setSelectedUrgency(e.target.value)}
+                        className="text-xs font-bold text-slate-700 bg-transparent border-none outline-none cursor-pointer"
+                      >
+                        <option value="ALL">Tất cả mức độ</option>
+                        <option value="HIGH">🔴 Khẩn cấp</option>
+                        <option value="MEDIUM">🟡 Cần nhập</option>
+                        <option value="LOW">🔵 Bình thường</option>
+                      </select>
+                    </div>
+
+                    {/* Category Filter */}
+                    {availableCategories.length > 0 && (
+                      <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm max-w-[200px]">
+                        <select
+                          value={selectedCategory}
+                          onChange={(e) => setSelectedCategory(e.target.value)}
+                          className="text-xs font-bold text-slate-700 bg-transparent border-none outline-none cursor-pointer truncate w-full"
+                        >
+                          <option value="ALL">Tất cả danh mục ({availableCategories.length})</option>
+                          {availableCategories.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Items per page */}
+                    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
+                      <span className="text-[11px] font-bold text-slate-500">Hiển thị:</span>
+                      <select
+                        value={itemsPerPage}
+                        onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                        className="text-xs font-bold text-slate-700 bg-transparent border-none outline-none cursor-pointer"
+                      >
+                        <option value={15}>15 / trang</option>
+                        <option value={30}>30 / trang</option>
+                        <option value={50}>50 / trang</option>
+                        <option value={100}>100 / trang</option>
+                        <option value={-1}>Tất cả ({totalItems})</option>
+                      </select>
+                    </div>
+
+                    {(searchQuery || selectedUrgency !== "ALL" || selectedCategory !== "ALL") && (
+                      <button
+                        onClick={handleResetFilters}
+                        className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors border border-slate-200"
+                        title="Xóa bộ lọc"
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    )}
+
+                    {selectedIds.length > 0 && (
+                      <button
+                        onClick={handleCreatePR}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-95 ml-auto"
+                      >
+                        <ShoppingCart size={15} />
+                        Tạo Đơn Nhập Hàng Tự Động ({selectedIds.length})
+                      </button>
+                    )}
+                  </div>
                 </div>
-                
-                {selectedIds.length > 0 && (
-                  <button
-                    onClick={handleCreatePR}
-                    className="w-full sm:w-auto px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
-                  >
-                    <ShoppingCart size={15} />
-                    Tạo Đơn Nhập Hàng Tự Động ({selectedIds.length})
-                  </button>
-                )}
+
+                {/* Active filter counters bar */}
+                <div className="flex items-center justify-between text-xs text-slate-500 font-medium pt-1">
+                  <div>
+                    Hiển thị <span className="font-bold text-slate-900">{totalItems.toLocaleString('vi-VN')}</span> kết quả 
+                    {(searchQuery || selectedUrgency !== "ALL" || selectedCategory !== "ALL") && " (Đã lọc)"}
+                  </div>
+                  {selectedIds.length > 0 && (
+                    <div className="text-purple-600 font-bold">
+                      Đã chọn {selectedIds.length} dược phẩm
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Table */}
@@ -267,9 +400,9 @@ export function AIForecast() {
                       <th className="px-5 py-4 w-10 text-center">
                         <input
                           type="checkbox"
-                          checked={filteredRecommendations.length > 0 && filteredRecommendations.every(x => selectedIds.includes(x.medicineId))}
-                          onChange={() => handleSelectAll(filteredRecommendations)}
-                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                          checked={paginatedRecommendations.length > 0 && paginatedRecommendations.every(x => selectedIds.includes(x.medicineId))}
+                          onChange={() => handleSelectAll(paginatedRecommendations)}
+                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                         />
                       </th>
                       <th className="px-5 py-4">Tên dược phẩm</th>
@@ -283,14 +416,14 @@ export function AIForecast() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredRecommendations.length === 0 ? (
+                    {paginatedRecommendations.length === 0 ? (
                       <tr>
                         <td colSpan={9} className="text-center py-12 text-slate-400 font-semibold">
-                          Không tìm thấy đề xuất dự báo phù hợp.
+                          Không tìm thấy đề xuất dự báo phù hợp với bộ lọc.
                         </td>
                       </tr>
                     ) : (
-                      filteredRecommendations.map((item) => {
+                      paginatedRecommendations.map((item) => {
                         const isSelected = selectedIds.includes(item.medicineId);
                         const isLowStock = item.currentStock <= 10;
                         return (
@@ -305,7 +438,7 @@ export function AIForecast() {
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => handleSelectItem(item.medicineId)}
-                                className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                                className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                               />
                             </td>
                             <td className="px-5 py-4">
@@ -320,7 +453,7 @@ export function AIForecast() {
                               </span>
                             </td>
                             <td className="px-5 py-4 text-center font-medium text-slate-700">
-                              {(item.averageDailySales * period).toFixed(0)} {item.unit}
+                              {(item.totalSold !== undefined && item.totalSold > 0 ? item.totalSold : Math.round(item.averageDailySales * period)).toLocaleString('vi-VN')} {item.unit}
                             </td>
                             <td className="px-5 py-4 text-center font-semibold text-slate-700">
                               {item.averageDailySales} /ngày
@@ -331,7 +464,11 @@ export function AIForecast() {
                               </span>
                             </td>
                             <td className="px-5 py-4 text-center bg-purple-50/30 border-x border-purple-100 font-black text-purple-700">
-                              {item.suggestedOrderQty > 0 ? `${item.suggestedOrderQty.toLocaleString('vi-VN')} ${item.unit}` : "Đủ hàng"}
+                              {item.suggestedOrderQty > 0 
+                                ? `${item.suggestedOrderQty.toLocaleString('vi-VN')} ${item.unit}` 
+                                : item.expectedIncoming > 0 
+                                  ? "Đang chờ hàng về" 
+                                  : "Đủ hàng"}
                             </td>
                             <td className="px-5 py-4 text-center">
                               <span className={`inline-block text-[9px] font-black border uppercase tracking-wider px-2 py-0.5 rounded-full ${getUrgencyBadge(item.urgency)}`}>
@@ -348,6 +485,18 @@ export function AIForecast() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination Footer */}
+              {!isShowAll && totalPages > 1 && (
+                <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+                  <Pagination
+                    currentPage={currentPage}
+                    setCurrentPage={setCurrentPage}
+                    totalPages={totalPages}
+                    totalItems={totalItems}
+                  />
+                </div>
+              )}
             </div>
           </motion.div>
         ) : null}
@@ -355,3 +504,4 @@ export function AIForecast() {
     </div>
   );
 }
+

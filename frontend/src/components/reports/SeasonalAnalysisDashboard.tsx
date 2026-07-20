@@ -22,6 +22,8 @@ import { useNavigate } from "react-router-dom";
 
 export function SeasonalAnalysisDashboard() {
   const [selectedBranch, setSelectedBranch] = useState("all");
+  const [selectedYear, setSelectedYear] = useState("2026");
+  const [selectedMonth, setSelectedMonth] = useState("all");
   const [branchesList, setBranchesList] = useState<any[]>([]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -59,7 +61,7 @@ export function SeasonalAnalysisDashboard() {
 
   useEffect(() => {
     fetchAnalysis();
-  }, [selectedBranch]);
+  }, [selectedBranch, selectedYear, selectedMonth]);
 
   const fetchBranches = async () => {
     try {
@@ -76,7 +78,7 @@ export function SeasonalAnalysisDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await reportService.getSeasonalAnalysis(selectedBranch);
+      const res = await reportService.getSeasonalAnalysis(selectedBranch, selectedYear, selectedMonth);
       if (res && res.success) {
         setData(res.data);
       } else {
@@ -229,12 +231,40 @@ export function SeasonalAnalysisDashboard() {
           )}
         </div>
         
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+          {/* Year Filter */}
+          <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1">
+            <Calendar size={14} className="text-slate-400" />
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none"
+            >
+              <option value="2026">Năm 2026</option>
+              <option value="2025">Năm 2025</option>
+              <option value="2024">Năm 2024</option>
+            </select>
+          </div>
+
+          {/* Month Filter */}
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="px-3 py-1.5 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="all">Tất cả các tháng</option>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i + 1} value={(i + 1).toString().padStart(2, '0')}>
+                Tháng {i + 1}
+              </option>
+            ))}
+          </select>
+
           {isAdmin && (
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              className="px-3.5 py-2 border border-slate-200 bg-white rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="px-3 py-1.5 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="all">Tất cả chi nhánh</option>
               {branchesList.map(b => (
