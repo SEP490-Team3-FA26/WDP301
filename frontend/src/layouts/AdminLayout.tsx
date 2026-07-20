@@ -16,6 +16,7 @@ export function AdminLayout() {
         { name: "Nhập / Xuất kho", href: "/admin/inventory/import" },
         { name: "Biên bản kiểm kê", href: "/admin/inventory/checks" },
         { name: "Lịch sử hủy thuốc", href: "/admin/inventory/dispose" },
+        { name: "Truy xuất Lô & IoT Tracking", href: "/admin/inventory/lot-tracking" },
       ]
     },
     {

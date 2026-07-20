@@ -2288,7 +2288,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2322,8 +2322,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: Colors.emerald.shade50, borderRadius: BorderRadius.circular(8)),
-              child: const Text('Nguồn gốc nhập hàng', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.emerald)),
+              decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
+              child: const Text('Nguồn gốc nhập hàng', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green)),
             ),
             const SizedBox(height: 12),
             _buildDetailRow('Nhà cung cấp', origin['supplierName'] ?? 'Không rõ'),
@@ -2354,7 +2354,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         String title = item['type'];
         if (item['type'] == 'GRN_IMPORT') {
           icon = Icons.add_circle;
-          color = Colors.emerald;
+          color = Colors.green;
           title = 'Nhập kho hàng loạt';
         } else if (item['type'] == 'SALE_EXPORT') {
           icon = Icons.shopping_basket;
@@ -2389,7 +2389,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.between,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         Text(
@@ -2399,10 +2399,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(item['notes'] ?? '', style: TextStyle(color: Colors.grey.shade650, fontSize: 11)),
+                    Text(item['notes'] ?? '', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
                     const SizedBox(height: 8),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.between,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Tồn: ${item['stockBefore']} -> ${item['stockAfter']}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
                         Text('Bởi: ${item['performedBy']}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
@@ -2536,7 +2536,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
                       child: Text(r['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B))),
@@ -2555,7 +2555,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                 Text(r['category'] ?? '', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
                 const Divider(height: 20),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildMiniStat('Tồn kho', '${r['currentStock']}'),
                     _buildMiniStat('Bán/ngày', '${r['averageDailySales']}'),
@@ -2625,5 +2625,4 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
       ],
     );
   }
-}
 }

@@ -1,6 +1,9 @@
 import 'dart:async';
-import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 
 class CustomerScreen extends StatefulWidget {
@@ -31,13 +34,16 @@ class _CustomerScreenState extends State<CustomerScreen>
   bool _checkingInteractions = false;
   Map<String, dynamic>? _interactionResult;
 
-  // Voice Consultant state & animations
-  bool _recording = false;
+  // Voice / AI Consultant state & animations
+  final _audioRecorder = AudioRecorder();
+  bool _recording = false; // simulated "recording" animation state
   int _timerSeconds = 0;
   Timer? _recordingTimer;
   bool _aiLoading = false;
   Map<String, dynamic>? _aiRecommendationResult;
   late AnimationController _waveAnimationController;
+  final _symptomsController = TextEditingController(); // text input for symptoms
+  bool _showSymptomsInput = false;
 
   // Checkout Form State
   final _fullnameController = TextEditingController();
@@ -69,6 +75,7 @@ class _CustomerScreenState extends State<CustomerScreen>
 
   @override
   void dispose() {
+    _audioRecorder.dispose();
     _tabController.dispose();
     _scrollController.dispose();
     _debounceTimer?.cancel();
@@ -76,6 +83,7 @@ class _CustomerScreenState extends State<CustomerScreen>
     _fullnameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _symptomsController.dispose();
     _waveAnimationController.dispose();
     super.dispose();
   }
@@ -627,20 +635,43 @@ class _CustomerScreenState extends State<CustomerScreen>
     });
   }
 
-  // AI voice consultant recorder simulator
-  void _startVoiceRecording() {
-    setState(() {
-      _recording = true;
-      _timerSeconds = 0;
-      _aiRecommendationResult = null;
-    });
-    _waveAnimationController.repeat();
+  Future<void> _startVoiceRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        setState(() {
+          _recording = true;
+          _timerSeconds = 0;
+          _aiRecommendationResult = null;
+          _showSymptomsInput = false;
+        });
+        _waveAnimationController.repeat();
+        _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          setState(() => _timerSeconds++);
+        });
+        
+        String recordPath = '';
+        if (!kIsWeb) {
+          final tempDir = await getTemporaryDirectory();
+          recordPath = '${tempDir.path}/consult_voice_${DateTime.now().millisecondsSinceEpoch}.wav';
+        }
 
-    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        await _audioRecorder.start(
+          const RecordConfig(encoder: AudioEncoder.wav),
+          path: recordPath,
+        );
+      } else {
+        _showToast('Không có quyền sử dụng Microphone!', Colors.orange);
+        setState(() {
+          _showSymptomsInput = true;
+        });
+      }
+    } catch (e) {
+      debugPrint("Lỗi bắt đầu ghi âm: $e");
+      _showToast('Không hỗ trợ ghi âm trực tiếp. Đang chuyển sang nhập văn bản.', Colors.orange);
       setState(() {
-        _timerSeconds++;
+        _showSymptomsInput = true;
       });
-    });
+    }
   }
 
   Future<void> _stopVoiceRecording() async {
@@ -651,41 +682,94 @@ class _CustomerScreenState extends State<CustomerScreen>
       _aiLoading = true;
     });
 
-    // Simulate API upload & Groq Whisper + LLM processing
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final path = await _audioRecorder.stop();
+      if (path != null) {
+        final apiResult = await ApiService.getVoicePrescription(path);
+        _handleAIResult(apiResult, 'Yêu cầu tư vấn bằng giọng nói');
+      } else {
+        throw Exception("Ghi âm trống");
+      }
+    } catch (e) {
+      debugPrint("Lỗi ghi âm: $e");
+      _showToast('Lỗi nhận diện giọng nói. Hãy mô tả triệu chứng bằng văn bản.', Colors.orange);
+      setState(() {
+        _aiLoading = false;
+        _showSymptomsInput = true;
+      });
+    }
+  }
 
+  void _handleAIResult(Map<String, dynamic>? apiResult, String defaultTranscript) {
     setState(() {
       _aiLoading = false;
-      _aiRecommendationResult = {
-        'transcript':
-            'Tôi bị sốt nóng lạnh, nhức đầu kèm nghẹt mũi chảy nước mắt suốt đêm qua, cần mua thuốc điều trị nhanh.',
-        'symptoms':
-            'Sốt cao nhẹ, nhức đầu vùng trán, nghẹt mũi do cảm cúm thời tiết.',
-        'warnings':
-            'Tránh uống Panadol Extra nếu bị dị ứng caffeine. Uống nhiều nước ấm.',
-        'drugs': [
-          {
-            'name': 'Panadol Extra',
-            'dosage': 'Uống 1 viên sau ăn, ngày 2-3 lần khi đau sốt.',
-            'qty': 1,
-            'isAvailable': true,
-          },
-          {
-            'name': 'Decolgen Forte',
-            'dosage': 'Uống 1 viên sau ăn, ngày 2 lần để giảm nghẹt mũi.',
-            'qty': 1,
-            'isAvailable': true,
-          },
-          {
-            'name': 'Strepsils Cool',
-            'dosage':
-                'Ngậm trực tiếp 1 viên, cách nhau 2-3 tiếng để dịu cổ họng.',
-            'qty': 1,
-            'isAvailable': true,
-          },
-        ],
-      };
+      _showSymptomsInput = false;
+      if (apiResult != null && apiResult['success'] == true) {
+        final prescription = apiResult['prescription'] as Map<String, dynamic>? ?? apiResult;
+        final recommended = (prescription['recommended_drugs'] as List?) ??
+            (apiResult['drugs'] as List?) ?? [];
+        final transcript = apiResult['transcribed_text']?.toString() ?? defaultTranscript;
+
+        _aiRecommendationResult = {
+          'transcript': transcript,
+          'symptoms': prescription['patient_symptoms'] ??
+              apiResult['patient_symptoms'] ?? transcript,
+          'warnings': prescription['warnings'] ??
+              apiResult['warnings'] ?? 'Không phát hiện chống chỉ định.',
+          'drugs': recommended.map((drug) {
+            final drugName = drug['name']?.toString() ?? 'N/A';
+            final match = _medicines.firstWhere(
+              (m) =>
+                  m['name'].toString().toLowerCase().contains(drugName.toLowerCase()) ||
+                  drugName.toLowerCase().contains(m['name'].toString().toLowerCase()),
+              orElse: () => {},
+            );
+            return {
+              'name': drugName,
+              'dosage': '${drug['dosage'] ?? ''} - ${drug['usage'] ?? ''}',
+              'qty': 1,
+              'isAvailable': match.isNotEmpty,
+            };
+          }).toList(),
+        };
+      } else {
+        // Offline fallback
+        _aiRecommendationResult = {
+          'transcript': defaultTranscript,
+          'symptoms': 'Sốt cao nhẹ, nhức đầu vùng trán, nghẹt mũi do cảm cúm. (Chế độ offline)',
+          'warnings': 'Tránh uống Panadol Extra nếu bị dị ứng caffeine. Uống nhiều nước ấm.',
+          'drugs': [
+            {
+              'name': 'Panadol Extra',
+              'dosage': 'Uống 1 viên sau ăn, ngày 2-3 lần khi đau sốt.',
+              'qty': 1,
+              'isAvailable': _medicines.any((m) =>
+                  m['name'].toString().toLowerCase().contains('panadol')),
+            },
+            {
+              'name': 'Decolgen Forte',
+              'dosage': 'Uống 1 viên sau ăn, ngày 2 lần để giảm nghẹt mũi.',
+              'qty': 1,
+              'isAvailable': _medicines.any((m) =>
+                  m['name'].toString().toLowerCase().contains('decolgen')),
+            },
+            {
+              'name': 'Strepsils Cool',
+              'dosage': 'Ngậm trực tiếp 1 viên, cách nhau 2-3 tiếng để dịu cổ họng.',
+              'qty': 1,
+              'isAvailable': _medicines.any((m) =>
+                  m['name'].toString().toLowerCase().contains('strepsils')),
+            },
+          ],
+        };
+      }
     });
+  }
+
+  Future<void> _callAIConsultAPI(String symptoms) async {
+    setState(() => _aiLoading = true);
+    final apiResult = await ApiService.getTextPrescription(symptoms);
+    _handleAIResult(apiResult, symptoms);
   }
 
   void _addAllAiMedsToCart() {
@@ -693,7 +777,9 @@ class _CustomerScreenState extends State<CustomerScreen>
     int count = 0;
     for (var drug in _aiRecommendationResult!['drugs']) {
       final match = _medicines.firstWhere(
-        (m) => m['name'].toLowerCase() == drug['name'].toLowerCase(),
+        (m) =>
+            m['name'].toString().toLowerCase().contains(drug['name'].toString().toLowerCase()) ||
+            drug['name'].toString().toLowerCase().contains(m['name'].toString().toLowerCase()),
         orElse: () => {},
       );
       if (match.isNotEmpty) {
@@ -704,6 +790,20 @@ class _CustomerScreenState extends State<CustomerScreen>
     if (count > 0) {
       _showToast('Đã thêm $count sản phẩm đề xuất vào giỏ hàng!', Colors.green);
       _tabController.animateTo(1); // Swipe to Cart tab
+    }
+  }
+
+  Future<void> _launchPaymentUrl(String urlString) async {
+    try {
+      final url = Uri.parse(urlString);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(url);
+      }
+    } catch (e) {
+      debugPrint("Could not launch payment URL: $e");
+      _showToast('Không thể tự động mở trang thanh toán.', Colors.orange);
     }
   }
 
@@ -720,42 +820,201 @@ class _CustomerScreenState extends State<CustomerScreen>
       'phone': _phoneController.text,
       'address': _addressController.text,
       'paymentMethod': _paymentMethod,
-      'items': _cart.map((item) => {
-        'medicineId': item['id'],
-        'name': item['name'],
-        'price': item['price'],
-        'quantity': item['qty']
-      }).toList(),
+      'items': _cart
+          .map((item) => {
+                'medicineId': item['id'],
+                'name': item['name'],
+                'price': item['price'],
+                'quantity': item['qty'],
+              })
+          .toList(),
       'totalAmount': _totalAmount,
-      'type': 'ONLINE_ORDER'
+      'type': 'ONLINE_ORDER',
     };
 
-    await ApiService.createOrder(orderData);
+    // Show loading overlay
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          color: Colors.white,
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF0D47A1)),
+                SizedBox(height: 12),
+                Text('Đang xử lý đơn hàng...', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
 
+    // ── ONLINE PAYMENT (QR / CARD) → gọi PayOS API ──
+    if (_paymentMethod == 'CARD' || _paymentMethod == 'QR') {
+      final payosResult = await ApiService.createPayOSLink(orderData);
+      if (!mounted) return;
+      Navigator.pop(context); // dismiss loading
+
+      if (payosResult != null) {
+        final payUrl = payosResult['checkoutUrl'] ??
+            payosResult['paymentUrl'] ??
+            payosResult['url'] ??
+            '';
+        final orderId = payosResult['orderId'] ??
+            payosResult['orderCode'] ??
+            payosResult['id'] ??
+            'ORD-${DateTime.now().millisecondsSinceEpoch}';
+
+        // Auto-launch URL
+        if (payUrl.isNotEmpty) {
+          _launchPaymentUrl(payUrl);
+        }
+
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Row(
+              children: [
+                Icon(Icons.qr_code_scanner, color: Colors.blue.shade700, size: 28),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Thanh Toán Trực Tuyến',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.blue.shade100),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.payment, size: 48, color: Colors.blue.shade700),
+                      const SizedBox(height: 8),
+                      Text('Đơn hàng #$orderId',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(height: 4),
+                      Text('$_totalAmount ₫',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.blue.shade800)),
+                    ],
+                  ),
+                ),
+                if (payUrl.isNotEmpty) ...[  
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => _launchPaymentUrl(payUrl),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade700,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(45),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text(
+                      'Mở Trang Thanh Toán PayOS',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Hoặc sao chép đường dẫn bên dưới nếu trình duyệt không tự mở:',
+                    style: TextStyle(fontSize: 9, color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: SelectableText(
+                      payUrl,
+                      style: const TextStyle(fontSize: 9, color: Colors.blue),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    _cart.clear();
+                    _fullnameController.clear();
+                    _phoneController.clear();
+                    _addressController.clear();
+                  });
+                  _tabController.animateTo(0);
+                },
+                child: const Text('Đã thanh toán xong',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      } else {
+        // PayOS failed, fall back to CASH order
+        _showToast('Cổng thanh toán không phản hồi. Đang tạo đơn COD...', Colors.orange);
+        final result = await ApiService.createOrder({...orderData, 'paymentMethod': 'CASH'});
+        if (!mounted) return;
+        if (result != null) _showOrderSuccessDialog(result);
+      }
+      return;
+    }
+
+    // ── CASH (COD) ──
+    final result = await ApiService.createOrder(orderData);
     if (!mounted) return;
+    Navigator.pop(context); // dismiss loading
+    if (result != null) {
+      _showOrderSuccessDialog(result);
+    } else {
+      _showToast('Không thể kết nối đến máy chủ để tạo đơn hàng.', Colors.red);
+    }
+  }
 
+  void _showOrderSuccessDialog(Map<String, dynamic> result) {
+    final orderId = result['orderId'] ?? result['id'] ?? result['orderCode'] ??
+        'ORD-${DateTime.now().millisecondsSinceEpoch}';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.check_circle, color: Colors.green),
-            SizedBox(width: 8),
-            Text(
-              'Đặt hàng thành công!',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Icon(Icons.check_circle, color: Colors.green.shade700),
+            const SizedBox(width: 8),
+            const Text('Đặt hàng thành công!',
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Hóa đơn đặt hàng đã được ghi nhận trên hệ thống:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
+            Text('Đơn hàng #$orderId đã ghi nhận:',
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
@@ -768,42 +1027,26 @@ class _CustomerScreenState extends State<CustomerScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text('Khách nhận: ${_fullnameController.text}',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text('SĐT: ${_phoneController.text}',
+                      style: const TextStyle(fontSize: 11)),
+                  Text('Địa chỉ: ${_addressController.text}',
+                      style: const TextStyle(fontSize: 11)),
                   Text(
-                    'Khách nhận: ${_fullnameController.text}',
+                    'Thanh toán: ${_paymentMethod == 'CASH' ? 'Tiền mặt (COD)' : _paymentMethod == 'CARD' ? 'Thẻ tín dụng' : 'VNPay/QR'}',
                     style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'SĐT: ${_phoneController.text}',
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                  Text(
-                    'Địa chỉ: ${_addressController.text}',
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                  Text(
-                    'Thanh toán: ${_paymentMethod == "CASH"
-                        ? "Tiền mặt (COD)"
-                        : _paymentMethod == "CARD"
-                        ? "Thẻ tín dụng"
-                        : "VNPay/QR"}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue),
                   ),
                   const Divider(),
-                  Text(
-                    'Tổng cộng: ${_totalAmount.toString()} ₫',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.red,
-                    ),
-                  ),
+                  Text('Tổng cộng: $_totalAmount ₫',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.red)),
                 ],
               ),
             ),
@@ -819,17 +1062,16 @@ class _CustomerScreenState extends State<CustomerScreen>
                 _phoneController.clear();
                 _addressController.clear();
               });
-              _tabController.animateTo(0); // Return to Shop
+              _tabController.animateTo(0);
             },
-            child: const Text(
-              'Đóng & Về Cửa Hàng',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            child: const Text('Đóng & Về Cửa Hàng',
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -1536,7 +1778,7 @@ class _CustomerScreenState extends State<CustomerScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Informational header
+            // Header info card
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -1544,26 +1786,28 @@ class _CustomerScreenState extends State<CustomerScreen>
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: Colors.deepPurple.shade100),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.auto_awesome, color: Colors.deepPurple, size: 30),
-                  SizedBox(width: 12),
+                  const Icon(Icons.auto_awesome, color: Colors.deepPurple, size: 30),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Trợ Lý Chẩn Đoán Triệu Chúng AI',
+                        const Text(
+                          'Trợ Lý Tư Vấn Thuốc AI',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                             color: Colors.deepPurple,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          'Hãy nhấn nút và mô tả các triệu chứng của bạn, AI sẽ tự động phân tích và đề xuất thuốc phù hợp nhất.',
-                          style: TextStyle(
+                          kIsWeb
+                              ? 'Mô tả triệu chứng bằng văn bản, AI sẽ tự phân tích và đề xuất thuốc.'
+                              : 'Nhấn nút mic, nói triệu chứng, AI sẽ phân tích và đề xuất thuốc phù hợp.',
+                          style: const TextStyle(
                             fontSize: 10,
                             color: Colors.black54,
                             height: 1.3,
@@ -1577,82 +1821,170 @@ class _CustomerScreenState extends State<CustomerScreen>
             ),
             const SizedBox(height: 24),
 
-            // Animated Microphone Recorder Widget
-            Center(
-              child: AnimatedBuilder(
-                animation: _waveAnimationController,
-                builder: (context, child) {
-                  return CustomPaint(
-                    painter: _recording
-                        ? WaveformCirclePainter(_waveAnimationController.value)
-                        : null,
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      child: GestureDetector(
-                        onTap: _recording
-                            ? _stopVoiceRecording
-                            : _startVoiceRecording,
-                        child: Container(
-                          width: 110,
-                          height: 110,
-                          decoration: BoxDecoration(
-                            color: _recording
-                                ? Colors.red.shade600
-                                : Colors.deepPurple,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color:
-                                    (_recording
-                                            ? Colors.red
-                                            : Colors.deepPurple)
-                                        .withValues(alpha: 0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            _recording ? Icons.stop : Icons.mic,
-                            size: 48,
-                            color: Colors.white,
+            // Adaptive UI: text input or mic button
+            if (_showSymptomsInput) ...[
+              // Text input for symptoms
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.deepPurple.shade200),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.deepPurple.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _symptomsController,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText: 'Mô tả triệu chứng của bạn...\nVí dụ: Tôi bị sốt, nhức đầu, nghẹt mũi từ tối qua.',
+                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.only(left: 12, top: 12),
+                      child: Icon(Icons.edit_note, color: Colors.deepPurple),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _aiLoading
+                    ? null
+                    : () {
+                        if (_symptomsController.text.trim().isEmpty) {
+                          _showToast('Vui lòng mô tả triệu chứng!', Colors.orange);
+                          return;
+                        }
+                        _callAIConsultAPI(_symptomsController.text.trim());
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: _aiLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.auto_awesome),
+                label: Text(
+                  _aiLoading ? 'AI đang phân tích...' : 'Phân Tích Triệu Chứng với AI',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              if (!_aiLoading) ...[
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _showSymptomsInput = false),
+                    icon: const Icon(Icons.mic, color: Colors.deepPurple),
+                    label: const Text(
+                      'Chuyển sang tư vấn bằng giọng nói AI',
+                      style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ] else ...[
+              // Animated Microphone button
+              Center(
+                child: AnimatedBuilder(
+                  animation: _waveAnimationController,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      painter: _recording
+                          ? WaveformCirclePainter(_waveAnimationController.value)
+                          : null,
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        child: GestureDetector(
+                          onTap: _recording ? _stopVoiceRecording : _startVoiceRecording,
+                          child: Container(
+                            width: 110,
+                            height: 110,
+                            decoration: BoxDecoration(
+                              color: _recording ? Colors.red.shade600 : Colors.deepPurple,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (_recording ? Colors.red : Colors.deepPurple)
+                                      .withValues(alpha: 0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              _recording ? Icons.stop : Icons.mic,
+                              size: 48,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Text(
+                  '${(_timerSeconds ~/ 60).toString().padLeft(2, '0')}:${(_timerSeconds % 60).toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+              Center(
+                child: Text(
+                  _recording
+                      ? 'Đang ghi âm cuộc thoại...'
+                      : _aiLoading
+                          ? 'AI đang phân tích...'
+                          : 'Nhấn nút để bắt đầu nói',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ),
+              if (!_recording && !_aiLoading) ...[
+                const SizedBox(height: 16),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _showSymptomsInput = true),
+                    icon: const Icon(Icons.keyboard, color: Colors.deepPurple),
+                    label: const Text(
+                      'Chuyển sang nhập triệu chứng bằng văn bản',
+                      style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold),
                     ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Time ticking
-            Center(
-              child: Text(
-                '${(math.max(0, _timerSeconds ~/ 60)).toString().padLeft(2, '0')}:${(math.max(0, _timerSeconds % 60)).toString().padLeft(2, '0')}',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace',
+                  ),
                 ),
-              ),
-            ),
-            Center(
-              child: Text(
-                _recording
-                    ? 'Đang ghi âm cuộc thoại...'
-                    : _aiLoading
-                    ? 'AI đang bóc tách âm thanh...'
-                    : 'Nhấn nút để bắt đầu nói',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade500,
-                ),
-              ),
-            ),
+              ],
+            ],
             const SizedBox(height: 24),
 
+            // Loading indicator
             if (_aiLoading) ...[
               const Center(
                 child: Column(
@@ -1668,7 +2000,7 @@ class _CustomerScreenState extends State<CustomerScreen>
               ),
             ],
 
-            // Results UI Box
+            // Results
             if (_aiRecommendationResult != null && !_aiLoading) ...[
               Container(
                 padding: const EdgeInsets.all(16),
@@ -1680,56 +2012,26 @@ class _CustomerScreenState extends State<CustomerScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'HỘI THOẠI TRANSCRIPT:',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                      ),
-                    ),
+                    const Text('HỘI THOẠI TRANSCRIPT:',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
                     const SizedBox(height: 4),
-                    Text(
-                      '"${_aiRecommendationResult!['transcript']}"',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
+                    Text('"${_aiRecommendationResult!['transcript']}"',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
                     const Divider(height: 20),
-                    const Text(
-                      'CHẨN ĐOÁN TRIỆU CHỨNG:',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                      ),
-                    ),
+                    const Text('CHẨN ĐOÁN TRIỆU CHỨNG:',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
                     const SizedBox(height: 4),
-                    Text(
-                      _aiRecommendationResult!['symptoms'],
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
+                    Text(_aiRecommendationResult!['symptoms'],
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
                     if (_aiRecommendationResult!['warnings'] != null) ...[
                       const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.amber.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                            color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8)),
                         child: Text(
                           'Cảnh báo AI: ${_aiRecommendationResult!['warnings']}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.amber.shade900,
-                          ),
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
                         ),
                       ),
                     ],
@@ -1737,40 +2039,23 @@ class _CustomerScreenState extends State<CustomerScreen>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'TOA THUỐC ĐỀ XUẤT:',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
-                          ),
-                        ),
+                        const Text('TOA THUỐC ĐỀ XUẤT:',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
                         ElevatedButton.icon(
                           onPressed: _addAllAiMedsToCart,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.deepPurple,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
                           icon: const Icon(Icons.add_shopping_cart, size: 12),
-                          label: const Text(
-                            'Thêm tất cả',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          label: const Text('Thêm tất cả',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // Suggested drugs list view
                     ...(_aiRecommendationResult!['drugs'] as List).map((drug) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
@@ -1783,47 +2068,35 @@ class _CustomerScreenState extends State<CustomerScreen>
                           ),
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.medication,
-                                color: Colors.deepPurple,
-                              ),
+                              const Icon(Icons.medication, color: Colors.deepPurple),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      drug['name'],
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(
-                                      drug['dosage'],
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
+                                    Text(drug['name'],
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    Text(drug['dosage'],
+                                        style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
                                   ],
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.green.shade50,
+                                  color: (drug['isAvailable'] == true)
+                                      ? Colors.green.shade50
+                                      : Colors.red.shade50,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  'Còn kho',
+                                  (drug['isAvailable'] == true) ? 'Còn kho' : 'Hết kho',
                                   style: TextStyle(
                                     fontSize: 8,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.green.shade700,
+                                    color: (drug['isAvailable'] == true)
+                                        ? Colors.green.shade700
+                                        : Colors.red.shade700,
                                   ),
                                 ),
                               ),

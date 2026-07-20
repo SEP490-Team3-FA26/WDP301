@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../models/user_role.dart';
 import '../services/api_service.dart';
@@ -66,7 +68,35 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  void _navigateToDashboard(UserRole role) {
+  Future<void> _navigateToDashboard(UserRole role) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.blue),
+      ),
+    );
+
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/auth/demo-token'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'role': role.name}),
+      ).timeout(const Duration(seconds: 4));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data != null && data['access_token'] != null) {
+          ApiService.currentToken = data['access_token'];
+        }
+      }
+    } catch (e) {
+      debugPrint("Demo token retrieval failed: $e");
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context); // Dismiss loading dialog
+
     Widget targetScreen;
     switch (role) {
       case UserRole.admin:
@@ -94,6 +124,7 @@ class _LoginScreenState extends State<LoginScreen>
       MaterialPageRoute(builder: (context) => targetScreen),
     );
   }
+
 
   void _showLoadingDialog() {
     showDialog(
@@ -170,6 +201,8 @@ class _LoginScreenState extends State<LoginScreen>
     if (result != null && result is Map<String, dynamic>) {
       if (result['success'] == true) {
         final token = result['token'];
+        // Save token globally for all API calls
+        ApiService.currentToken = token ?? '';
         _showLoadingDialog();
         
         try {
@@ -202,6 +235,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -217,19 +251,14 @@ class _LoginScreenState extends State<LoginScreen>
         child: FloatingBackground(
           child: SafeArea(
             child: SingleChildScrollView(
-              child: Container(
-                height:
-                    MediaQuery.of(context).size.height -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24.0,
-                  vertical: 16.0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Spacer(),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 24.0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 24),
 
                     // Animated Logo & Title
                     FadeTransition(
@@ -281,7 +310,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
 
-                    const Spacer(),
+                    const SizedBox(height: 32),
 
                     // Animated Form Inputs
                     FadeTransition(
@@ -434,7 +463,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
 
-                    const Spacer(),
+                    const SizedBox(height: 32),
 
                     // Animated Demo Panel
                     FadeTransition(
@@ -526,9 +555,8 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 }
 
 // FLOATING BACKDROP PARTICLES SYSTEM
