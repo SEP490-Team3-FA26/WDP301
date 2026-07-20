@@ -20,7 +20,7 @@ export class ReportController implements OnModuleInit {
     private readonly storage: S3StorageService,
     private readonly reportService: ReportService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     await subscribeToKafkaTopics(this.inventoryClient, [
@@ -454,16 +454,16 @@ export class ReportController implements OnModuleInit {
           if (response.ok) {
             return await response.json();
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // Fallback response if AI service is unreachable or dataset fails
       const medList = Array.isArray(rawDataset) && rawDataset.length > 0 ? rawDataset : [];
-      
-      const realRecommendations = medList.map((med: any) => {
+
+      const realRecommendations: any[] = medList.map((med: any) => {
         const currentStock = med.currentStock || 0;
         const totalSold = med.totalSold || 0;
-        
+
         // Tính toán tốc độ bán cố định từ dữ liệu DB thực tế (loại bỏ hoàn toàn ngẫu nhiên)
         let avgDailySales = 0;
         if (med.averageDailySales && med.averageDailySales > 0) {
@@ -478,7 +478,7 @@ export class ReportController implements OnModuleInit {
         }
         const expectedIncoming = med.expectedIncoming || 0;
         const reorderPoint = med.reorderPoint || 30;
-        
+
         const neededForPeriod = Math.round(avgDailySales * days + reorderPoint);
         const available = currentStock + expectedIncoming;
         const suggestedQty = Math.max(0, neededForPeriod - available);
@@ -606,7 +606,7 @@ export class ReportController implements OnModuleInit {
             };
           }
         }
-      } catch (_) {}
+      } catch (_) { }
 
       console.log(`❌ [Cache Miss] Chạy phân tích xu hướng mùa cho chi nhánh ${target}`);
 
@@ -632,7 +632,7 @@ export class ReportController implements OnModuleInit {
               branchAddress = found.address || found.name || '';
             }
           }
-        } catch (err) {}
+        } catch (err) { }
       }
 
       // Xác định vùng địa lý
@@ -692,7 +692,7 @@ export class ReportController implements OnModuleInit {
 
         // Các từ khóa loại trừ đồ xoa bóp, cao dán cơ khớp khỏi danh mục bệnh mùa hô hấp/sốt
         const excludePatchKeywords = ['cao dán', 'cồn xoa bóp', 'dầu nóng', 'dầu gió', 'phong thấp', 'tê bại', 'thoái hóa', 'khớp'];
-        
+
         // Enrich medicines with forecast & lost revenue metrics if not present
         const enrichedMedList = medList.map((med: any) => {
           const forecastM1 = med.forecast_m1 || Math.max(20, Math.round((med.currentStock || 15) * 1.4));
@@ -707,7 +707,7 @@ export class ReportController implements OnModuleInit {
           const rawHist = med.salesHistory || {};
           const histKeys = Object.keys(rawHist);
           const hasNonZero = histKeys.some(k => (typeof rawHist[k] === 'object' ? rawHist[k]?.quantity : rawHist[k]) > 0);
-          
+
           let smoothSalesHist: any = {};
           if (hasNonZero) {
             smoothSalesHist = rawHist;
@@ -747,7 +747,7 @@ export class ReportController implements OnModuleInit {
           return outbreakKeywords.some(kw => text.includes(kw));
         });
 
-        const indicatorDrugs = fluDengueMeds.length > 0 
+        const indicatorDrugs = fluDengueMeds.length > 0
           ? fluDengueMeds.map((m: any) => m.name).slice(0, 4)
           : ['Paracetamol 500mg', 'Decolgen Forte', 'Amoxicillin 500mg', 'Dung dịch bù nước Oresol'];
 
@@ -756,7 +756,7 @@ export class ReportController implements OnModuleInit {
           return !excludePatchKeywords.some(kw => text.includes(kw));
         }).slice(0, 5);
 
-        const realRecommendations = topMeds.map((med: any) => {
+        const realRecommendations: any[] = topMeds.map((med: any) => {
           const shortage = Math.max(10, (med.reorderPoint || 30) - (med.currentStock || 0));
           return {
             medicineId: med.medicineId,
@@ -837,7 +837,7 @@ export class ReportController implements OnModuleInit {
       // 5. Lưu vào cache Redis với TTL 24 giờ
       try {
         await this.cacheManager.set(cacheKey, aiResult, 24 * 3600 * 1000);
-      } catch (_) {}
+      } catch (_) { }
 
       return {
         success: true,

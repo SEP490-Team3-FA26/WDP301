@@ -6,8 +6,8 @@ export class AutoRoutePoDto {
   items: any[];
 
   @IsArray()
-  @IsNotEmpty()
-  prIds: string[];
+  @IsOptional()
+  prIds?: string[];
 
   @IsString()
   @IsOptional()
