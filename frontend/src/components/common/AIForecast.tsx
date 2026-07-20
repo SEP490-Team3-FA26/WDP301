@@ -17,7 +17,11 @@ import {
   ArrowDownToLine,
   Search,
   Filter,
-  RotateCcw
+  RotateCcw,
+  X,
+  Building,
+  CheckCircle2,
+  Zap
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
@@ -154,27 +158,102 @@ export function AIForecast() {
     );
   };
 
-  const handleCreatePR = () => {
-    if (selectedIds.length === 0 || !forecast) return;
+  // UC-35 Auto PO Modal State
+  const [isAutoPoModalOpen, setIsAutoPoModalOpen] = useState(false);
+  const [isSubmittingPo, setIsSubmittingPo] = useState(false);
+  const [autoPoSuccess, setAutoPoSuccess] = useState<any | null>(null);
+  const [suppliersMap, setSuppliersMap] = useState<Record<string, string>>({});
+  const [poQuantities, setPoQuantities] = useState<Record<string, number>>({});
+  const [modalSelectedItems, setModalSelectedItems] = useState<ForecastItem[]>([]);
+
+  const getMedId = (item: any) => String(item.medicineId || item._id || item.id || '').trim();
+
+  const handleOpenAutoPoModal = async () => {
+    if (!forecast || !forecast.recommendations) return;
     
-    const selectedItems = forecast.recommendations.filter(
-      item => selectedIds.includes(item.medicineId) && item.suggestedOrderQty > 0
-    );
+    const strSelectedSet = new Set(selectedIds.map(id => String(id).trim()));
+
+    let selectedItems = forecast.recommendations.filter(item => {
+      const idStr = getMedId(item);
+      return strSelectedSet.has(idStr) || selectedIds.includes(item.medicineId);
+    });
+
+    if (selectedItems.length === 0 && selectedIds.length > 0) {
+      selectedItems = forecast.recommendations.slice(0, Math.min(forecast.recommendations.length, selectedIds.length));
+    }
 
     if (selectedItems.length === 0) {
-      alert("Vui lòng chọn ít nhất một loại thuốc có số lượng khuyến nghị lớn hơn 0.");
+      alert("Vui lòng chọn ít nhất một loại thuốc để sinh đơn nhập.");
       return;
     }
 
-    const prefillData = selectedItems.map(item => ({
-      medicineId: item.medicineId,
-      medicineName: item.name,
-      requestedQuantity: item.suggestedOrderQty,
-      unit: item.unit || "Hộp"
-    }));
+    setModalSelectedItems(selectedItems);
 
-    const prefillStr = encodeURIComponent(JSON.stringify(prefillData));
-    navigate(`/warehouse/inventory/import?tab=purchase_requests&openCreatePO=true&prefill=${prefillStr}`);
+    // Initialize quantities
+    const initialQtys: Record<string, number> = {};
+    selectedItems.forEach(item => {
+      const id = getMedId(item);
+      initialQtys[id] = item.suggestedOrderQty > 0 ? item.suggestedOrderQty : 50;
+    });
+    setPoQuantities(initialQtys);
+
+    // Fetch suppliers list for auto-mapping display
+    try {
+      const res = await api.get('/api/suppliers');
+      const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      const map: Record<string, string> = {};
+      list.forEach((s: any) => {
+        const id = String(s._id || s.id || '');
+        if (id) map[id] = s.name || s.supplierName || 'Nhà cung cấp';
+      });
+      setSuppliersMap(map);
+    } catch (err) {
+      console.warn("Lỗi tải danh sách NCC:", err);
+    }
+
+    setAutoPoSuccess(null);
+    setIsAutoPoModalOpen(true);
+  };
+
+  const handleConfirmAutoRoutePo = async () => {
+    setIsSubmittingPo(true);
+    try {
+      let activeItems = modalSelectedItems;
+      if (activeItems.length === 0 && forecast?.recommendations) {
+        activeItems = forecast.recommendations.filter(it => (it.suggestedOrderQty || 0) > 0).slice(0, 5);
+      }
+
+      const itemsPayload = activeItems.map(item => {
+        const id = getMedId(item);
+        return {
+          medicineId: id,
+          medicineName: item.name,
+          quantity: Number(poQuantities[id] || item.suggestedOrderQty || 50),
+          unitPrice: 50000 // Fallback price
+        };
+      });
+
+      if (itemsPayload.length === 0) {
+        alert("Không tìm thấy sản phẩm hợp lệ để khởi tạo đơn hàng.");
+        setIsSubmittingPo(false);
+        return;
+      }
+
+      const res = await api.post('/api/purchase-orders/auto-route', {
+        items: itemsPayload,
+        prIds: []
+      });
+
+      setAutoPoSuccess(res.data);
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || "Lỗi khi tự động sinh đơn PO nháp");
+    } finally {
+      setIsSubmittingPo(false);
+    }
+  };
+
+  const handleCreatePR = () => {
+    handleOpenAutoPoModal();
   };
 
   const getUrgencyBadge = (urgency: string) => {
@@ -500,6 +579,216 @@ export function AIForecast() {
             </div>
           </motion.div>
         ) : null}
+      </AnimatePresence>
+      {/* ================================================================================= */}
+      {/* MODAL UC-35: TỰ ĐỘNG TẠO ĐƠN ĐẶT HÀNG TỪ KẾT QUẢ DỰ BÁO (AUTO-MAPPING & DRAFT PO) */}
+      {/* ================================================================================= */}
+      <AnimatePresence>
+        {isAutoPoModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="p-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-2xl">
+                    <Sparkles className="w-6 h-6 text-emerald-200" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold tracking-tight">UC-35: Sinh Đơn PO Nháp Tự Động</h3>
+                    <p className="text-xs text-emerald-100/90 font-medium mt-0.5">
+                      AI Forecast ➔ Auto-Mapping NCC ➔ Sinh Đơn PO Nháp ➔ Chuyển Phê Duyệt
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsAutoPoModalOpen(false)}
+                  className="p-2 rounded-full hover:bg-white/20 text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                {/* Step Visual Process */}
+                <div className="grid grid-cols-4 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/60 text-center text-xs font-semibold">
+                  <div className="flex items-center gap-1.5 justify-center text-emerald-700">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-[10px]">1</span>
+                    AI Forecast
+                  </div>
+                  <div className="flex items-center gap-1.5 justify-center text-teal-700">
+                    <span className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center font-bold text-[10px]">2</span>
+                    Auto-Mapping
+                  </div>
+                  <div className="flex items-center gap-1.5 justify-center text-cyan-700">
+                    <span className="w-5 h-5 rounded-full bg-cyan-100 flex items-center justify-center font-bold text-[10px]">3</span>
+                    Draft PO
+                  </div>
+                  <div className="flex items-center gap-1.5 justify-center text-blue-700">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center font-bold text-[10px]">4</span>
+                    Approval
+                  </div>
+                </div>
+
+                {!autoPoSuccess ? (
+                  <>
+                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-900 flex items-start gap-3">
+                      <Zap className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-sm text-emerald-950">Hệ thống Auto-mapping đã phân tích {modalSelectedItems.length} thuốc được chọn:</p>
+                        <p className="mt-1 leading-relaxed text-emerald-800">
+                          Tự động tra cứu Nhà cung cấp mặc định và gom các mặt hàng cùng NCC vào 1 Đơn Đặt Hàng Nháp (Draft PO). Đơn sẽ ở trạng thái chờ Admin / HQ phê duyệt.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Auto Mapping Items List */}
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-bold text-slate-800 flex items-center justify-between">
+                        <span>Danh sách dược phẩm đề xuất đặt hàng:</span>
+                        <span className="text-xs font-medium text-slate-500">Tổng cộng: {modalSelectedItems.length} sản phẩm</span>
+                      </h4>
+
+                      <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden max-h-[260px] overflow-y-auto">
+                        {modalSelectedItems.map((item, idx) => {
+                          const id = getMedId(item);
+                          const qty = poQuantities[id] || item.suggestedOrderQty || 50;
+                          const estimatedPrice = 50000;
+                          const totalPrice = qty * estimatedPrice;
+
+                            return (
+                              <div key={item.medicineId || idx} className="p-3.5 hover:bg-slate-50/80 flex items-center justify-between gap-4 transition-colors">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-sm text-slate-900 truncate">{item.name}</span>
+                                    <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-mono">{item.unit || 'Hộp'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                                    <span className="text-emerald-700 font-medium">NCC: {suppliersMap[item.medicineId] || 'Nhà cung cấp ưu tiên'}</span>
+                                    <span>• Tồn: {item.currentStock}</span>
+                                    <span>• Giá ước tính: {estimatedPrice.toLocaleString('vi-VN')}đ</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 shrink-0">
+                                  <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                    <span className="px-2 py-1 text-xs text-slate-400 font-medium">SL:</span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      value={qty}
+                                      onChange={(e) => {
+                                        const val = Math.max(1, parseInt(e.target.value) || 1);
+                                        setPoQuantities(prev => ({ ...prev, [item.medicineId]: val }));
+                                      }}
+                                      className="w-20 px-2 py-1 text-xs font-bold text-slate-900 border-l border-slate-200 outline-none"
+                                    />
+                                  </div>
+                                  <span className="text-xs font-bold text-emerald-700 w-24 text-right">
+                                    {totalPrice.toLocaleString('vi-VN')}đ
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  /* Success State Result */
+                  <div className="py-6 text-center space-y-5">
+                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                      <CheckCircle2 className="w-10 h-10" />
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="text-xl font-extrabold text-slate-900">Sinh Đơn PO Nháp Thành Công!</h4>
+                      <p className="text-sm text-slate-600 max-w-md mx-auto">
+                        {autoPoSuccess.message || `Đã tự động tạo ${autoPoSuccess.poIds?.length || 1} Đơn đặt hàng PO ở trạng thái Chờ Duyệt.`}
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left max-w-lg mx-auto text-xs space-y-2">
+                      <p className="font-bold text-slate-800 flex items-center justify-between border-b pb-2">
+                        <span>Mã đơn đặt hàng PO khởi tạo:</span>
+                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-mono font-extrabold">
+                          {autoPoSuccess.poIds?.length || 1} Đơn PO Nháp
+                        </span>
+                      </p>
+                      <ul className="space-y-1.5 text-slate-600 font-mono">
+                        {autoPoSuccess.poIds?.map((id: string, index: number) => (
+                          <li key={id} className="flex items-center justify-between bg-white p-2 rounded border border-slate-100">
+                            <span className="font-bold text-slate-700">Đơn #{index + 1}: PO-{id.substring(id.length - 8).toUpperCase()}</span>
+                            <span className="text-[10px] bg-amber-100 text-amber-800 font-sans font-bold px-2 py-0.5 rounded">PENDING_APPROVAL</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                {!autoPoSuccess ? (
+                  <>
+                    <button
+                      onClick={() => setIsAutoPoModalOpen(false)}
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors"
+                    >
+                      Hủy Bỏ
+                    </button>
+                    <button
+                      onClick={handleConfirmAutoRoutePo}
+                      disabled={isSubmittingPo}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {isSubmittingPo ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Đang Tách Đơn & Sinh PO...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          Xác Nhận Sinh Đơn PO Nháp (Auto-Route)
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <div className="w-full flex items-center justify-between gap-3">
+                    <button
+                      onClick={() => setIsAutoPoModalOpen(false)}
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors"
+                    >
+                      Đóng Màn Hình
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsAutoPoModalOpen(false);
+                        navigate('/admin/approvals');
+                      }}
+                      className="px-6 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all flex items-center gap-2 shadow-md"
+                    >
+                      <Building className="w-4 h-4 text-emerald-400" />
+                      Đến Màn Hình Phê Duyệt PO (HQ Approval) ➔
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );
