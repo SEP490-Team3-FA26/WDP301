@@ -863,7 +863,14 @@ export class PurchaseService {
     const txns = await this.txnModel.find({ batchNo }).sort({ createdAt: 1 }).exec();
     
     if (batches.length === 0 && txns.length === 0) {
-      throw new RpcException({ message: `Không tìm thấy thông tin cho lô thuốc: ${batchNo}`, statusCode: 404 });
+      return {
+        batchNo,
+        medicine: null,
+        batches: [],
+        origin: null,
+        timeline: [],
+        message: `Lô thuốc ${batchNo} chưa phát sinh giao dịch hoặc chưa có trên hệ thống.`
+      };
     }
 
     // Lấy medicineId từ lô hoặc từ txn
@@ -911,6 +918,11 @@ export class PurchaseService {
       }
     }
 
+    // Lấy thông tin chi tiết từng loại thuốc cho các lô
+    const medIds = Array.from(new Set(batches.map(b => b.medicineId).filter(Boolean)));
+    const medsList = medIds.length > 0 ? await this.medicineModel.find({ _id: { $in: medIds } }).exec() : [];
+    const medMap = new Map(medsList.map(m => [m._id.toString(), m]));
+
     return {
       batchNo,
       medicine: medicine ? {
@@ -920,12 +932,19 @@ export class PurchaseService {
         unit: medicine.unit || 'Hộp',
         category: medicine.category || 'Chưa phân loại',
       } : null,
-      batches: batches.map(b => ({
-        branchId: b.branchId,
-        stock: b.stock,
-        expDate: b.expDate,
-        status: b.status,
-      })),
+      batches: batches.map(b => {
+        const m = medMap.get(String(b.medicineId));
+        return {
+          medicineId: b.medicineId,
+          medicineName: m ? m.name : 'Dược phẩm',
+          sku: m ? (m as any).sku : 'N/A',
+          unit: m ? m.unit : 'Hộp',
+          branchId: b.branchId,
+          stock: b.stock,
+          expDate: b.expDate,
+          status: b.status,
+        };
+      }),
       origin,
       timeline: txns.map(t => ({
         _id: t._id.toString(),

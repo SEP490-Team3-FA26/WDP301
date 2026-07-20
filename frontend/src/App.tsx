@@ -133,6 +133,7 @@ export default function App() {
             <Route path="inventory/import" element={<InventoryHistory type="import" />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
             <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
+            <Route path="inventory/lot-tracking" element={<LotTracking />} />
 
             <Route path="master-data/products" element={<Products />} />
             <Route path="master-data/suppliers" element={<Suppliers />} />
@@ -149,6 +150,7 @@ export default function App() {
             <Route path="inventory/import" element={<WarehouseInventoryHub />} />
             <Route path="inventory/export" element={<InventoryHistory type="export" />} />
             <Route path="inventory/dispose" element={<InventoryHistory type="dispose" />} />
+            <Route path="inventory/lot-tracking" element={<LotTracking />} />
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="ai-insights" element={<AIInsights />} />
             <Route path="ai-forecast" element={<AIForecast />} />
@@ -174,6 +176,7 @@ export default function App() {
             <Route path="supplier-credit" element={<SupplierCreditManagement />} />
             <Route path="reports" element={<Reports />} />
             <Route path="lot-tracking" element={<LotTracking />} />
+            <Route path="inventory/lot-tracking" element={<LotTracking />} />
             <Route path="profile" element={<Profile />} />
           </Route>
         </Route>

@@ -298,7 +298,7 @@ export function Finance() {
                   ? 'Tất cả chi nhánh (Tổng hợp)'
                   : branchesList.find(b => b.branchCode === selectedBranch)?.name || selectedBranch}
             </h2>
-            <p className="text-gray-600 mt-1">Kỳ báo cáo: Năm {targetYear}</p>
+            <p className="text-gray-600 mt-1">Kỳ báo cáo: {selectedYear === 'all' ? 'Tất cả thời gian' : `Năm ${selectedYear}`}</p>
          </div>
 
          {loading ? (
@@ -354,7 +354,7 @@ export function Finance() {
                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
                   <div className="flex items-center justify-between mb-6">
                      <div>
-                        <h3 className="font-bold text-slate-900 text-lg">Biểu đồ Doanh thu & Chi phí năm {targetYear}</h3>
+                        <h3 className="font-bold text-slate-900 text-lg">Biểu đồ Doanh thu & Chi phí {selectedYear === 'all' ? 'Tất cả thời gian' : `năm ${selectedYear}`}</h3>
                         <p className="text-slate-500 text-sm mt-1">Đơn vị: Triệu VNĐ</p>
                      </div>
                      <span className="text-xs font-bold text-[#0057cd] px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
