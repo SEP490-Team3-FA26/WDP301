@@ -33,10 +33,11 @@ export class AppWebsocketGateway implements OnGatewayInit, OnGatewayConnection, 
       if (token) {
         // Verify JWT token
         const decoded = this.jwtService.verify(token as string);
-        const { role, branchId, email, fullName, _id } = decoded;
+        const { role, branchId, email, fullName } = decoded;
+        const userId = decoded.sub || decoded._id;
         
         // Store user data in socket
-        client.data.user = { userId: _id, role, branchId, email, fullName };
+        client.data.user = { userId, role, branchId, email, fullName };
         
         this.logger.log(`🔌 User connecting: ${email} with role: ${role}`);
         
@@ -62,7 +63,9 @@ export class AppWebsocketGateway implements OnGatewayInit, OnGatewayConnection, 
         }
         
         // Join personal room for targeted messages
-        client.join(`user-${_id}`);
+        if (userId) {
+          client.join(`user-${userId}`);
+        }
         
         // Log all rooms this client joined
         const rooms = Array.from(client.rooms);

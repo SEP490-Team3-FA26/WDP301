@@ -21,8 +21,9 @@ export class NotificationController {
     @Req() req: any,
   ) {
     const user = req.user;
+    const userId = user.sub || user._id;
     const notifications = await this.notificationService.findForUser(
-      user._id,
+      userId,
       user.role,
       user.branchId,
       {
@@ -35,7 +36,7 @@ export class NotificationController {
     // Transform: add `read` boolean field per user
     const result = notifications.map((n: any) => ({
       ...n,
-      read: (n.readBy || []).includes(user._id),
+      read: (n.readBy || []).includes(userId),
     }));
 
     return { success: true, data: result };
@@ -45,10 +46,11 @@ export class NotificationController {
   @ApiOperation({ summary: 'Polling: lấy notifications mới sau timestamp' })
   async getNewNotifications(@Query('after') after: string, @Req() req: any) {
     const user = req.user;
+    const userId = user.sub || user._id;
     const afterDate = new Date(after || 0);
 
     const notifications = await this.notificationService.findNewSince(
-      user._id,
+      userId,
       user.role,
       user.branchId,
       afterDate,
@@ -56,7 +58,7 @@ export class NotificationController {
 
     const result = notifications.map((n: any) => ({
       ...n,
-      read: (n.readBy || []).includes(user._id),
+      read: (n.readBy || []).includes(userId),
     }));
 
     return { success: true, data: result };
@@ -66,7 +68,7 @@ export class NotificationController {
   @ApiOperation({ summary: 'Đếm notifications chưa đọc' })
   async getUnreadCount(@Req() req: any) {
     const user = req.user;
-    const count = await this.notificationService.getUnreadCount(user._id, user.role, user.branchId);
+    const count = await this.notificationService.getUnreadCount(user.sub || user._id, user.role, user.branchId);
     return { success: true, data: count };
   }
 
@@ -74,7 +76,7 @@ export class NotificationController {
   @ApiOperation({ summary: 'Đánh dấu tất cả đã đọc' })
   async markAllAsRead(@Req() req: any) {
     const user = req.user;
-    await this.notificationService.markAllAsRead(user._id, user.role, user.branchId);
+    await this.notificationService.markAllAsRead(user.sub || user._id, user.role, user.branchId);
     return { success: true, message: 'All notifications marked as read' };
   }
 
@@ -82,7 +84,7 @@ export class NotificationController {
   @ApiOperation({ summary: 'Đánh dấu notification đã đọc' })
   async markAsRead(@Param('id') id: string, @Req() req: any) {
     const user = req.user;
-    const notification = await this.notificationService.markAsRead(id, user._id);
+    const notification = await this.notificationService.markAsRead(id, user.sub || user._id);
     return { success: true, data: notification };
   }
 

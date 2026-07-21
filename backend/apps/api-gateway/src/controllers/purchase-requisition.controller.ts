@@ -51,7 +51,7 @@ export class PurchaseRequisitionController implements OnModuleInit {
       // Handle nested response structure (result.data or result directly)
       const prData = result.data || result;
 
-      const notificationPayload = {
+      let notificationPayload: any = {
         type: 'NEW_PR',
         prId: prData._id || prData.id,
         prCode: prData.prCode || 'PR-UNKNOWN',
@@ -70,21 +70,32 @@ export class PurchaseRequisitionController implements OnModuleInit {
       const warehouseClients = await this.websocketGateway.server.in('warehouse').fetchSockets();
       console.log(`📊 Warehouse room has ${warehouseClients.length} connected clients`);
       
+      try {
+        const [savedNotification] = await this.notificationService.create({
+          type: 'NEW_PR',
+          targetRooms: ['warehouse'],
+          message: notificationPayload.message,
+          prId: notificationPayload.prId,
+          prCode: notificationPayload.prCode,
+          branchId: notificationPayload.branchId,
+          branchName: notificationPayload.branchName,
+          itemsCount: notificationPayload.itemsCount,
+          createdBy: notificationPayload.createdBy,
+        });
+
+        notificationPayload = {
+          ...notificationPayload,
+          _id: (savedNotification as any)._id,
+          id: (savedNotification as any)._id,
+          createdAt: (savedNotification as any).createdAt,
+          read: false,
+        };
+      } catch (err) {
+        console.error('Failed to persist NEW_PR notification:', err);
+      }
+      
       // Chỉ gửi cho warehouse, không gửi admin
       this.websocketGateway.server.to('warehouse').emit('new_pr_notification', notificationPayload);
-      
-      // Persist to DB
-      this.notificationService.create({
-        type: 'NEW_PR',
-        targetRooms: ['warehouse'],
-        message: notificationPayload.message,
-        prId: notificationPayload.prId,
-        prCode: notificationPayload.prCode,
-        branchId: notificationPayload.branchId,
-        branchName: notificationPayload.branchName,
-        itemsCount: notificationPayload.itemsCount,
-        createdBy: notificationPayload.createdBy,
-      }).catch(err => console.error('Failed to persist NEW_PR notification:', err));
       
       console.log('✅ Notification emitted to warehouse room');
     }
@@ -133,7 +144,7 @@ export class PurchaseRequisitionController implements OnModuleInit {
       const prData = result.data || result;
       // Emit targeted notifications based on status
       if (data.status === 'APPROVED' && prData.branchId) {
-        const notificationPayload = {
+        let notificationPayload: any = {
           type: 'PR_APPROVED',
           prId: prData._id || id,
           prCode: prData.prCode || 'PR-???',
@@ -145,23 +156,34 @@ export class PurchaseRequisitionController implements OnModuleInit {
         };
         
         console.log('✅ Emitting PR approved notification:', notificationPayload);
+        try {
+          const [savedNotification] = await this.notificationService.create({
+            type: 'PR_APPROVED',
+            targetRooms: [`branch-${prData.branchId}`],
+            message: notificationPayload.message,
+            prId: notificationPayload.prId,
+            prCode: notificationPayload.prCode,
+            branchId: notificationPayload.branchId,
+            branchName: notificationPayload.branchName,
+            approvedBy: notificationPayload.approvedBy,
+          });
+
+          notificationPayload = {
+            ...notificationPayload,
+            _id: (savedNotification as any)._id,
+            id: (savedNotification as any)._id,
+            createdAt: (savedNotification as any).createdAt,
+            read: false,
+          };
+        } catch (err) {
+          console.error('Failed to persist PR_APPROVED notification:', err);
+        }
+
         this.websocketGateway.server.to(`branch-${prData.branchId}`).emit('pr_approved_notification', notificationPayload);
-        
-        // Persist to DB
-        this.notificationService.create({
-          type: 'PR_APPROVED',
-          targetRooms: [`branch-${prData.branchId}`],
-          message: notificationPayload.message,
-          prId: notificationPayload.prId,
-          prCode: notificationPayload.prCode,
-          branchId: notificationPayload.branchId,
-          branchName: notificationPayload.branchName,
-          approvedBy: notificationPayload.approvedBy,
-        }).catch(err => console.error('Failed to persist PR_APPROVED notification:', err));
       }
       
       if (data.status === 'REJECTED' && prData.branchId) {
-        const notificationPayload = {
+        let notificationPayload: any = {
           type: 'PR_REJECTED',
           prId: prData._id || id,
           prCode: prData.prCode || 'PR-???',
@@ -173,19 +195,30 @@ export class PurchaseRequisitionController implements OnModuleInit {
         };
         
         console.log('❌ Emitting PR rejected notification:', notificationPayload);
+        try {
+          const [savedNotification] = await this.notificationService.create({
+            type: 'PR_REJECTED',
+            targetRooms: [`branch-${prData.branchId}`],
+            message: notificationPayload.message,
+            prId: notificationPayload.prId,
+            prCode: notificationPayload.prCode,
+            branchId: notificationPayload.branchId,
+            branchName: notificationPayload.branchName,
+            rejectionReason: notificationPayload.rejectionReason,
+          });
+
+          notificationPayload = {
+            ...notificationPayload,
+            _id: (savedNotification as any)._id,
+            id: (savedNotification as any)._id,
+            createdAt: (savedNotification as any).createdAt,
+            read: false,
+          };
+        } catch (err) {
+          console.error('Failed to persist PR_REJECTED notification:', err);
+        }
+
         this.websocketGateway.server.to(`branch-${prData.branchId}`).emit('pr_rejected_notification', notificationPayload);
-        
-        // Persist to DB
-        this.notificationService.create({
-          type: 'PR_REJECTED',
-          targetRooms: [`branch-${prData.branchId}`],
-          message: notificationPayload.message,
-          prId: notificationPayload.prId,
-          prCode: notificationPayload.prCode,
-          branchId: notificationPayload.branchId,
-          branchName: notificationPayload.branchName,
-          rejectionReason: notificationPayload.rejectionReason,
-        }).catch(err => console.error('Failed to persist PR_REJECTED notification:', err));
       }
     }
 

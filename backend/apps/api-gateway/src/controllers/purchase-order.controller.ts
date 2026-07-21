@@ -56,9 +56,9 @@ export class PurchaseOrderController implements OnModuleInit {
     try {
       if (this.websocketGateway.server && poData) {
         const poList = Array.isArray(poData) ? poData : (poData.poIds || [poData]);
-        poList.forEach((poItem: any) => {
+        for (const poItem of poList) {
           const poId = typeof poItem === 'string' ? poItem : (poItem._id || poItem.id || 'PO-NEW');
-          const notificationPayload = {
+          let notificationPayload: any = {
             type: 'NEW_PO',
             poId: poId,
             supplierName: poItem.supplierName || 'Nhà cung cấp',
@@ -68,16 +68,33 @@ export class PurchaseOrderController implements OnModuleInit {
             timestamp: new Date().toISOString(),
           };
           
+          try {
+            const [savedNotification] = await this.notificationService.create({
+              type: 'NEW_PO',
+              targetRooms: ['admin'],
+              poId,
+              supplierName: notificationPayload.supplierName,
+              itemsCount: notificationPayload.itemsCount,
+              totalAmount: notificationPayload.totalAmount,
+              message: notificationPayload.message,
+              createdBy: data.createdBy,
+            });
+
+            notificationPayload = {
+              ...notificationPayload,
+              _id: (savedNotification as any)._id,
+              id: (savedNotification as any)._id,
+              createdAt: (savedNotification as any).createdAt,
+              read: false,
+            };
+          } catch (e) {
+            console.warn('Could not persist notification:', e);
+          }
+
+          const adminClients = await this.websocketGateway.server.in('admin').fetchSockets();
+          console.log(`📊 Admin room has ${adminClients.length} connected clients`);
           this.websocketGateway.server.to('admin').emit('new_po_notification', notificationPayload);
-          
-          this.notificationService.createNotification({
-            userId: 'ADMIN',
-            title: 'Đơn đặt hàng PO mới chờ duyệt',
-            message: notificationPayload.message,
-            type: 'WARNING',
-            link: '/admin/approvals'
-          }).catch(e => console.warn('Could not persist notification:', e));
-        });
+        }
       }
     } catch (err) {
       console.warn('⚠️ Notification emission error ignored:', err);

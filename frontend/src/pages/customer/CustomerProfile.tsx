@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, MapPin, Phone, Mail, Edit2, Lock, X, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/core/api';
+import { notifyAuthTokenChanged } from '../../utils/authEvents';
 
 export function CustomerProfile() {
   const navigate = useNavigate();
@@ -84,6 +85,7 @@ export function CustomerProfile() {
       setTimeout(() => {
         localStorage.removeItem('token');
         localStorage.removeItem('userRole');
+        notifyAuthTokenChanged();
         navigate('/auth/login');
       }, 3000);
       
