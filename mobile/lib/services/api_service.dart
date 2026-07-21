@@ -6,8 +6,8 @@ import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
-  static const String baseUrl = kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
-  static const String fallbackUrl = kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
+  static const String baseUrl = kIsWeb ? 'http://localhost:4000' ;
+  static const String fallbackUrl = 'http://localhost:4000';
 
   // JWT token stored globally after login
   static String currentToken = '';

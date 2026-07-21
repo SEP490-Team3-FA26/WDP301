@@ -29,6 +29,7 @@ export function WarehouseInventoryHub() {
   };
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showCreatePOModal, setShowCreatePOModal] = useState(false);
+  const [purchaseRequestsRefreshKey, setPurchaseRequestsRefreshKey] = useState(0);
   const [prefillData, setPrefillData] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -142,6 +143,7 @@ export function WarehouseInventoryHub() {
         {activeTab === "purchase_requests" && (
           <PurchaseRequestsTab
             suppliers={suppliers}
+            refreshKey={purchaseRequestsRefreshKey}
             onMsg={setMsg}
             onOpenCreate={() => {
               setPrefillData([]);
@@ -164,6 +166,7 @@ export function WarehouseInventoryHub() {
             onClose={() => setShowCreatePOModal(false)}
             onSuccess={() => {
               setShowCreatePOModal(false);
+              setPurchaseRequestsRefreshKey(key => key + 1);
               setMsg({ type: "success", text: "Tạo Đơn Nhập Hàng thành công!" });
             }}
           />

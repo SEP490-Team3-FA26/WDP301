@@ -14,8 +14,10 @@ export interface PurchaseOrderPayload {
 }
 
 export const purchaseOrderService = {
-  async getPurchaseOrders() {
-    const response = await api.get('/api/purchase-orders');
+  async getPurchaseOrders(status?: string) {
+    const response = await api.get('/api/purchase-orders', {
+      params: status ? { status } : undefined,
+    });
     return response.data;
   },
 

@@ -58,27 +58,18 @@ export function HQApproval() {
     setActionLoading(true);
     setMsg(null);
     try {
-      const response = await fetch("/api/stock-transfers/direct", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromBranchId: rec.branchId,
-          toBranchId: detailPr.branchId,
-          toBranchName: detailPr.branchName,
-          shippedBy: "HQ Admin",
-          items: [{
-            medicineId: recommendationResult.medicineId,
-            medicineName: activeRecMedicine.name,
-            quantity: rec.suggestedQty,
-            unit: "Hộp"
-          }]
-        })
+      await api.post("/api/stock-transfers/direct", {
+        fromBranchId: rec.branchId,
+        toBranchId: detailPr.branchId,
+        toBranchName: detailPr.branchName,
+        shippedBy: "HQ Admin",
+        items: [{
+          medicineId: recommendationResult.medicineId,
+          medicineName: activeRecMedicine.name,
+          quantity: rec.suggestedQty,
+          unit: "Hộp"
+        }]
       });
-
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.message || "Giao dịch điều phối thất bại.");
-      }
 
       setMsg({ type: "success", text: `Đã tạo lệnh điều phối ${rec.suggestedQty} sản phẩm từ ${rec.branchName} sang ${detailPr.branchName} thành công!` });
 
@@ -87,7 +78,10 @@ export function HQApproval() {
       setDetailPr(null);
       fetchData();
     } catch (err: any) {
-      setMsg({ type: "error", text: err.message || "Đã xảy ra lỗi khi tạo lệnh điều phối." });
+      setMsg({
+        type: "error",
+        text: err.response?.data?.message || err.message || "Đã xảy ra lỗi khi tạo lệnh điều phối."
+      });
     } finally {
       setActionLoading(false);
     }

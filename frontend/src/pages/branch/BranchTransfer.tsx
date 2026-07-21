@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Search, Send, ArrowRightLeft, Trash2, Plus, AlertCircle, CheckCircle2, Loader2, Package } from "lucide-react";
 import { branchService } from "../../services/admin/branch.service";
 import { medicineService } from "../../services/inventory/medicine.service";
+import api from "../../services/core/api";
 
 // Helper to decode JWT token to extract branchId and user info
 function getBranchInfoFromToken() {
@@ -109,27 +110,20 @@ export function BranchTransfer() {
     setActionLoading(true);
 
     try {
-      const response = await fetch("/api/stock-transfers/direct", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromBranchId: activeBranchId,
-          toBranchId: selectedToBranch.branchCode,
-          toBranchName: selectedToBranch.name,
-          shippedBy: currentUserName,
-          items: cart.map(item => ({
-            medicineId: item.id,
-            medicineName: item.name,
-            quantity: item.transferQty,
-            unit: item.unit || "Hộp"
-          }))
-        })
+      const response = await api.post("/api/stock-transfers/direct", {
+        fromBranchId: activeBranchId,
+        toBranchId: selectedToBranch.branchCode,
+        toBranchName: selectedToBranch.name,
+        shippedBy: currentUserName,
+        items: cart.map(item => ({
+          medicineId: item.id,
+          medicineName: item.name,
+          quantity: item.transferQty,
+          unit: item.unit || "Hộp"
+        }))
       });
 
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.message || "Giao dịch chuyển kho thất bại.");
-      }
+      const resData = response.data;
 
       setMsg({ type: "success", text: resData.message || "Tạo yêu cầu chuyển kho trực tiếp thành công!" });
       setCart([]);
@@ -139,7 +133,10 @@ export function BranchTransfer() {
       const invList = await medicineService.getBranchMedicines(activeBranchId, { limit: 500, branchStockOnly: true });
       setInventory(invList.data || []);
     } catch (err: any) {
-      setMsg({ type: "error", text: err.message || "Đã xảy ra lỗi không xác định." });
+      setMsg({
+        type: "error",
+        text: err.response?.data?.message || err.message || "Đã xảy ra lỗi không xác định."
+      });
     } finally {
       setActionLoading(false);
       setLoadingInv(false);
