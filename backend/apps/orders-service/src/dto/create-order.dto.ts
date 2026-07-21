@@ -23,6 +23,10 @@ export class OrderItemDto {
 
   @IsNumber()
   quantity: number;
+
+  @IsString()
+  @IsOptional()
+  unit?: string;
 }
 
 export class CreateOrderDto {
@@ -56,7 +60,7 @@ export class CreateOrderDto {
 
   @IsString()
   @IsOptional()
-  @IsIn(['ONLINE', 'RETAIL'])
+  @IsIn(['ONLINE', 'RETAIL', 'POS_SALE'])
   type?: string;
 
   @IsString()
@@ -74,4 +78,12 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   branchId?: string;
+
+  @IsString()
+  @IsOptional()
+  returnUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  cancelUrl?: string;
 }
