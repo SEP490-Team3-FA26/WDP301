@@ -3,12 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
-
 class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
   static const String baseUrl = kIsWeb
       ? 'http://localhost:4000'
-      : 'http://192.168.1.15:4000';
+      : 'http://127.0.0.1:4000';
   static const String fallbackUrl = 'http://localhost:4000';
 
   // JWT token stored globally after login
@@ -31,9 +30,19 @@ class ApiService {
       'stock': 25,
       'isRx': true,
       'batches': [
-        {'batchNo': 'Lô A1', 'expDate': '12/12/2026', 'stock': 15, 'status': 'ACTIVE'},
-        {'batchNo': 'Lô A2', 'expDate': '10/05/2027', 'stock': 10, 'status': 'ACTIVE'},
-      ]
+        {
+          'batchNo': 'Lô A1',
+          'expDate': '12/12/2026',
+          'stock': 15,
+          'status': 'ACTIVE',
+        },
+        {
+          'batchNo': 'Lô A2',
+          'expDate': '10/05/2027',
+          'stock': 10,
+          'status': 'ACTIVE',
+        },
+      ],
     },
     {
       'id': 'MED-002',
@@ -45,8 +54,13 @@ class ApiService {
       'stock': 100,
       'isRx': false,
       'batches': [
-        {'batchNo': 'Lô B1', 'expDate': '25/08/2026', 'stock': 100, 'status': 'ACTIVE'}
-      ]
+        {
+          'batchNo': 'Lô B1',
+          'expDate': '25/08/2026',
+          'stock': 100,
+          'status': 'ACTIVE',
+        },
+      ],
     },
     {
       'id': 'MED-003',
@@ -58,8 +72,13 @@ class ApiService {
       'stock': 50,
       'isRx': false,
       'batches': [
-        {'batchNo': 'Lô C1', 'expDate': '11/11/2026', 'stock': 50, 'status': 'ACTIVE'}
-      ]
+        {
+          'batchNo': 'Lô C1',
+          'expDate': '11/11/2026',
+          'stock': 50,
+          'status': 'ACTIVE',
+        },
+      ],
     },
     {
       'id': 'MED-004',
@@ -71,8 +90,13 @@ class ApiService {
       'stock': 12,
       'isRx': true,
       'batches': [
-        {'batchNo': 'Lô D1', 'expDate': '20/09/2026', 'stock': 12, 'status': 'ACTIVE'}
-      ]
+        {
+          'batchNo': 'Lô D1',
+          'expDate': '20/09/2026',
+          'stock': 12,
+          'status': 'ACTIVE',
+        },
+      ],
     },
     {
       'id': 'MED-005',
@@ -84,8 +108,13 @@ class ApiService {
       'stock': 40,
       'isRx': false,
       'batches': [
-        {'batchNo': 'Lô E1', 'expDate': '01/01/2027', 'stock': 40, 'status': 'ACTIVE'}
-      ]
+        {
+          'batchNo': 'Lô E1',
+          'expDate': '01/01/2027',
+          'stock': 40,
+          'status': 'ACTIVE',
+        },
+      ],
     },
     {
       'id': 'MED-006',
@@ -97,39 +126,56 @@ class ApiService {
       'stock': 75,
       'isRx': false,
       'batches': [
-        {'batchNo': 'Lô F1', 'expDate': '15/10/2026', 'stock': 75, 'status': 'ACTIVE'}
-      ]
+        {
+          'batchNo': 'Lô F1',
+          'expDate': '15/10/2026',
+          'stock': 75,
+          'status': 'ACTIVE',
+        },
+      ],
     },
   ];
 
   static Map<String, dynamic> _mapMedicine(Map<String, dynamic> m) {
     final activeIng = m['active_ingredient'] ?? m['active'] ?? 'N/A';
     final classification = m['drug_classification'] ?? '';
-    final isRx = classification.toString().toUpperCase().contains('PRESCRIPTION') || m['isRx'] == true;
-    
+    final isRx =
+        classification.toString().toUpperCase().contains('PRESCRIPTION') ||
+        m['isRx'] == true;
+
     // Map list of batches if present
     List<Map<String, dynamic>> batchesList = [];
     if (m['batches'] != null && m['batches'] is List) {
-      batchesList = (m['batches'] as List).map((b) => {
-        'batchNo': b['batchNo'] ?? 'Lô KD',
-        'expDate': b['expDate'] ?? '2026-12-31',
-        'stock': b['stock'] is num ? (b['stock'] as num).toInt() : 0,
-        'status': b['status'] ?? 'ACTIVE'
-      }).toList();
+      batchesList = (m['batches'] as List)
+          .map(
+            (b) => {
+              'batchNo': b['batchNo'] ?? 'Lô KD',
+              'expDate': b['expDate'] ?? '2026-12-31',
+              'stock': b['stock'] is num ? (b['stock'] as num).toInt() : 0,
+              'status': b['status'] ?? 'ACTIVE',
+            },
+          )
+          .toList();
     }
 
     return {
       'id': m['id'] ?? m['_id'] ?? '',
       'name': m['name'] ?? 'Thuốc chưa đặt tên',
-      'price': m['price'] is num ? (m['price'] as num).toInt() : int.tryParse(m['price'].toString()) ?? 50000,
+      'price': m['price'] is num
+          ? (m['price'] as num).toInt()
+          : int.tryParse(m['price'].toString()) ?? 50000,
       'unit': m['unit'] ?? 'Hộp',
       'active': activeIng,
       'category': m['category'] ?? 'Chưa phân loại',
-      'stock': m['stock'] is num ? (m['stock'] as num).toInt() : int.tryParse(m['stock'].toString()) ?? 0,
+      'stock': m['stock'] is num
+          ? (m['stock'] as num).toInt()
+          : int.tryParse(m['stock'].toString()) ?? 0,
       'isRx': isRx,
       'batches': batchesList,
       'image': m['image'] ?? m['image_url'] ?? '',
-      'images': m['images'] is List ? List<String>.from(m['images']) : <String>[],
+      'images': m['images'] is List
+          ? List<String>.from(m['images'])
+          : <String>[],
       'cong_dung': m['cong_dung'] ?? m['indications'] ?? 'N/A',
       'cach_dung': m['cach_dung'] ?? m['default_dosage'] ?? 'N/A',
       'tac_dung_phu': m['tac_dung_phu'] ?? m['side_effects'] ?? 'N/A',
@@ -149,10 +195,16 @@ class ApiService {
     String category = '',
     String classification = '',
   }) async {
-    final queryParams = '?page=$page&limit=$limit&search=${Uri.encodeComponent(search)}&category=${Uri.encodeComponent(category)}&classification=${Uri.encodeComponent(classification)}';
-    
+    final queryParams =
+        '?page=$page&limit=$limit&search=${Uri.encodeComponent(search)}&category=${Uri.encodeComponent(category)}&classification=${Uri.encodeComponent(classification)}';
+
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/medicines$queryParams'), headers: _authHeaders).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/medicines$queryParams'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         final List dataList = decoded['data'] ?? [];
@@ -165,30 +217,38 @@ class ApiService {
   }
 
   // Check interactive compatibility of selected medicines via API
-  static Future<Map<String, dynamic>?> checkInteractions(List<String> medicineNames) async {
+  static Future<Map<String, dynamic>?> checkInteractions(
+    List<String> medicineNames,
+  ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/medicines/check-interaction'),
-        headers: _authHeaders,
-        body: jsonEncode({'medicines': medicineNames}),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/medicines/check-interaction'),
+            headers: _authHeaders,
+            body: jsonEncode({'medicines': medicineNames}),
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         return jsonDecode(response.body);
       }
     } catch (_) {
       try {
-        final response = await http.post(
-          Uri.parse('$fallbackUrl/api/medicines/check-interaction'),
-          headers: _authHeaders,
-          body: jsonEncode({'medicines': medicineNames}),
-        ).timeout(const Duration(seconds: 30));
+        final response = await http
+            .post(
+              Uri.parse('$fallbackUrl/api/medicines/check-interaction'),
+              headers: _authHeaders,
+              body: jsonEncode({'medicines': medicineNames}),
+            )
+            .timeout(const Duration(seconds: 30));
 
         if (response.statusCode == 201 || response.statusCode == 200) {
           return jsonDecode(response.body);
         }
       } catch (e) {
-        debugPrint("Interaction check failed. Offline mode fallback. Error: $e");
+        debugPrint(
+          "Interaction check failed. Offline mode fallback. Error: $e",
+        );
       }
     }
     return null;
@@ -197,19 +257,27 @@ class ApiService {
   // Trace batch/lot lifecycle
   static Future<Map<String, dynamic>?> traceLot(String batchNo) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(
+            Uri.parse(
+              '$baseUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}',
+            ),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
     } catch (_) {
       try {
-        final response = await http.get(
-          Uri.parse('$fallbackUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 30));
+        final response = await http
+            .get(
+              Uri.parse(
+                '$fallbackUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}',
+              ),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 30));
         if (response.statusCode == 200) {
           return jsonDecode(response.body);
         }
@@ -229,8 +297,18 @@ class ApiService {
         'category': 'Giảm đau / Giảm sốt',
       },
       'batches': [
-        {'branchId': 'CENTRAL_WH', 'stock': 120, 'expDate': '2026-12-31T00:00:00.000Z', 'status': 'ACTIVE'},
-        {'branchId': 'CN1', 'stock': 45, 'expDate': '2026-12-31T00:00:00.000Z', 'status': 'ACTIVE'},
+        {
+          'branchId': 'CENTRAL_WH',
+          'stock': 120,
+          'expDate': '2026-12-31T00:00:00.000Z',
+          'status': 'ACTIVE',
+        },
+        {
+          'branchId': 'CN1',
+          'stock': 45,
+          'expDate': '2026-12-31T00:00:00.000Z',
+          'status': 'ACTIVE',
+        },
       ],
       'origin': {
         'grnId': 'GRN-984F7E',
@@ -253,7 +331,7 @@ class ApiService {
           'referenceType': 'GRN',
           'performedBy': 'Nguyễn Văn Kho',
           'notes': 'Nhập kho lô mới từ PO-882C1B',
-          'createdAt': '2026-06-15T08:30:00.000Z'
+          'createdAt': '2026-06-15T08:30:00.000Z',
         },
         {
           '_id': 'tx2',
@@ -265,7 +343,7 @@ class ApiService {
           'referenceType': 'TRANSFER',
           'performedBy': 'Lê Điều Phối',
           'notes': 'Chuyển hàng sang cơ sở CN1',
-          'createdAt': '2026-06-20T10:15:00.000Z'
+          'createdAt': '2026-06-20T10:15:00.000Z',
         },
         {
           '_id': 'tx3',
@@ -277,16 +355,23 @@ class ApiService {
           'referenceType': 'SALE',
           'performedBy': 'Trần Dược Sĩ',
           'notes': 'Xuất bán lẻ cho khách hàng',
-          'createdAt': '2026-07-02T14:45:00.000Z'
-        }
-      ]
+          'createdAt': '2026-07-02T14:45:00.000Z',
+        },
+      ],
     };
   }
 
   // Get AI Demand Forecast
   static Future<Map<String, dynamic>?> getAIForecast(int periodDays) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/reports/ai-forecast?periodDays=$periodDays'), headers: _authHeaders).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(
+            Uri.parse(
+              '$baseUrl/api/reports/ai-forecast?periodDays=$periodDays',
+            ),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -312,67 +397,91 @@ class ApiService {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection'),
+        Uri.parse(
+          '$baseUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection',
+        ),
       );
       request.headers.addAll(_authHeaders);
-      request.headers['x-internal-token'] = 'wdp301-super-secret-key-change-in-production';
-      
+      request.headers['x-internal-token'] =
+          'wdp301-super-secret-key-change-in-production';
+
       if (fileBytes != null) {
-        request.files.add(http.MultipartFile.fromBytes(
-          'file',
-          fileBytes,
-          filename: 'upload.jpg',
-          contentType: mediaType,
-        ));
-      } else {
-        request.files.add(await http.MultipartFile.fromPath(
-          'file',
-          filePath,
-          contentType: mediaType,
-        ));
-      }
-      
-      var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
-      var response = await http.Response.fromStream(streamedResponse);
-      
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      } else {
-        throw Exception("AI Service returned code ${response.statusCode}: ${response.body}");
-      }
-    } catch (_) {
-      try {
-        // Fallback to direct FastAPI port for local emulator testing
-        final localAiUrl = baseUrl.contains('10.0.2.2') ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
-        var request = http.MultipartRequest(
-          'POST',
-          Uri.parse('$localAiUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection'),
-        );
-        request.headers.addAll(_authHeaders);
-        request.headers['x-internal-token'] = 'wdp301-super-secret-key-change-in-production';
-        
-        if (fileBytes != null) {
-          request.files.add(http.MultipartFile.fromBytes(
+        request.files.add(
+          http.MultipartFile.fromBytes(
             'file',
             fileBytes,
             filename: 'upload.jpg',
             contentType: mediaType,
-          ));
-        } else {
-          request.files.add(await http.MultipartFile.fromPath(
+          ),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath(
             'file',
             filePath,
             contentType: mediaType,
-          ));
+          ),
+        );
+      }
+
+      var streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+      );
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception(
+          "AI Service returned code ${response.statusCode}: ${response.body}",
+        );
+      }
+    } catch (_) {
+      try {
+        // Fallback to direct FastAPI port for local emulator testing
+        final localAiUrl = baseUrl.contains('10.0.2.2')
+            ? 'http://10.0.2.2:8000'
+            : 'http://localhost:8000';
+        var request = http.MultipartRequest(
+          'POST',
+          Uri.parse(
+            '$localAiUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection',
+          ),
+        );
+        request.headers.addAll(_authHeaders);
+        request.headers['x-internal-token'] =
+            'wdp301-super-secret-key-change-in-production';
+
+        if (fileBytes != null) {
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              fileBytes,
+              filename: 'upload.jpg',
+              contentType: mediaType,
+            ),
+          );
+        } else {
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'file',
+              filePath,
+              contentType: mediaType,
+            ),
+          );
         }
-        
-        var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+
+        var streamedResponse = await request.send().timeout(
+          const Duration(seconds: 30),
+        );
         var response = await http.Response.fromStream(streamedResponse);
-        
+
         if (response.statusCode == 200) {
           return jsonDecode(response.body) as Map<String, dynamic>;
         } else {
-          throw Exception("AI Service returned code ${response.statusCode}: ${response.body}");
+          throw Exception(
+            "AI Service returned code ${response.statusCode}: ${response.body}",
+          );
         }
       } catch (e) {
         debugPrint("AI GRN inspection failed: $e");
@@ -387,22 +496,21 @@ class ApiService {
     required int actualQty,
     required String userId,
   }) async {
-    final body = jsonEncode({
-      'actualQty': actualQty,
-      'verifiedBy': userId,
-    });
-    
+    final body = jsonEncode({'actualQty': actualQty, 'verifiedBy': userId});
+
     final headers = {
       ..._authHeaders,
       'x-internal-token': 'wdp301-super-secret-key-change-in-production',
     };
-    
+
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/ai/inspections/$inspectionRecordId/verify'),
-        headers: headers,
-        body: body,
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/ai/inspections/$inspectionRecordId/verify'),
+            headers: headers,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return true;
       } else {
@@ -410,12 +518,18 @@ class ApiService {
       }
     } catch (_) {
       try {
-        final localAiUrl = baseUrl.contains('10.0.2.2') ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
-        final response = await http.post(
-          Uri.parse('$localAiUrl/api/ai/inspections/$inspectionRecordId/verify'),
-          headers: headers,
-          body: body,
-        ).timeout(const Duration(seconds: 30));
+        final localAiUrl = baseUrl.contains('10.0.2.2')
+            ? 'http://10.0.2.2:8000'
+            : 'http://localhost:8000';
+        final response = await http
+            .post(
+              Uri.parse(
+                '$localAiUrl/api/ai/inspections/$inspectionRecordId/verify',
+              ),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 30));
         return response.statusCode == 200 || response.statusCode == 201;
       } catch (e) {
         debugPrint("Failed to verify count: $e");
@@ -427,17 +541,21 @@ class ApiService {
   // UC-19: Approve Goods Receipt
   static Future<bool> approveGoodsReceipt(String receiptId) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/goods-receipts/$receiptId/approve'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/goods-receipts/$receiptId/approve'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 30));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
       try {
-        final response = await http.post(
-          Uri.parse('$fallbackUrl/api/goods-receipts/$receiptId/approve'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 30));
+        final response = await http
+            .post(
+              Uri.parse('$fallbackUrl/api/goods-receipts/$receiptId/approve'),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 30));
         return response.statusCode == 200 || response.statusCode == 201;
       } catch (e) {
         debugPrint("Failed to approve GRN: $e");
@@ -459,16 +577,18 @@ class ApiService {
           'expectedQty': 10,
           'actualQty': 0,
           'unit': 'Hộp',
-          'status': 'PENDING'
-        }
-      ]
-    }
+          'status': 'PENDING',
+        },
+      ],
+    },
   ];
 
   // UC-19: Fetch all Goods Receipt Notes from database
   static Future<List<dynamic>> getGoodsReceipts() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/goods-receipts'), headers: _authHeaders).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/goods-receipts'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as List<dynamic>;
       }
@@ -481,7 +601,9 @@ class ApiService {
   // UC-19: Fetch single medicine details by ID
   static Future<Map<String, dynamic>?> getMedicineById(String id) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/medicines/$id'), headers: _authHeaders).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/medicines/$id'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
@@ -494,17 +616,25 @@ class ApiService {
   // UC-19: Submit inspection report
   static Future<bool> submitInspection(String receiptId) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/goods-receipts/$receiptId/submit-inspection'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse(
+              '$baseUrl/api/goods-receipts/$receiptId/submit-inspection',
+            ),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 30));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
       try {
-        final response = await http.post(
-          Uri.parse('$fallbackUrl/api/goods-receipts/$receiptId/submit-inspection'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 30));
+        final response = await http
+            .post(
+              Uri.parse(
+                '$fallbackUrl/api/goods-receipts/$receiptId/submit-inspection',
+              ),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 30));
         return response.statusCode == 200 || response.statusCode == 201;
       } catch (e) {
         debugPrint("Failed to submit inspection: $e");
@@ -513,30 +643,33 @@ class ApiService {
     }
   }
 
-
   // Get User Profile using JWT token
   static Future<Map<String, dynamic>?> getProfile(String token) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/auth/profile'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/auth/profile'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (_) {
       try {
-        final response = await http.get(
-          Uri.parse('$fallbackUrl/api/auth/profile'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-        ).timeout(const Duration(seconds: 30));
+        final response = await http
+            .get(
+              Uri.parse('$fallbackUrl/api/auth/profile'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+            )
+            .timeout(const Duration(seconds: 30));
 
         if (response.statusCode == 200) {
           return jsonDecode(response.body) as Map<String, dynamic>;
@@ -551,7 +684,9 @@ class ApiService {
   // Fetch Purchase Orders for Director / HQ Approval
   static Future<List<dynamic>> getPurchaseOrders() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/purchase-orders'), headers: _authHeaders).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/purchase-orders'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) return decoded;
@@ -571,8 +706,8 @@ class ApiService {
         'createdAt': '2026-06-12T08:00:00.000Z',
         'items': [
           {'medicineName': 'Amoxicillin 500mg', 'qty': 500, 'price': 85000},
-          {'medicineName': 'Panadol Extra', 'qty': 1000, 'price': 45000}
-        ]
+          {'medicineName': 'Panadol Extra', 'qty': 1000, 'price': 45000},
+        ],
       },
       {
         '_id': 'PO-88232',
@@ -584,25 +719,32 @@ class ApiService {
         'createdAt': '2026-06-12T09:30:00.000Z',
         'items': [
           {'medicineName': 'Hoạt huyết dưỡng não', 'qty': 2000, 'price': 50000},
-          {'medicineName': 'Dầu khuynh diệp', 'qty': 1500, 'price': 35000}
-        ]
-      }
+          {'medicineName': 'Dầu khuynh diệp', 'qty': 1500, 'price': 35000},
+        ],
+      },
     ];
   }
 
   // Approve or Reject Purchase Order
-  static Future<bool> approvePurchaseOrder(String poId, String action, {String? paymentType, String? rejectionReason}) async {
+  static Future<bool> approvePurchaseOrder(
+    String poId,
+    String action, {
+    String? paymentType,
+    String? rejectionReason,
+  }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/purchase-orders/approve-pay'),
-        headers: _authHeaders,
-        body: jsonEncode({
-          'poId': poId,
-          'action': action,
-          'paymentType': paymentType,
-          'rejectionReason': rejectionReason
-        }),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/purchase-orders/approve-pay'),
+            headers: _authHeaders,
+            body: jsonEncode({
+              'poId': poId,
+              'action': action,
+              'paymentType': paymentType,
+              'rejectionReason': rejectionReason,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       debugPrint("Failed to process PO approval: $e");
@@ -613,7 +755,12 @@ class ApiService {
   // Fetch Purchase Requisitions (PR) for Branch Screen
   static Future<List<dynamic>> getPurchaseRequisitions() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/purchase-requisitions'), headers: _authHeaders).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/purchase-requisitions'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) return decoded;
@@ -632,20 +779,24 @@ class ApiService {
         'createdAt': '2026-06-14T10:00:00.000Z',
         'items': [
           {'medicineName': 'Amoxicillin 500mg', 'qty': 200},
-          {'medicineName': 'Decolgen Forte', 'qty': 150}
-        ]
-      }
+          {'medicineName': 'Decolgen Forte', 'qty': 150},
+        ],
+      },
     ];
   }
 
   // Create Purchase Requisition (PR)
-  static Future<bool> createPurchaseRequisition(Map<String, dynamic> prData) async {
+  static Future<bool> createPurchaseRequisition(
+    Map<String, dynamic> prData,
+  ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/purchase-requisitions'),
-        headers: _authHeaders,
-        body: jsonEncode(prData),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/purchase-requisitions'),
+            headers: _authHeaders,
+            body: jsonEncode(prData),
+          )
+          .timeout(const Duration(seconds: 30));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       debugPrint("Failed to create PR: $e");
@@ -654,35 +805,51 @@ class ApiService {
   }
 
   // Submit Order / POS Sale / Customer Checkout
-  static Future<Map<String, dynamic>?> createOrder(Map<String, dynamic> orderData) async {
+  static Future<Map<String, dynamic>?> createOrder(
+    Map<String, dynamic> orderData,
+  ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/orders'),
-        headers: _authHeaders,
-        body: jsonEncode(orderData),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/orders'),
+            headers: _authHeaders,
+            body: jsonEncode(orderData),
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
-      debugPrint('createOrder status: ${response.statusCode} body: ${response.body}');
+      debugPrint(
+        'createOrder status: ${response.statusCode} body: ${response.body}',
+      );
     } catch (e) {
       debugPrint("Failed to create order: $e");
     }
-    return {'success': true, 'orderId': 'ORD-${DateTime.now().millisecondsSinceEpoch}', 'message': 'Đơn hàng đã được tạo thành công!'};
+    return {
+      'success': true,
+      'orderId': 'ORD-${DateTime.now().millisecondsSinceEpoch}',
+      'message': 'Đơn hàng đã được tạo thành công!',
+    };
   }
 
   // Create PayOS payment link for QR/Card online payment
-  static Future<Map<String, dynamic>?> createPayOSLink(Map<String, dynamic> orderData) async {
+  static Future<Map<String, dynamic>?> createPayOSLink(
+    Map<String, dynamic> orderData,
+  ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/orders/payos-link'),
-        headers: _authHeaders,
-        body: jsonEncode(orderData),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/orders/payos-link'),
+            headers: _authHeaders,
+            body: jsonEncode(orderData),
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
-      debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body}');
+      debugPrint(
+        'createPayOSLink status: ${response.statusCode} body: ${response.body}',
+      );
     } catch (e) {
       debugPrint("Failed to create PayOS link: $e");
     }
@@ -692,7 +859,12 @@ class ApiService {
   // Fetch Expiration Report for Warehouse Screen
   static Future<List<dynamic>> getExpirationReport() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/medicines/expiration-report'), headers: _authHeaders).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/medicines/expiration-report'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) return decoded;
@@ -725,22 +897,49 @@ class ApiService {
         'stock': 50,
         'unit': 'Hộp',
         'status': 'SOON_TO_EXPIRE',
-      }
+      },
     ];
   }
 
   // Fetch System Microservice Health
   static Future<List<Map<String, dynamic>>> getServiceHealth() async {
     final services = [
-      {'name': 'auth-service', 'port': '4001', 'status': 'ACTIVE', 'load': '1.2%'},
-      {'name': 'user-service', 'port': '4002', 'status': 'ACTIVE', 'load': '0.8%'},
-      {'name': 'inventory-service', 'port': '4003', 'status': 'ACTIVE', 'load': '2.4%'},
-      {'name': 'supplier-service', 'port': '4004', 'status': 'ACTIVE', 'load': '0.3%'},
-      {'name': 'ai-service', 'port': '8000', 'status': 'ACTIVE', 'load': '12.6%'},
+      {
+        'name': 'auth-service',
+        'port': '4001',
+        'status': 'ACTIVE',
+        'load': '1.2%',
+      },
+      {
+        'name': 'user-service',
+        'port': '4002',
+        'status': 'ACTIVE',
+        'load': '0.8%',
+      },
+      {
+        'name': 'inventory-service',
+        'port': '4003',
+        'status': 'ACTIVE',
+        'load': '2.4%',
+      },
+      {
+        'name': 'supplier-service',
+        'port': '4004',
+        'status': 'ACTIVE',
+        'load': '0.3%',
+      },
+      {
+        'name': 'ai-service',
+        'port': '8000',
+        'status': 'ACTIVE',
+        'load': '12.6%',
+      },
     ];
     for (var s in services) {
       try {
-        final res = await http.get(Uri.parse('$baseUrl/api/health'), headers: _authHeaders).timeout(const Duration(seconds: 30));
+        final res = await http
+            .get(Uri.parse('$baseUrl/api/health'), headers: _authHeaders)
+            .timeout(const Duration(seconds: 30));
         if (res.statusCode == 200) {
           s['status'] = 'ACTIVE';
         }
@@ -750,7 +949,9 @@ class ApiService {
   }
 
   // UC-34: Get voice-activated AI consultation recommendation (Web-safe: text-based)
-  static Future<Map<String, dynamic>?> getVoicePrescription(String audioPath) async {
+  static Future<Map<String, dynamic>?> getVoicePrescription(
+    String audioPath,
+  ) async {
     // audioPath is unused on web; the endpoint accepts multipart audio
     // For Web builds, fall back gracefully
     try {
@@ -760,7 +961,9 @@ class ApiService {
         request.headers['Authorization'] = 'Bearer $currentToken';
       }
       request.files.add(await http.MultipartFile.fromPath('audio', audioPath));
-      var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      var streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+      );
       var response = await http.Response.fromStream(streamedResponse);
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -772,8 +975,12 @@ class ApiService {
         if (currentToken.isNotEmpty) {
           request.headers['Authorization'] = 'Bearer $currentToken';
         }
-        request.files.add(await http.MultipartFile.fromPath('audio', audioPath));
-        var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+        request.files.add(
+          await http.MultipartFile.fromPath('audio', audioPath),
+        );
+        var streamedResponse = await request.send().timeout(
+          const Duration(seconds: 30),
+        );
         var response = await http.Response.fromStream(streamedResponse);
         if (response.statusCode == 200) {
           return jsonDecode(response.body) as Map<String, dynamic>;
@@ -786,23 +993,29 @@ class ApiService {
   }
 
   // UC-34: Text-based AI symptom consultation (works on Flutter Web)
-  static Future<Map<String, dynamic>?> getTextPrescription(String symptoms) async {
+  static Future<Map<String, dynamic>?> getTextPrescription(
+    String symptoms,
+  ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/prescriptions/symptom-consult'),
-        headers: _authHeaders,
-        body: jsonEncode({'symptoms': symptoms}),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/prescriptions/symptom-consult'),
+            headers: _authHeaders,
+            body: jsonEncode({'symptoms': symptoms}),
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (_) {
       try {
-        final response = await http.post(
-          Uri.parse('$fallbackUrl/api/prescriptions/symptom-consult'),
-          headers: _authHeaders,
-          body: jsonEncode({'symptoms': symptoms}),
-        ).timeout(const Duration(seconds: 30));
+        final response = await http
+            .post(
+              Uri.parse('$fallbackUrl/api/prescriptions/symptom-consult'),
+              headers: _authHeaders,
+              body: jsonEncode({'symptoms': symptoms}),
+            )
+            .timeout(const Duration(seconds: 30));
         if (response.statusCode == 200) {
           return jsonDecode(response.body) as Map<String, dynamic>;
         }
@@ -812,6 +1025,7 @@ class ApiService {
     }
     return null;
   }
+
   // Fetch notifications for the current user
   static Future<List<dynamic>> getMyNotifications({
     bool unreadOnly = false,
@@ -820,10 +1034,12 @@ class ApiService {
   }) async {
     try {
       final queryParams = '?unreadOnly=$unreadOnly&limit=$limit&offset=$offset';
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/notifications/me$queryParams'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/notifications/me$queryParams'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -833,11 +1049,14 @@ class ApiService {
       }
     } catch (_) {
       try {
-        final queryParams = '?unreadOnly=$unreadOnly&limit=$limit&offset=$offset';
-        final response = await http.get(
-          Uri.parse('$fallbackUrl/api/notifications/me$queryParams'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 5));
+        final queryParams =
+            '?unreadOnly=$unreadOnly&limit=$limit&offset=$offset';
+        final response = await http
+            .get(
+              Uri.parse('$fallbackUrl/api/notifications/me$queryParams'),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 5));
 
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);
@@ -855,28 +1074,36 @@ class ApiService {
   // Get count of unread notifications
   static Future<int> getUnreadCount() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/notifications/unread-count'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 4));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/notifications/unread-count'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded != null && decoded['success'] == true) {
-          return decoded['data'] is int ? decoded['data'] : int.tryParse(decoded['data'].toString()) ?? 0;
+          return decoded['data'] is int
+              ? decoded['data']
+              : int.tryParse(decoded['data'].toString()) ?? 0;
         }
       }
     } catch (_) {
       try {
-        final response = await http.get(
-          Uri.parse('$fallbackUrl/api/notifications/unread-count'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 4));
+        final response = await http
+            .get(
+              Uri.parse('$fallbackUrl/api/notifications/unread-count'),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 4));
 
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);
           if (decoded != null && decoded['success'] == true) {
-            return decoded['data'] is int ? decoded['data'] : int.tryParse(decoded['data'].toString()) ?? 0;
+            return decoded['data'] is int
+                ? decoded['data']
+                : int.tryParse(decoded['data'].toString()) ?? 0;
           }
         }
       } catch (e) {
@@ -889,17 +1116,21 @@ class ApiService {
   // Mark a specific notification as read
   static Future<bool> markAsRead(String id) async {
     try {
-      final response = await http.patch(
-        Uri.parse('$baseUrl/api/notifications/$id/read'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 4));
+      final response = await http
+          .patch(
+            Uri.parse('$baseUrl/api/notifications/$id/read'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 4));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
       try {
-        final response = await http.patch(
-          Uri.parse('$fallbackUrl/api/notifications/$id/read'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 4));
+        final response = await http
+            .patch(
+              Uri.parse('$fallbackUrl/api/notifications/$id/read'),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 4));
         return response.statusCode == 200 || response.statusCode == 201;
       } catch (e) {
         debugPrint("Failed to mark notification as read: $e");
@@ -911,17 +1142,21 @@ class ApiService {
   // Mark all notifications as read
   static Future<bool> markAllAsRead() async {
     try {
-      final response = await http.patch(
-        Uri.parse('$baseUrl/api/notifications/mark-all-read'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .patch(
+            Uri.parse('$baseUrl/api/notifications/mark-all-read'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 5));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
       try {
-        final response = await http.patch(
-          Uri.parse('$fallbackUrl/api/notifications/mark-all-read'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 5));
+        final response = await http
+            .patch(
+              Uri.parse('$fallbackUrl/api/notifications/mark-all-read'),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 5));
         return response.statusCode == 200 || response.statusCode == 201;
       } catch (e) {
         debugPrint("Failed to mark all notifications as read: $e");
@@ -933,17 +1168,21 @@ class ApiService {
   // Delete a notification
   static Future<bool> deleteNotification(String id) async {
     try {
-      final response = await http.delete(
-        Uri.parse('$baseUrl/api/notifications/$id'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 4));
+      final response = await http
+          .delete(
+            Uri.parse('$baseUrl/api/notifications/$id'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 4));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
       try {
-        final response = await http.delete(
-          Uri.parse('$fallbackUrl/api/notifications/$id'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 4));
+        final response = await http
+            .delete(
+              Uri.parse('$fallbackUrl/api/notifications/$id'),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 4));
         return response.statusCode == 200 || response.statusCode == 201;
       } catch (e) {
         debugPrint("Failed to delete notification: $e");
@@ -953,13 +1192,17 @@ class ApiService {
   }
 
   // Polling: Get new notifications after timestamp
-  static Future<List<dynamic>> getNewNotifications(String afterTimestamp) async {
+  static Future<List<dynamic>> getNewNotifications(
+    String afterTimestamp,
+  ) async {
     try {
       final queryParams = '?after=${Uri.encodeComponent(afterTimestamp)}';
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/notifications/new$queryParams'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/notifications/new$queryParams'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -970,10 +1213,12 @@ class ApiService {
     } catch (_) {
       try {
         final queryParams = '?after=${Uri.encodeComponent(afterTimestamp)}';
-        final response = await http.get(
-          Uri.parse('$fallbackUrl/api/notifications/new$queryParams'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 5));
+        final response = await http
+            .get(
+              Uri.parse('$fallbackUrl/api/notifications/new$queryParams'),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 5));
 
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);
@@ -988,4 +1233,3 @@ class ApiService {
     return [];
   }
 }
-
