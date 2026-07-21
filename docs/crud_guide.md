@@ -1,10 +1,11 @@
-**# Hướng Dẫn Phát Triển CRUD Quy Chuẩn (CRUD Implementation Playbook)
+**# Hướng Dẫn Phát Triển CRUD Quy Chuẩn (CRUD Implementation Playbook) - v1.1
 
 ## Kiến Trúc Microservices: API Gateway + Kafka + Redis + MongoDB
 
 Tài liệu này là **"công thức nấu ăn" (Recipe Book)** dành cho đội ngũ phát triển (Dev Team) để triển khai đồng bộ các tác vụ CRUD (Create, Read, Update, Delete) trên hệ thống.
 
-không đuơợc su dung api truc tiep trong code
+> [!CAUTION]
+> **Quy định:** Tuyệt đối không được gọi API HTTP trực tiếp giữa các service, mọi giao tiếp phải đi qua Kafka.
 
 Mọi Entity mới (ví dụ: `Product`, `Order`, `Inventory`...) khi được phát triển cần tuân thủ tuyệt đối cấu trúc và luồng xử lý chuẩn hóa dưới đây.
 
@@ -298,4 +299,3 @@ export class ProductMsService {
 >
 > * Đối với sự kiện (Event-Driven): `{entity}.event.{action}` (Ví dụ: `order.event.created`).
 > * Đối với truy vấn (Request-Response): `{entity}.get.{query}` (Ví dụ: `order.get.by.id`).
-**
