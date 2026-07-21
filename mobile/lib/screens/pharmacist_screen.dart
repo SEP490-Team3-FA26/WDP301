@@ -820,15 +820,20 @@ class _PharmacistScreenState extends State<PharmacistScreen> with TickerProvider
 
   Future<void> _showToastInvoiceSuccess() async {
     final orderData = {
+      'patientName': 'Khách hàng mua tại quầy',
+      'patientPhone': '0900000000',
+      'shippingAddress': 'Mua tại quầy POS',
       'items': _cart.map((item) => {
-        'medicineId': item['id'],
+        'medicineId': (item['id'] != null && item['id'].toString().isNotEmpty)
+            ? item['id'].toString()
+            : 'MED-001',
         'name': item['name'],
         'price': item['price'],
         'quantity': item['qty'],
       }).toList(),
       'totalAmount': _totalAmount,
       'paymentMethod': 'CASH',
-      'type': 'POS_SALE'
+      'type': 'RETAIL',
     };
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -839,19 +844,29 @@ class _PharmacistScreenState extends State<PharmacistScreen> with TickerProvider
       ),
     );
 
-    await ApiService.createOrder(orderData);
+    final res = await ApiService.createOrder(orderData);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Thanh toán và xuất hóa đơn POS thành công!', style: TextStyle(fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      setState(() {
-        _cart.clear();
-      });
+      if (res != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Thanh toán và xuất hóa đơn POS thành công!', style: TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        setState(() {
+          _cart.clear();
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tạo đơn hàng thất bại. Vui lòng kiểm tra lại kết nối máy chủ.', style: TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 }
