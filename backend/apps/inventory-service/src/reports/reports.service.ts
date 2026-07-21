@@ -22,8 +22,11 @@ export class ReportsService {
   async getForecastDataset(periodDays = 30, branchId?: string) {
     this.logger.log(`Compiling forecast dataset. Period: ${periodDays} days, Branch: ${branchId || 'all'}`);
     
-    // 1. Lấy tất cả thuốc hoạt động
-    const medicines = await this.medicineModel.find({ status: { $ne: 'INACTIVE' } }).lean().exec();
+    // 1. Lấy tất cả thuốc hoạt động (chỉ lấy các trường cần thiết để tối ưu hóa hiệu năng)
+    const medicines = await this.medicineModel.find(
+      { status: { $ne: 'INACTIVE' } },
+      '_id name category unit price minStock status'
+    ).lean().exec();
     
     // Thời điểm bắt đầu tính doanh số
     const startDate = new Date();
@@ -103,6 +106,7 @@ export class ReportsService {
     });
 
     return dataset;
+  }
   }
 
   async getSeasonalDataset(branchId?: string, monthsCount = 12) {

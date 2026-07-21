@@ -242,10 +242,52 @@ export class AppGatewayModule {
       'inventory.transfer.list',
       'inventory.transfer.get_by_id',
       'inventory.sale.report',
-      'quota.get.by.id',
-      'quota.get.by.branch',
-      'quota.get.summary',
-      'quota.get.all',
+      // Các topic báo cáo và phân tích AI bổ sung
+      'inventory.reports.forecast_dataset',
+      'inventory.reports.seasonal_trends',
+      'inventory.profit.report',
+      'inventory.report.create',
+      'inventory.report.list',
+      'inventory.sale.performance',
+      // Các topic bán hàng thực tế
+      'inventory.sale.create',
+      'inventory.sale.list',
+      'inventory.sale.get',
+      'inventory.sale.return',
+      'inventory.sale.exchange',
+      // Các topic PR/PO bổ sung
+      'inventory.pr.update_status',
+      'inventory.pr.update',
+      'inventory.pr.delete',
+      'inventory.po.receive',
+      // Các topic bảng giá
+      'inventory.pricing.list',
+      'inventory.pricing.upsert',
+      'inventory.pricing.bulk_upsert',
+      'inventory.pricing.delete',
+      'inventory.pricing.resolve',
+      'inventory.pricing.copy',
+      'inventory.pricing.summary',
+      // Đơn thuốc
+      'inventory.prescription.get',
+      // Chi tiết thuốc và xử lý hết hạn
+      'inventory.medicine.update_price_tiers',
+      'inventory.medicine.handle_expiration_action',
+      'inventory.medicine.low_stock_report',
+      'inventory.medicine.dropdown_list',
+      'inventory.medicine.get_alternatives',
+      'inventory.medicine.update_price',
+      'inventory.medicine.safe_stock_chain',
+      'inventory.medicine.detect_anomalies',
+      'inventory.medicine.branch_list',
+      // Inventory transactions bổ sung
+      'inventory.transactions.trace',
+      'inventory.reports.import_export',
+      // Kiểm kho
+      'inventory.check.create',
+      'inventory.check.list',
+      'inventory.check.get_by_id',
+      'inventory.check.complete',
     ];
     for (const t of inventoryTopics) {
       this.inventoryClient.subscribeToResponseOf(t);
@@ -255,6 +297,15 @@ export class AppGatewayModule {
     const supplierTopics = [
       'supplier.get_all',
       'supplier.create',
+      // Công nợ nhà cung cấp
+      'supplier.credit.check_limit',
+      'supplier.credit.update_limit',
+      'supplier.credit.record_grn',
+      'supplier.credit.record_payment',
+      'supplier.credit.debt_detail',
+      'supplier.credit.debt_summary',
+      'supplier.credit.debt_overdue',
+      'supplier.credit.debt_aging',
     ];
     for (const t of supplierTopics) {
       this.supplierClient.subscribeToResponseOf(t);
@@ -278,6 +329,11 @@ export class AppGatewayModule {
       'user.admin.employee.get',
       'user.admin.employee.update',
       'user.admin.employee.ban_unban',
+      // Điểm tích lũy và Audit log bổ sung
+      'user.loyalty.update_points',
+      'user.audit.list',
+      'user.audit.export',
+      'user.audit.export_status',
     ];
     for (const t of userTopics) {
       this.userClient.subscribeToResponseOf(t);
@@ -289,6 +345,12 @@ export class AppGatewayModule {
       'orders.check',
       'orders.list',
       'orders.my-orders',
+      // Vouchers
+      'vouchers.create',
+      'vouchers.update',
+      'vouchers.delete',
+      'vouchers.list',
+      'vouchers.validate',
     ];
     for (const t of orderTopics) {
       this.orderClient.subscribeToResponseOf(t);
@@ -309,6 +371,11 @@ export class AppGatewayModule {
       'auth.2fa.authenticate',
       'auth.verify.email',
       'auth.resend.verification',
+      // Quota (được gọi qua kafkaClient)
+      'quota.get.by.id',
+      'quota.get.by.branch',
+      'quota.get.summary',
+      'quota.get.all',
     ];
     for (const t of kafkaTopics) {
       this.kafkaClient.subscribeToResponseOf(t);

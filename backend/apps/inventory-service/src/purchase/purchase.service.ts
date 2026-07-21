@@ -1114,7 +1114,7 @@ export class PurchaseService {
       const po = poMap.get(grn.poId?.toString());
       return {
         ...grn,
-        poCode: po ? po.poCode : 'Unknown'
+        poCode: po ? (po as any).poCode || po._id.toString() : 'Unknown'
       };
     });
   }

@@ -188,6 +188,7 @@ NGUYÊN TẮC QUAN TRỌNG:
    - "MEDIUM": Khi tồn kho hiện tại dưới định mức minStock hoặc sắp hết hàng trong vòng 10 ngày tới.
    - "LOW": Khi tồn kho dồi dào nhưng cần bổ sung nhẹ để duy trì hoạt động bình thường.
 4. Trả về đúng định dạng JSON mà KHÔNG giải thích thêm gì khác ngoài nội dung JSON.
+5. Bạn phải phân tích và đưa ra khuyến nghị cho ít nhất 15-20 sản phẩm nổi bật nhất trong danh sách được gửi lên (ưu tiên các sản phẩm có tồn kho thấp hoặc có doanh số bán). Ngay cả khi sản phẩm không cần nhập thêm (suggestedOrderQty = 0), hãy vẫn đưa vào danh sách đề xuất với mức độ khẩn cấp LOW kèm lý do phân tích rõ ràng (ví dụ: tồn kho đủ dùng, hoặc đã có hàng đang về đủ đáp ứng) để thủ kho có cái nhìn bao quát về tình hình của các mặt hàng quan trọng.
 
 BẮT BUỘC TRẢ VỀ JSON HỢP LỆ THEO SCHEMA SAU:
 {
@@ -211,9 +212,9 @@ async def generate_demand_forecast(dataset: list, period_days: int) -> dict:
     Tạo dự báo nhu cầu nhập hàng JSON dựa trên dataset lịch sử bán hàng và tồn kho
     """
     try:
-        # Lọc ưu tiên 350 sản phẩm quan trọng nhất (tồn kho thấp / nhu cầu cao) gửi cho LLM
+        # Lọc ưu tiên 60 sản phẩm quan trọng nhất (tồn kho thấp / nhu cầu cao) gửi cho LLM để tránh Rate Limit TPM của Groq
         sorted_dataset = sorted(dataset, key=lambda x: (x.get('currentStock', 9999) - x.get('reorderPoint', 30)))
-        sample_dataset = sorted_dataset[:350]
+        sample_dataset = sorted_dataset[:60]
         
         # Rút gọn siêu tiết kiệm Token (chỉ ~10-12 tokens/sản phẩm)
         compact_samples = [
@@ -230,7 +231,7 @@ async def generate_demand_forecast(dataset: list, period_days: int) -> dict:
         ]
 
         dataset_str = json.dumps(compact_samples, ensure_ascii=False)
-        user_prompt = f"Số ngày dự báo: {period_days} ngày. Tổng danh mục trong kho: {len(dataset)}. Dưới đây là 350 sản phẩm dược phẩm ưu tiên hàng đầu:\n{dataset_str}"
+        user_prompt = f"Số ngày dự báo: {period_days} ngày. Tổng danh mục trong kho: {len(dataset)}. Dưới đây là {len(compact_samples)} sản phẩm dược phẩm ưu tiên hàng đầu:\n{dataset_str}"
         
         response = await client.chat.completions.create(
             model="llama-3.3-70b-versatile",

@@ -435,7 +435,10 @@ export class ReportController implements OnModuleInit {
       try {
         const response = await fetch(aiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
+          },
           body: JSON.stringify({ dataset: rawDataset || [], periodDays: days }),
         });
 
@@ -447,7 +450,10 @@ export class ReportController implements OnModuleInit {
           aiUrl = 'http://localhost:8000/api/ai/forecast';
           const response = await fetch(aiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
+            },
             body: JSON.stringify({ dataset: rawDataset || [], periodDays: days }),
           });
 
@@ -668,14 +674,20 @@ export class ReportController implements OnModuleInit {
         try {
           aiResponse = await fetch(aiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
+            },
             body: JSON.stringify({ dataset: rawDataset || [], weatherRegion, currentSeason, currentMonth }),
           });
         } catch (err) {
           aiUrl = 'http://localhost:8000/api/ai/seasonal-analysis';
           aiResponse = await fetch(aiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
+            },
             body: JSON.stringify({ dataset: rawDataset || [], weatherRegion, currentSeason, currentMonth }),
           });
         }

@@ -80,6 +80,7 @@ export class PrescriptionController implements OnModuleInit {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
         },
         body: JSON.stringify({ symptoms }),
       });
