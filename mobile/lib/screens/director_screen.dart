@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/notification_badge.dart';
 
 class DirectorScreen extends StatefulWidget {
   const DirectorScreen({super.key});
@@ -117,6 +118,9 @@ class _DirectorScreenState extends State<DirectorScreen> {
         ),
         elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [
+          NotificationBadge(iconColor: Colors.white),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(

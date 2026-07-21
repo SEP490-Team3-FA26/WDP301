@@ -6,7 +6,7 @@ import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
-  static const String baseUrl = kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
+  static const String baseUrl = kIsWeb ? 'http://localhost:4000' : 'http://127.0.0.1:4000';
   static const String fallbackUrl = 'http://localhost:4000';
 
   // JWT token stored globally after login
@@ -810,4 +810,180 @@ class ApiService {
     }
     return null;
   }
+  // Fetch notifications for the current user
+  static Future<List<dynamic>> getMyNotifications({
+    bool unreadOnly = false,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    try {
+      final queryParams = '?unreadOnly=$unreadOnly&limit=$limit&offset=$offset';
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/notifications/me$queryParams'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded != null && decoded['success'] == true) {
+          return decoded['data'] ?? [];
+        }
+      }
+    } catch (_) {
+      try {
+        final queryParams = '?unreadOnly=$unreadOnly&limit=$limit&offset=$offset';
+        final response = await http.get(
+          Uri.parse('$fallbackUrl/api/notifications/me$queryParams'),
+          headers: _authHeaders,
+        ).timeout(const Duration(seconds: 5));
+
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded != null && decoded['success'] == true) {
+            return decoded['data'] ?? [];
+          }
+        }
+      } catch (e) {
+        debugPrint("Failed to fetch notifications: $e");
+      }
+    }
+    return [];
+  }
+
+  // Get count of unread notifications
+  static Future<int> getUnreadCount() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/notifications/unread-count'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded != null && decoded['success'] == true) {
+          return decoded['data'] is int ? decoded['data'] : int.tryParse(decoded['data'].toString()) ?? 0;
+        }
+      }
+    } catch (_) {
+      try {
+        final response = await http.get(
+          Uri.parse('$fallbackUrl/api/notifications/unread-count'),
+          headers: _authHeaders,
+        ).timeout(const Duration(seconds: 4));
+
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded != null && decoded['success'] == true) {
+            return decoded['data'] is int ? decoded['data'] : int.tryParse(decoded['data'].toString()) ?? 0;
+          }
+        }
+      } catch (e) {
+        debugPrint("Failed to fetch unread notifications count: $e");
+      }
+    }
+    return 0;
+  }
+
+  // Mark a specific notification as read
+  static Future<bool> markAsRead(String id) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/api/notifications/$id/read'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 4));
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      try {
+        final response = await http.patch(
+          Uri.parse('$fallbackUrl/api/notifications/$id/read'),
+          headers: _authHeaders,
+        ).timeout(const Duration(seconds: 4));
+        return response.statusCode == 200 || response.statusCode == 201;
+      } catch (e) {
+        debugPrint("Failed to mark notification as read: $e");
+        return false;
+      }
+    }
+  }
+
+  // Mark all notifications as read
+  static Future<bool> markAllAsRead() async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/api/notifications/mark-all-read'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 5));
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      try {
+        final response = await http.patch(
+          Uri.parse('$fallbackUrl/api/notifications/mark-all-read'),
+          headers: _authHeaders,
+        ).timeout(const Duration(seconds: 5));
+        return response.statusCode == 200 || response.statusCode == 201;
+      } catch (e) {
+        debugPrint("Failed to mark all notifications as read: $e");
+        return false;
+      }
+    }
+  }
+
+  // Delete a notification
+  static Future<bool> deleteNotification(String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/notifications/$id'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 4));
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      try {
+        final response = await http.delete(
+          Uri.parse('$fallbackUrl/api/notifications/$id'),
+          headers: _authHeaders,
+        ).timeout(const Duration(seconds: 4));
+        return response.statusCode == 200 || response.statusCode == 201;
+      } catch (e) {
+        debugPrint("Failed to delete notification: $e");
+        return false;
+      }
+    }
+  }
+
+  // Polling: Get new notifications after timestamp
+  static Future<List<dynamic>> getNewNotifications(String afterTimestamp) async {
+    try {
+      final queryParams = '?after=${Uri.encodeComponent(afterTimestamp)}';
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/notifications/new$queryParams'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded != null && decoded['success'] == true) {
+          return decoded['data'] ?? [];
+        }
+      }
+    } catch (_) {
+      try {
+        final queryParams = '?after=${Uri.encodeComponent(afterTimestamp)}';
+        final response = await http.get(
+          Uri.parse('$fallbackUrl/api/notifications/new$queryParams'),
+          headers: _authHeaders,
+        ).timeout(const Duration(seconds: 5));
+
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded != null && decoded['success'] == true) {
+            return decoded['data'] ?? [];
+          }
+        }
+      } catch (e) {
+        debugPrint("Failed to poll new notifications: $e");
+      }
+    }
+    return [];
+  }
 }
+

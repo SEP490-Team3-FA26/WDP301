@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../models/user_role.dart';
 import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import 'google_webview_screen.dart';
 import 'admin_screen.dart';
 import 'director_screen.dart';
@@ -41,6 +42,10 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+    // Clear token and disconnect socket on landing/returning to LoginScreen
+    SocketService().disconnect();
+    ApiService.currentToken = '';
+
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -107,6 +112,8 @@ class _LoginScreenState extends State<LoginScreen>
           
           if (profile != null) {
             final userRole = _parseRole(profile['role']);
+            // Initialize socket connection after login
+            SocketService().initSocket(token);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Đăng nhập thành công! Chào mừng ${profile['fullName'] ?? ''}'),
@@ -145,6 +152,8 @@ class _LoginScreenState extends State<LoginScreen>
         final data = jsonDecode(response.body);
         if (data != null && data['access_token'] != null) {
           ApiService.currentToken = data['access_token'];
+          // Initialize socket connection for demo login
+          SocketService().initSocket(data['access_token']);
         }
       }
     } catch (e) {
