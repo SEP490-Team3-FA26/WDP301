@@ -761,27 +761,26 @@ export class PurchaseService {
       if (!Number.isFinite(unitPrice) || unitPrice < 0) {
         throw new RpcException({ message: `Đơn giá của sản phẩm ${item.medicineId} không hợp lệ` });
       }
-      if (!batchNo) {
-        throw new RpcException({ message: `Vui lòng nhập số lô cho sản phẩm ${item.medicineId}` });
-      }
-      if (!expDateValue || Number.isNaN(expDate.getTime())) {
-        throw new RpcException({ message: `Hạn sử dụng của sản phẩm ${item.medicineId} không hợp lệ` });
-      }
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (expDate <= today) {
-        throw new RpcException({ message: `Hạn sử dụng của sản phẩm ${item.medicineId} phải sau ngày hôm nay` });
+      if (batchNo) {
+        if (!expDateValue || Number.isNaN(expDate.getTime())) {
+          throw new RpcException({ message: `Hạn sử dụng của sản phẩm ${item.medicineId} không hợp lệ` });
+        }
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (expDate <= today) {
+          throw new RpcException({ message: `Hạn sử dụng của sản phẩm ${item.medicineId} phải sau ngày hôm nay` });
+        }
       }
 
       totalAmount += quantity * unitPrice;
       return {
         medicineId: item.medicineId,
-        batchNo,
-        expDate,
-        quantity,
+        batchNo: batchNo || undefined,
+        expDate: batchNo ? expDate : undefined,
+        quantity: quantity,
         actualQty: null,
         status: 'PENDING',
-        unitPrice,
+        unitPrice: unitPrice,
       };
     });
 
@@ -1111,7 +1110,20 @@ export class PurchaseService {
   }
 
   async listGoodsReceiptNotes() {
-    return this.grnModel.find().sort({ createdAt: -1 }).exec();
+    const grns = await this.grnModel.find().sort({ createdAt: -1 }).lean().exec();
+    
+    // Fetch POs to attach poCode
+    const poIds = [...new Set(grns.map(grn => grn.poId))];
+    const pos = await this.poModel.find({ _id: { $in: poIds } }).lean().exec();
+    const poMap = new Map(pos.map(po => [po._id.toString(), po]));
+
+    return grns.map(grn => {
+      const po = poMap.get(grn.poId?.toString());
+      return {
+        ...grn,
+        poCode: po ? po.poCode : 'Unknown'
+      };
+    });
   }
 
   async getGoodsReceiptNoteById(id: string) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/notification_badge.dart';
 
 class PharmacistScreen extends StatefulWidget {
   const PharmacistScreen({super.key});
@@ -392,6 +393,9 @@ class _PharmacistScreenState extends State<PharmacistScreen> with TickerProvider
         ),
         elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [
+          NotificationBadge(iconColor: Colors.white),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
