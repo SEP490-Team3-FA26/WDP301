@@ -5,6 +5,7 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { ClientKafka } from '@nestjs/microservices';
 import { PayOS } from '@payos/node';
+import { timeout } from 'rxjs';
 import { Order } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Voucher } from './schemas/voucher.schema';
@@ -120,33 +121,41 @@ export class OrdersServiceService implements OnModuleInit {
     // Nếu đơn hàng từ UserLoyalty, lấy thông tin email
     if (data.userId) {
       try {
-        const userLoyalty = await sendKafkaMessage(
-          this.userClient,
-          'user.loyalty.get',
-          { userId: data.userId }
-        );
+        const userLoyalty: any = await Promise.race([
+          sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.get',
+            { userId: data.userId }
+          ),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Loyalty get timeout')), 2500))
+        ]).catch(() => null);
+
         if (userLoyalty) {
           // Gắn email để gửi hóa đơn
           if (userLoyalty.email && !patientEmail) {
             patientEmail = userLoyalty.email;
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         this.logger.warn(`Failed to fetch user loyalty for ID ${data.userId}: ${err.message}`);
       }
 
       // Fallback: Lấy email từ auth-service (bảng users) nếu chưa có patientEmail
       if (!patientEmail) {
         try {
-          const authUser = await sendKafkaMessage(
-            this.authClient,
-            'auth.get.user.by.id',
-            data.userId
-          );
+          const authUser: any = await Promise.race([
+            sendKafkaMessage(
+              this.authClient,
+              'auth.get.user.by.id',
+              data.userId
+            ),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Auth get user timeout')), 2500))
+          ]).catch(() => null);
+
           if (authUser && authUser.email) {
             patientEmail = authUser.email;
           }
-        } catch (err) {
+        } catch (err: any) {
           this.logger.warn(`Failed to fetch user email from auth-service for ID ${data.userId}: ${err.message}`);
         }
       }
@@ -154,11 +163,18 @@ export class OrdersServiceService implements OnModuleInit {
 
     if (data.patientPhone && data.patientPhone !== DEFAULT_PHONE_NUMBER) {
       try {
-        const userLoyalty = await sendKafkaMessage(
-          this.userClient,
-          'user.loyalty.lookup',
-          { phone: data.patientPhone }
-        );
+        const userLoyalty: any = await Promise.race([
+          sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.lookup',
+            { phone: data.patientPhone }
+          ),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Loyalty lookup timeout')), 2500))
+        ]).catch(e => {
+          this.logger.warn(`Loyalty lookup timeout or error: ${e.message}`);
+          return null;
+        });
+
         if (userLoyalty && !userLoyalty.error) {
           const userPoints = userLoyalty.points || 0;
           if (redeemedPoints > userPoints) {
@@ -533,7 +549,7 @@ export class OrdersServiceService implements OnModuleInit {
     };
 
     return new Promise((resolve, reject) => {
-      this.inventoryClient.send('inventory.sale.create', payload).subscribe({
+      this.inventoryClient.send('inventory.sale.create', payload).pipe(timeout(8000)).subscribe({
         next: (res) => resolve(res),
         error: (err) => reject(err),
       });

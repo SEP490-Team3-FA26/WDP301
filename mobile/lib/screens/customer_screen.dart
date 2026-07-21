@@ -815,21 +815,25 @@ class _CustomerScreenState extends State<CustomerScreen>
       return;
     }
 
+    final String mappedPaymentMethod = _paymentMethod == 'QR' ? 'QR_PAY' : _paymentMethod;
+
     final orderData = {
-      'customerName': _fullnameController.text,
-      'phone': _phoneController.text,
-      'address': _addressController.text,
-      'paymentMethod': _paymentMethod,
+      'patientName': _fullnameController.text,
+      'patientPhone': _phoneController.text,
+      'shippingAddress': _addressController.text,
+      'paymentMethod': mappedPaymentMethod,
       'items': _cart
           .map((item) => {
-                'medicineId': item['id'],
+                'medicineId': (item['id'] != null && item['id'].toString().isNotEmpty)
+                    ? item['id'].toString()
+                    : 'MED-001',
                 'name': item['name'],
                 'price': item['price'],
                 'quantity': item['qty'],
               })
           .toList(),
       'totalAmount': _totalAmount,
-      'type': 'ONLINE_ORDER',
+      'type': 'ONLINE',
     };
 
     // Show loading overlay

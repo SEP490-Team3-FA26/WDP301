@@ -51,7 +51,7 @@ export function WarehouseInventoryHub() {
         }
       }
       setShowCreatePOModal(true);
-      
+
       // Clear query parameters
       setSearchParams(prev => {
         prev.delete("openCreatePO");

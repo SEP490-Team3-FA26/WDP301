@@ -2,10 +2,10 @@ import { Controller, Post, Get, Body, Param, Inject, OnModuleInit, Req, UseGuard
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../guards/optional-jwt-auth.guard';
 import { CreateOrderDto } from '../dto/create-order.dto';
 
 @Controller('api/orders')
-@UseGuards(JwtAuthGuard)
 export class OrderController implements OnModuleInit {
   constructor(
     @Inject('ORDER_SERVICE') private readonly orderClient: ClientKafka,
@@ -21,6 +21,7 @@ export class OrderController implements OnModuleInit {
   }
 
   @Post()
+  @UseGuards(OptionalJwtAuthGuard)
   async createOrder(@Body() data: CreateOrderDto, @Req() req: any) {
     if (req.user) {
       if (req.user.sub) data.userId = req.user.sub;
@@ -35,6 +36,7 @@ export class OrderController implements OnModuleInit {
   }
 
   @Post('payos-link')
+  @UseGuards(OptionalJwtAuthGuard)
   async createPayOSLink(@Body() data: CreateOrderDto, @Req() req: any) {
     if (req.user) {
       if (req.user.sub) data.userId = req.user.sub;
@@ -44,16 +46,18 @@ export class OrderController implements OnModuleInit {
     return await sendKafkaMessage(this.orderClient, 'orders.create', {
       ...data,
       paymentMethod: 'QR_PAY',
-      userId: req.user.sub,
+      userId: req.user?.sub,
     });
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   async listOrders() {
     return await sendKafkaMessage(this.orderClient, 'orders.list', {});
   }
 
   @Get('my-orders')
+  @UseGuards(JwtAuthGuard)
   async getMyOrders(@Req() req: any) {
     const userId = req.user.sub;
     const fullName = req.user.fullName || '';
@@ -61,4 +65,5 @@ export class OrderController implements OnModuleInit {
     return await sendKafkaMessage(this.orderClient, 'orders.my-orders', { userId, fullName });
   }
 }
+
 

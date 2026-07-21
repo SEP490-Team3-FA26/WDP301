@@ -44,53 +44,46 @@ export class PurchaseOrderController implements OnModuleInit {
     const poData = result.data || result;
     
     // Emit notification to admin ONLY (not warehouse)
-    try {
-      if (this.websocketGateway.server && poData) {
-        const poList = Array.isArray(poData) ? poData : (poData.poIds || [poData]);
-        for (const poItem of poList) {
-          const poId = typeof poItem === 'string' ? poItem : (poItem._id || poItem.id || 'PO-NEW');
-          let notificationPayload: any = {
-            type: 'NEW_PO',
-            poId: poId,
-            supplierName: poItem.supplierName || 'Nhà cung cấp',
-            itemsCount: poItem.items?.length || 1,
-            totalAmount: poItem.totalAmount || 0,
-            message: `Đơn đặt hàng mới đã được tạo và chuyển tới cấp phê duyệt`,
-            timestamp: new Date().toISOString(),
-          };
-          
-          try {
-            const [savedNotification] = await this.notificationService.create({
-              type: 'NEW_PO',
-              targetRooms: ['admin'],
-              poId,
-              supplierName: notificationPayload.supplierName,
-              itemsCount: notificationPayload.itemsCount,
-              totalAmount: notificationPayload.totalAmount,
-              message: notificationPayload.message,
-              createdBy: data.createdBy,
-            });
-
-            notificationPayload = {
-              ...notificationPayload,
-              _id: (savedNotification as any)._id,
-              id: (savedNotification as any)._id,
-              createdAt: (savedNotification as any).createdAt,
-              read: false,
-            };
-          } catch (e) {
-            console.warn('Could not persist notification:', e);
-          }
-
-          const adminClients = await this.websocketGateway.server.in('admin').fetchSockets();
-          console.log(`📊 Admin room has ${adminClients.length} connected clients`);
-          this.websocketGateway.server.to('admin').emit('new_po_notification', notificationPayload);
-        }
-      }
-    } catch (err) {
-      console.warn('⚠️ Notification emission error ignored:', err);
+    // Warehouse tạo PO → Admin nhận notification
+    if (this.websocketGateway.server && poData) {
+      // Handle both single PO and array of POs
+      const pos = Array.isArray(poData) ? poData : (poData.pos || poData.poIds || [poData]);
+      
+      pos.forEach((po: any) => {
+        console.log('📦 PO Items:', po.items);
+        console.log('📦 Items Count:', po.items?.length);
+        
+        const itemsCount = po.items?.length || 0;
+        
+        const notificationPayload = {
+          type: 'NEW_PO',
+          poId: typeof po === 'string' ? po : (po._id || po.id),
+          supplierId: po.supplierId,
+          supplierName: po.supplierName || 'Nhà cung cấp',
+          itemsCount: itemsCount,
+          totalAmount: po.totalAmount || 0,
+          linkedPrId: po.linkedPrId,
+          message: `Đơn đặt hàng mới đã được tạo cho ${po.supplierName || 'nhà cung cấp'} (${itemsCount} sản phẩm)`,
+          timestamp: new Date().toISOString(),
+        };
+        
+        console.log('📦 Emitting NEW_PO notification to ADMIN only:', notificationPayload);
+        // Chỉ gửi cho admin, KHÔNG gửi warehouse
+        this.websocketGateway.server.to('admin').emit('new_po_notification', notificationPayload);
+        
+        // Persist to DB
+        this.notificationService.create({
+          type: 'NEW_PO',
+          targetRooms: ['admin'],
+          message: notificationPayload.message,
+          poId: notificationPayload.poId,
+          supplierName: notificationPayload.supplierName,
+          itemsCount: notificationPayload.itemsCount,
+          totalAmount: notificationPayload.totalAmount,
+        }).catch(err => console.error('Failed to persist NEW_PO notification:', err));
+      });
     }
-
+    
     return result;
   }
 

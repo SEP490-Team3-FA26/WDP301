@@ -7,7 +7,7 @@ import 'package:http_parser/http_parser.dart';
 class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
   static const String baseUrl = kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
-  static const String fallbackUrl = 'http://localhost:4000';
+  static const String fallbackUrl = kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
 
   // JWT token stored globally after login
   static String currentToken = '';
@@ -704,15 +704,26 @@ class ApiService {
         Uri.parse('$baseUrl/api/orders'),
         headers: _authHeaders,
         body: jsonEncode(orderData),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 25));
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
       debugPrint('createOrder status: ${response.statusCode} body: ${response.body}');
-    } catch (e) {
-      debugPrint("Failed to create order: $e");
+    } catch (_) {
+      try {
+        final response = await http.post(
+          Uri.parse('$fallbackUrl/api/orders'),
+          headers: _authHeaders,
+          body: jsonEncode(orderData),
+        ).timeout(const Duration(seconds: 25));
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint("Failed to create order: $e");
+      }
     }
-    return {'success': true, 'orderId': 'ORD-${DateTime.now().millisecondsSinceEpoch}', 'message': 'Đơn hàng đã được tạo thành công!'};
+    return null;
   }
 
   // Create PayOS payment link for QR/Card online payment
@@ -722,13 +733,24 @@ class ApiService {
         Uri.parse('$baseUrl/api/orders/payos-link'),
         headers: _authHeaders,
         body: jsonEncode(orderData),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 25));
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
       debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body}');
-    } catch (e) {
-      debugPrint("Failed to create PayOS link: $e");
+    } catch (_) {
+      try {
+        final response = await http.post(
+          Uri.parse('$fallbackUrl/api/orders/payos-link'),
+          headers: _authHeaders,
+          body: jsonEncode(orderData),
+        ).timeout(const Duration(seconds: 25));
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint("Failed to create PayOS link: $e");
+      }
     }
     return null;
   }
