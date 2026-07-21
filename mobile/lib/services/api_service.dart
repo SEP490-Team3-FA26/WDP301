@@ -194,9 +194,10 @@ class ApiService {
     String search = '',
     String category = '',
     String classification = '',
+    String indication = '',
   }) async {
     final queryParams =
-        '?page=$page&limit=$limit&search=${Uri.encodeComponent(search)}&category=${Uri.encodeComponent(category)}&classification=${Uri.encodeComponent(classification)}';
+        '?page=$page&limit=$limit&search=${Uri.encodeComponent(search)}&category=${Uri.encodeComponent(category)}&classification=${Uri.encodeComponent(classification)}&indication=${Uri.encodeComponent(indication)}';
 
     try {
       final response = await http
@@ -872,7 +873,6 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
       } catch (e) {
         debugPrint("Failed to create PayOS link: $e");
       }
-    }
     }
     return null;
   }

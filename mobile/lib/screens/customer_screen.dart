@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
 
@@ -67,7 +68,6 @@ class _CustomerScreenState extends State<CustomerScreen>
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
-    _tabController = TabController(length: 5, vsync: this);
 
     // Setup lazy loading scroll listener
     _scrollController.addListener(() {
@@ -124,7 +124,6 @@ class _CustomerScreenState extends State<CustomerScreen>
     _fullnameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
-    _symptomsController.dispose();
     _searchPhoneController.dispose();
     _voucherCodeController.dispose();
     _waveAnimationController.dispose();
@@ -200,7 +199,7 @@ class _CustomerScreenState extends State<CustomerScreen>
         page: _currentPage,
         limit: 10,
         search: _searchQuery,
-        category: _selectedCategory,
+        indication: _selectedCategory,
       );
 
       setState(() {
@@ -1683,8 +1682,6 @@ class _CustomerScreenState extends State<CustomerScreen>
           ),
         ],
       ),
-        ],
-      ),
       child: Stack(
         children: [
           Positioned(
@@ -1770,34 +1767,44 @@ class _CustomerScreenState extends State<CustomerScreen>
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: ['Tất cả', 'Kháng sinh', 'Giảm đau', 'Cảm cúm', 'Hô hấp'].map(
-          (cat) {
-            final isSelected =
-                (_selectedCategory == cat ||
-                (cat == 'Tất cả' && _selectedCategory.isEmpty));
+        children: [
+          {'value': '', 'label': 'Tất cả'},
+          {'value': 'Giảm đau', 'label': 'Giảm đau'},
+          {'value': 'Kháng sinh', 'label': 'Kháng sinh'},
+          {'value': 'Dị ứng', 'label': 'Chống dị ứng'},
+          {'value': 'Ho', 'label': 'Ho / Sổ mũi'},
+          {'value': 'Dạ dày', 'label': 'Dạ dày'},
+        ].map(
+          (item) {
+            final cat = item['value']!;
+            final label = item['label']!;
+            final isSelected = _selectedCategory == cat;
             return Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: FilterChip(
                 label: Text(
-                  cat,
+                  label,
                   style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                     color: isSelected ? Colors.white : Colors.grey.shade700,
                   ),
                 ),
                 selected: isSelected,
+                showCheckmark: isSelected,
+                checkmarkColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 onSelected: (val) {
                   setState(() {
-                    _selectedCategory = cat == 'Tất cả' ? '' : cat;
+                    _selectedCategory = cat;
                   });
                   _loadMedicines(reset: true);
                 },
-                selectedColor: const Color(0xFF0D47A1),
+                selectedColor: const Color(0xFF1554A6),
                 backgroundColor: Colors.white,
-                side: BorderSide(color: Colors.grey.shade200),
+                side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.shade300),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(24),
                 ),
               ),
             );
@@ -2039,36 +2046,46 @@ class _CustomerScreenState extends State<CustomerScreen>
             scrollDirection: Axis.horizontal,
             child: Row(
               children:
-                  ['Tất cả', 'Kháng sinh', 'Giảm đau', 'Cảm cúm', 'Hô hấp'].map(
-                    (cat) {
-                      final isSelected =
-                          (_selectedCategory == cat ||
-                          (cat == 'Tất cả' && _selectedCategory.isEmpty));
+                  [
+                    {'value': '', 'label': 'Tất cả'},
+                    {'value': 'Giảm đau', 'label': 'Giảm đau'},
+                    {'value': 'Kháng sinh', 'label': 'Kháng sinh'},
+                    {'value': 'Dị ứng', 'label': 'Chống dị ứng'},
+                    {'value': 'Ho', 'label': 'Ho / Sổ mũi'},
+                    {'value': 'Dạ dày', 'label': 'Dạ dày'},
+                  ].map(
+                    (item) {
+                      final cat = item['value']!;
+                      final label = item['label']!;
+                      final isSelected = _selectedCategory == cat;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: FilterChip(
                           label: Text(
-                            cat,
+                            label,
                             style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                               color: isSelected
                                   ? Colors.white
                                   : Colors.grey.shade700,
                             ),
                           ),
                           selected: isSelected,
+                          showCheckmark: isSelected,
+                          checkmarkColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           onSelected: (val) {
                             setState(() {
-                              _selectedCategory = cat == 'Tất cả' ? '' : cat;
+                              _selectedCategory = cat;
                             });
                             _loadMedicines(reset: true);
                           },
-                          selectedColor: const Color(0xFF0D47A1),
+                          selectedColor: const Color(0xFF1554A6),
                           backgroundColor: Colors.white,
-                          side: BorderSide(color: Colors.grey.shade200),
+                          side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.shade300),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(24),
                           ),
                         ),
                       );
