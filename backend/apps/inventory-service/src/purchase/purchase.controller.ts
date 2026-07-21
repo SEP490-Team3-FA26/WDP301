@@ -285,6 +285,7 @@ export class PurchaseController {
       toBranchName: string;
       shippedBy: string;
       items: { medicineId: string; medicineName: string; quantity: number; unit?: string }[];
+      traceId?: string;
     }
   ) {
     try {
@@ -296,7 +297,9 @@ export class PurchaseController {
   }
 
   @MessagePattern('inventory.transfer.receive')
-  async confirmStockTransferReceipt(@Payload() data: { transferId: string; receivedBy: string }) {
+  async confirmStockTransferReceipt(
+    @Payload() data: { transferId: string; receivedBy: string; traceId?: string },
+  ) {
     try {
       return await this.purchaseService.confirmStockTransferReceipt(data);
     } catch (error) {
