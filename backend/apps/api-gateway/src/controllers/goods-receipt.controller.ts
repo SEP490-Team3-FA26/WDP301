@@ -27,6 +27,10 @@ export class GoodsReceiptController implements OnModuleInit {
       'inventory.grn.approve',
       'inventory.grn.reject',
       'inventory.grn.update',
+      'inventory.inspection.create',
+      'inventory.inspection.verify_item',
+      'inventory.inspection.submit',
+      'inventory.inspection.list',
     ]);
   }
 

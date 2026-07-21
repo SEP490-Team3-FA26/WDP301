@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   PackageCheck, Truck, ClipboardCheck, ArrowRight, Calendar, User, CheckCircle2,
   X, AlertTriangle, Loader2, Eye, ClipboardList
@@ -6,7 +6,36 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { stockTransferService } from "../../services/inventory/stockTransfer.service";
 
+function getBranchUserFromToken() {
+  const token = localStorage.getItem("token");
+  if (!token) return { branchId: null, fullName: "Quản lý Chi Nhánh" };
+
+  try {
+    const base64Url = token.split(".")[1];
+    if (!base64Url) throw new Error("JWT không có payload");
+
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const paddedBase64 = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const jsonPayload = decodeURIComponent(
+      window.atob(paddedBase64)
+        .split("")
+        .map((char) => `%${(`00${char.charCodeAt(0).toString(16)}`).slice(-2)}`)
+        .join("")
+    );
+    const payload = JSON.parse(jsonPayload);
+
+    return {
+      branchId: payload.branchId || null,
+      fullName: payload.fullName || "Quản lý Chi Nhánh",
+    };
+  } catch (error) {
+    console.error("Không thể đọc thông tin chi nhánh từ token:", error);
+    return { branchId: null, fullName: "Quản lý Chi Nhánh" };
+  }
+}
+
 export function BranchStockReceive() {
+  const currentUser = useMemo(() => getBranchUserFromToken(), []);
   const [transfers, setTransfers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailTransfer, setDetailTransfer] = useState<any>(null);
@@ -14,32 +43,44 @@ export function BranchStockReceive() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const fetchTransfers = async () => {
+  const fetchTransfers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await stockTransferService.getStockTransfers();
+      if (!currentUser.branchId) {
+        throw new Error("Tài khoản chưa được gán chi nhánh. Vui lòng đăng nhập lại hoặc liên hệ quản trị viên.");
+      }
+
+      const data = await stockTransferService.getStockTransfers(undefined, currentUser.branchId);
       setTransfers(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Lỗi khi tải danh sách phiếu chuyển kho:", err);
+      setTransfers([]);
+      setErrorMsg(err.response?.data?.message || err.message || "Không thể tải danh sách phiếu chuyển kho");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser.branchId]);
 
   useEffect(() => {
-    fetchTransfers();
-  }, []);
+    void fetchTransfers();
+  }, [fetchTransfers]);
 
   const handleConfirmReceipt = async (transferId: string) => {
     setActionLoading(transferId);
     setErrorMsg(null);
+    setSuccessMsg(null);
     try {
-      const resData = await stockTransferService.confirmStockTransferReceipt(transferId, "Nguyễn Văn A");
+      await stockTransferService.confirmStockTransferReceipt(transferId, currentUser.fullName);
       setSuccessMsg("Xác nhận nhận hàng và cập nhật tồn kho chi nhánh thành công!");
       if (detailTransfer && detailTransfer._id === transferId) {
-        setDetailTransfer({ ...detailTransfer, status: "DELIVERED", receivedBy: "Nguyễn Văn A", receivedAt: new Date() });
+        setDetailTransfer({
+          ...detailTransfer,
+          status: "DELIVERED",
+          receivedBy: currentUser.fullName,
+          receivedAt: new Date(),
+        });
       }
-      fetchTransfers();
+      await fetchTransfers();
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || err.message || "Đã xảy ra lỗi");
     } finally {
@@ -77,7 +118,7 @@ export function BranchStockReceive() {
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Nhập Thuốc Chi Nhánh</h1>
           </div>
           <p className="text-slate-500 mt-2 ml-13">
-            Xác nhận nhập kho chi nhánh đối với các kiện hàng được vận chuyển từ Kho Tổng
+            Xác nhận các kiện hàng chuyển đến {currentUser.branchId || "chi nhánh của bạn"}
           </p>
         </div>
       </div>

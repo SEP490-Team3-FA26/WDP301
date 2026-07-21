@@ -10,7 +10,6 @@ import { AuditLogAction } from '../decorators/audit-log.decorator';
 
 @ApiTags('💊 Medicines')
 @Controller('api/medicines')
-@UseGuards(JwtAuthGuard)
 export class MedicineController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -25,6 +24,7 @@ export class MedicineController implements OnModuleInit {
       'inventory.medicine.get_filters',
       'inventory.medicine.stats',
       'inventory.medicine.expiration_report',
+      'inventory.medicine.handle_expiration_action',
       'inventory.medicine.low_stock_report',
       'inventory.medicine.dropdown_list',
       'inventory.medicine.get_alternatives',
@@ -42,24 +42,47 @@ export class MedicineController implements OnModuleInit {
   }
 
   @Get('stats')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy thống kê tồn kho' })
   async getStats() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.stats', {});
   }
 
   @Get('expiration-report')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy báo cáo hết hạn của các lô hàng' })
   async getExpirationReport() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.expiration_report', {});
   }
 
+  @Post('expiration-action')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Xử lý đề xuất xử lý thuốc sắp hết hạn (Xuất hủy, Trả NCC, Giảm giá)' })
+  async handleExpirationAction(@Body() body: {
+    batchId: string;
+    action: 'DISPOSE' | 'RETURN_SUPPLIER' | 'DISCOUNT';
+    quantity: number;
+    notes?: string;
+    discountPrice?: number;
+    performedBy?: string;
+  }) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.handle_expiration_action', body);
+  }
+
   @Get('low-stock-report')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy báo cáo các loại thuốc sắp hết hàng hoặc hết hàng' })
   async getLowStockReport() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.low_stock_report', {});
   }
 
   @Get('dropdown')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy danh sách tối giản của các loại thuốc phục vụ cho dropdown' })
   async getMedicinesDropdown() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.dropdown_list', {});
@@ -122,6 +145,8 @@ export class MedicineController implements OnModuleInit {
   }
 
   @Patch(':id/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Cập nhật trạng thái / tồn kho của thuốc' })
   @AuditLogAction({
     actionCode: 'MEDICINE_STATUS_UPDATE',
@@ -139,6 +164,8 @@ export class MedicineController implements OnModuleInit {
   }
 
   @Patch(':id/price-tiers')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Cập nhật bảng giá sỉ bậc thang của thuốc' })
   @AuditLogAction({
     actionCode: 'MEDICINE_PRICE_TIERS_UPDATE',
@@ -155,7 +182,7 @@ export class MedicineController implements OnModuleInit {
   }
 
   @Patch(':id/price')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cập nhật giá bán chung của thuốc' })
@@ -217,6 +244,8 @@ export class MedicineController implements OnModuleInit {
   }
 
   @Get('branch/:branchId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy danh sách thuốc và tồn kho riêng của chi nhánh' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })

@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../models/user_role.dart';
 import '../services/api_service.dart';
@@ -26,6 +28,15 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<double> _fadeAnimation;
   late Animation<double> _logoScaleAnimation;
   late Animation<Offset> _slideAnimation;
+
+  final Map<UserRole, Map<String, String>> demoCredentials = const {
+    UserRole.admin:      {'email': 'admin@vinapharmacy.com',      'password': '123456'},
+    UserRole.headBranch: {'email': 'director@vinapharmacy.com',   'password': '123456'},
+    UserRole.warehouse:  {'email': 'warehouse@vinapharmacy.com',  'password': '123456'},
+    UserRole.branch:     {'email': 'manager@vinapharmacy.com',    'password': '123456'},
+    UserRole.pharmacist: {'email': 'pharmacist@vinapharmacy.com', 'password': '123456'},
+    UserRole.customer:   {'email': 'user@vinapharmacy.com',       'password': '123456'},
+  };
 
   @override
   void initState() {
@@ -66,7 +77,86 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  void _navigateToDashboard(UserRole role) {
+  Future<void> _handleRealLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      _showErrorDialog('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+      return;
+    }
+
+    _showLoadingDialog();
+
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      ).timeout(const Duration(seconds: 5));
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data != null && data['access_token'] != null) {
+          final token = data['access_token'];
+          ApiService.currentToken = token;
+          
+          final profile = await ApiService.getProfile(token);
+          Navigator.of(context).pop(); // dismiss loading
+          
+          if (profile != null) {
+            final userRole = _parseRole(profile['role']);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Đăng nhập thành công! Chào mừng ${profile['fullName'] ?? ''}'),
+                backgroundColor: const Color(0xFF2E7D32),
+              ),
+            );
+            _goToScreen(userRole);
+          } else {
+            _showErrorDialog('Không thể tải thông tin tài khoản (Profile rỗng).');
+          }
+        } else {
+          Navigator.of(context).pop();
+          _showErrorDialog('Đăng nhập thất bại: Không nhận được token.');
+        }
+      } else {
+        Navigator.of(context).pop();
+        _showErrorDialog('Sai email hoặc mật khẩu (401)!');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      _showErrorDialog('Lỗi kết nối tới máy chủ DB: $e');
+    }
+  }
+
+  Future<void> _handleDemoLogin(UserRole role) async {
+    _showLoadingDialog();
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/auth/demo-token'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'role': role.name}),
+      ).timeout(const Duration(seconds: 4));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data != null && data['access_token'] != null) {
+          ApiService.currentToken = data['access_token'];
+        }
+      }
+    } catch (e) {
+      debugPrint("Demo token retrieval failed: $e");
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context); // Dismiss loading dialog
+    _goToScreen(role);
+  }
+
+  void _goToScreen(UserRole role) {
     Widget targetScreen;
     switch (role) {
       case UserRole.admin:
@@ -94,6 +184,7 @@ class _LoginScreenState extends State<LoginScreen>
       MaterialPageRoute(builder: (context) => targetScreen),
     );
   }
+
 
   void _showLoadingDialog() {
     showDialog(
@@ -170,6 +261,8 @@ class _LoginScreenState extends State<LoginScreen>
     if (result != null && result is Map<String, dynamic>) {
       if (result['success'] == true) {
         final token = result['token'];
+        // Save token globally for all API calls
+        ApiService.currentToken = token ?? '';
         _showLoadingDialog();
         
         try {
@@ -187,7 +280,7 @@ class _LoginScreenState extends State<LoginScreen>
                 backgroundColor: const Color(0xFF2E7D32),
               ),
             );
-            _navigateToDashboard(userRole);
+            _goToScreen(userRole);
           } else {
             _showErrorDialog('Không thể tải thông tin tài khoản sau khi đăng nhập Google.');
           }
@@ -201,6 +294,7 @@ class _LoginScreenState extends State<LoginScreen>
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -217,19 +311,14 @@ class _LoginScreenState extends State<LoginScreen>
         child: FloatingBackground(
           child: SafeArea(
             child: SingleChildScrollView(
-              child: Container(
-                height:
-                    MediaQuery.of(context).size.height -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24.0,
-                  vertical: 16.0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Spacer(),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 24.0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 24),
 
                     // Animated Logo & Title
                     FadeTransition(
@@ -281,7 +370,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
 
-                    const Spacer(),
+                    const SizedBox(height: 32),
 
                     // Animated Form Inputs
                     FadeTransition(
@@ -351,9 +440,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                             // Login Button
                             ElevatedButton(
-                              onPressed: () {
-                                _navigateToDashboard(UserRole.pharmacist);
-                              },
+                              onPressed: _handleRealLogin,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF1A73E8),
                                 foregroundColor: Colors.white,
@@ -407,15 +494,10 @@ class _LoginScreenState extends State<LoginScreen>
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Image.network(
-                                    'https://developers.google.com/identity/images/g-logo.png',
-                                    height: 20,
-                                    width: 20,
-                                    errorBuilder: (context, error, stackTrace) => const Icon(
-                                      Icons.g_mobiledata,
-                                      color: Colors.red,
-                                      size: 24,
-                                    ),
+                                  const Icon(
+                                    Icons.g_mobiledata,
+                                    size: 32,
+                                    color: Colors.red,
                                   ),
                                   const SizedBox(width: 12),
                                   const Text(
@@ -434,7 +516,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
 
-                    const Spacer(),
+                    const SizedBox(height: 32),
 
                     // Animated Demo Panel
                     FadeTransition(
@@ -511,7 +593,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    onPressed: () => _navigateToDashboard(role),
+                                    onPressed: () => _handleDemoLogin(role),
                                   );
                                 }).toList(),
                               ),
@@ -526,9 +608,8 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 }
 
 // FLOATING BACKDROP PARTICLES SYSTEM

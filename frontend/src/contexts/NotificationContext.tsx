@@ -139,6 +139,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const handleNewPR = (data: any) => {
       console.log('🔔 New PR notification received:', data);
       addNotification({
+        id: data.id || data._id,
         type: 'NEW_PR',
         prId: data.prId,
         prCode: data.prCode || 'PR-???',
@@ -147,46 +148,54 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         itemsCount: data.itemsCount || 0,
         message: data.message || `Có yêu cầu nhập hàng mới từ ${data.branchName || 'chi nhánh'}`,
         createdBy: data.createdBy,
+        timestamp: data.timestamp || data.createdAt,
       });
     };
 
     const handlePRApproved = (data: any) => {
       console.log('✅ PR approved notification received:', data);
       addNotification({
+        id: data.id || data._id,
         type: 'PR_APPROVED',
         prId: data.prId,
         prCode: data.prCode || 'PR-???',
         approvedBy: data.approvedBy,
         message: data.message || `Yêu cầu ${data.prCode || 'PR'} đã được phê duyệt`,
+        timestamp: data.timestamp || data.createdAt,
       });
     };
 
     const handlePRRejected = (data: any) => {
       console.log('❌ PR rejected notification received:', data);
       addNotification({
+        id: data.id || data._id,
         type: 'PR_REJECTED',
         prId: data.prId,
         prCode: data.prCode || 'PR-???',
         rejectionReason: data.rejectionReason,
         message: data.message || `Yêu cầu ${data.prCode || 'PR'} bị từ chối`,
+        timestamp: data.timestamp || data.createdAt,
       });
     };
 
     const handleNewPO = (data: any) => {
       console.log('📦 New PO notification received:', data);
       addNotification({
+        id: data.id || data._id,
         type: 'NEW_PO',
         poId: data.poId,
         supplierName: data.supplierName || 'Nhà cung cấp',
         itemsCount: data.itemsCount || 0,
         totalAmount: data.totalAmount || 0,
         message: data.message || `Đơn đặt hàng mới cho ${data.supplierName || 'nhà cung cấp'}`,
+        timestamp: data.timestamp || data.createdAt,
       });
     };
 
     const handleGRNCompleted = (data: any) => {
       console.log('📥 GRN completed notification received:', data);
       addNotification({
+        id: data.id || data._id,
         type: 'GRN_COMPLETED',
         grnId: data.grnId,
         poId: data.poId,
@@ -194,6 +203,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         totalAmount: data.totalAmount || 0,
         receivedBy: data.receivedBy,
         message: data.message || `Đã nhập kho ${data.itemsCount || 0} loại thuốc`,
+        timestamp: data.timestamp || data.createdAt,
       });
     };
 
@@ -215,12 +225,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     };
   }, [socket, isSocketConnected]);
 
-  const addNotification = useCallback((notification: Omit<Notification, 'id' | 'read' | 'timestamp'>) => {
+  const addNotification = useCallback((notification: Omit<Notification, 'read'> & { read?: boolean }) => {
     const newNotification: Notification = {
       ...notification,
-      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      read: false,
-      timestamp: new Date().toISOString(),
+      id: notification.id || `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      read: notification.read || false,
+      timestamp: notification.timestamp || new Date().toISOString(),
     };
 
     setNotifications((prev) => {
@@ -252,21 +262,40 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const markAsRead = useCallback((id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
+    try {
+      await notificationService.markAsRead(id);
+    } catch (e) {
+      console.error('Failed to mark notification as read in DB', e);
+    }
   }, []);
 
-  const markAllAsRead = useCallback(() => {
+  const markAllAsRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await notificationService.markAllAsRead();
+    } catch (e) {
+      console.error('Failed to mark all notifications as read in DB', e);
+    }
   }, []);
 
-  const clearNotification = useCallback((id: string) => {
+  const clearNotification = useCallback(async (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      if (id && !id.startsWith('notif-')) {
+        await notificationService.deleteNotification(id);
+      }
+    } catch (e) {
+      console.error('Failed to delete notification in DB', e);
+    }
   }, []);
 
   const clearAll = useCallback(() => {
+    // For now, clearAll just clears UI to avoid accidentally deleting all DB history
+    // if backend doesn't support mass delete.
     setNotifications([]);
   }, []);
 
@@ -313,13 +342,31 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  // Load notifications from server on mount
+  // Load notifications from server on mount and when token changes
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      refreshNotifications();
-    }
-  }, []);
+    const checkAndRefresh = () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        refreshNotifications();
+      } else {
+        setNotifications([]); // Clear on logout
+      }
+    };
+
+    // Initial check
+    checkAndRefresh();
+
+    // Listen to token changes
+    import('../utils/authEvents').then(({ AUTH_TOKEN_CHANGED_EVENT }) => {
+      window.addEventListener(AUTH_TOKEN_CHANGED_EVENT, checkAndRefresh);
+    });
+
+    return () => {
+      import('../utils/authEvents').then(({ AUTH_TOKEN_CHANGED_EVENT }) => {
+        window.removeEventListener(AUTH_TOKEN_CHANGED_EVENT, checkAndRefresh);
+      });
+    };
+  }, [refreshNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

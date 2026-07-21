@@ -36,7 +36,16 @@ export class PurchaseOrderController implements OnModuleInit {
     entityType: 'PurchaseOrder',
   })
   async createAutoRoutedPurchaseOrders(@Body() data: AutoRoutePoDto) {
-    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.po.auto_route', data);
+    // ValidationPipe transforms the request body into an AutoRoutePoDto instance.
+    // Convert it back to a plain object so ClientKafka serializes it as JSON
+    // instead of the string "[object Object]".
+    const payload = {
+      items: data.items,
+      prIds: data.prIds,
+      ...(data.createdBy ? { createdBy: data.createdBy } : {}),
+    };
+
+    const result = await sendKafkaMessage(this.inventoryClient, 'inventory.po.auto_route', payload);
     
     console.log('📦 PO Created - Full Result:', JSON.stringify(result, null, 2));
     
@@ -44,47 +53,53 @@ export class PurchaseOrderController implements OnModuleInit {
     const poData = result.data || result;
     
     // Emit notification to admin ONLY (not warehouse)
-    // Warehouse tạo PO → Admin nhận notification
-    if (this.websocketGateway.server && poData) {
-      // Handle both single PO and array of POs
-      const pos = Array.isArray(poData) ? poData : [poData];
-      
-      pos.forEach(po => {
-        // Debug log để check items
-        console.log('📦 PO Items:', po.items);
-        console.log('📦 Items Count:', po.items?.length);
-        
-        const itemsCount = po.items?.length || 0;
-        
-        const notificationPayload = {
-          type: 'NEW_PO',
-          poId: po._id || po.id,
-          supplierId: po.supplierId,
-          supplierName: po.supplierName || 'Nhà cung cấp',
-          itemsCount: itemsCount,
-          totalAmount: po.totalAmount || 0,
-          linkedPrId: po.linkedPrId,
-          message: `Đơn đặt hàng mới đã được tạo cho ${po.supplierName || 'nhà cung cấp'} (${itemsCount} sản phẩm)`,
-          timestamp: new Date().toISOString(),
-        };
-        
-        console.log('📦 Emitting NEW_PO notification to ADMIN only:', notificationPayload);
-        // Chỉ gửi cho admin, KHÔNG gửi warehouse
-        this.websocketGateway.server.to('admin').emit('new_po_notification', notificationPayload);
-        
-        // Persist to DB
-        this.notificationService.create({
-          type: 'NEW_PO',
-          targetRooms: ['admin'],
-          message: notificationPayload.message,
-          poId: notificationPayload.poId,
-          supplierName: notificationPayload.supplierName,
-          itemsCount: notificationPayload.itemsCount,
-          totalAmount: notificationPayload.totalAmount,
-        }).catch(err => console.error('Failed to persist NEW_PO notification:', err));
-      });
+    try {
+      if (this.websocketGateway.server && poData) {
+        const poList = Array.isArray(poData) ? poData : (poData.poIds || [poData]);
+        for (const poItem of poList) {
+          const poId = typeof poItem === 'string' ? poItem : (poItem._id || poItem.id || 'PO-NEW');
+          let notificationPayload: any = {
+            type: 'NEW_PO',
+            poId: poId,
+            supplierName: poItem.supplierName || 'Nhà cung cấp',
+            itemsCount: poItem.items?.length || 1,
+            totalAmount: poItem.totalAmount || 0,
+            message: `Đơn đặt hàng mới đã được tạo và chuyển tới cấp phê duyệt`,
+            timestamp: new Date().toISOString(),
+          };
+          
+          try {
+            const [savedNotification] = await this.notificationService.create({
+              type: 'NEW_PO',
+              targetRooms: ['admin'],
+              poId,
+              supplierName: notificationPayload.supplierName,
+              itemsCount: notificationPayload.itemsCount,
+              totalAmount: notificationPayload.totalAmount,
+              message: notificationPayload.message,
+              createdBy: data.createdBy,
+            });
+
+            notificationPayload = {
+              ...notificationPayload,
+              _id: (savedNotification as any)._id,
+              id: (savedNotification as any)._id,
+              createdAt: (savedNotification as any).createdAt,
+              read: false,
+            };
+          } catch (e) {
+            console.warn('Could not persist notification:', e);
+          }
+
+          const adminClients = await this.websocketGateway.server.in('admin').fetchSockets();
+          console.log(`📊 Admin room has ${adminClients.length} connected clients`);
+          this.websocketGateway.server.to('admin').emit('new_po_notification', notificationPayload);
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Notification emission error ignored:', err);
     }
-    
+
     return result;
   }
 
@@ -97,7 +112,15 @@ export class PurchaseOrderController implements OnModuleInit {
     entityType: 'PurchaseOrder',
   })
   async approveAndPayPurchaseOrder(@Body() data: ApprovePayPoDto) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.approve_pay', data);
+    const payload = {
+      poId: data.poId,
+      action: data.action,
+      ...(data.approvedBy ? { approvedBy: data.approvedBy } : {}),
+      ...(data.rejectionReason ? { rejectionReason: data.rejectionReason } : {}),
+      ...(data.paymentType ? { paymentType: data.paymentType } : {}),
+    };
+
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.approve_pay', payload);
   }
 
   @Post('reject-delivery')
@@ -109,7 +132,12 @@ export class PurchaseOrderController implements OnModuleInit {
     entityType: 'PurchaseOrder',
   })
   async rejectPurchaseOrderDelivery(@Body() data: RejectPoDeliveryDto) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.reject_delivery', data);
+    const payload = {
+      poId: data.poId,
+      ...(data.reason ? { reason: data.reason } : {}),
+    };
+
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.reject_delivery', payload);
   }
 
   @Get()
@@ -124,6 +152,9 @@ export class PurchaseOrderController implements OnModuleInit {
 
   @Post(':id/receive')
   async receivePurchaseOrder(@Param('id') id: string, @Body() data: ReceivePoDto) {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.receive', { id, ...data });
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.po.receive', {
+      id,
+      receivedBy: data.receivedBy,
+    });
   }
 }

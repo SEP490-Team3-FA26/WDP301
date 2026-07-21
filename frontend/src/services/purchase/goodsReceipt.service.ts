@@ -2,9 +2,11 @@ import api from '../core/api';
 
 export interface GoodsReceiptItem {
   medicineId: string;
-  quantityReceived: number;
   batchNo: string;
-  expiryDate: string;
+  expDate: string;
+  quantity: number;
+  unitPrice: number;
+  actualQty?: number;
 }
 
 export interface GoodsReceiptPayload {
@@ -44,13 +46,13 @@ export const goodsReceiptService = {
     return response.data;
   },
 
-  async createInspectionRecord(grnId: string, performedBy: string) {
-    const response = await api.post('/api/goods-receipts/inspections', { grnId, performedBy });
+  async createInspectionRecord(grnId: string, inspectedBy: string) {
+    const response = await api.post('/api/goods-receipts/inspections', { grnId, inspectedBy });
     return response.data;
   },
 
-  async verifyInspectionItem(recordId: string, medicineId: string, actualQty: number) {
-    const response = await api.post('/api/goods-receipts/inspections/verify', { recordId, medicineId, actualQty });
+  async verifyInspectionItem(recordId: string, itemId: string, actualQty: number) {
+    const response = await api.post('/api/goods-receipts/inspections/verify', { recordId, itemId, actualQty });
     return response.data;
   },
 

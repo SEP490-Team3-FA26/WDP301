@@ -7,6 +7,7 @@ import { MedicineCard } from "../../components/MedicineCard";
 import { ShopFilterSidebar } from "../../components/ShopFilterSidebar";
 import { Pagination } from "../../components/Pagination";
 import { MedicineDetailModal } from "../../components/MedicineDetailModal";
+import api from "../../services/core/api";
 
 export function CustomerShop() {
   const [searchParams] = useSearchParams();
@@ -117,13 +118,11 @@ export function CustomerShop() {
       const indicationParam = selectedIndication ? `&indication=${encodeURIComponent(selectedIndication)}` : "";
       const brandOriginParam = selectedBrandOrigin ? `&brandOrigin=${encodeURIComponent(selectedBrandOrigin)}` : "";
 
-      const res = await fetch(`/api/medicines?page=${currentPage}&limit=${limit}${searchParam}${categoryParam}${classParam}${targetParam}${minPriceParam}${maxPriceParam}${flavourParam}${countryParam}${brandParam}${indicationParam}${brandOriginParam}`);
-      if (res.ok) {
-        const result = await res.json();
-        setMedicines(result.data || []);
-        setTotalItems(result.total || 0);
-        setTotalPages(Math.ceil((result.total || 0) / limit) || 1);
-      }
+      const res = await api.get(`/api/medicines?page=${currentPage}&limit=${limit}${searchParam}${categoryParam}${classParam}${targetParam}${minPriceParam}${maxPriceParam}${flavourParam}${countryParam}${brandParam}${indicationParam}${brandOriginParam}`);
+      const result = res.data;
+      setMedicines(result.data || []);
+      setTotalItems(result.total || 0);
+      setTotalPages(Math.ceil((result.total || 0) / limit) || 1);
     } catch (err) {
       console.error("Error fetching medicines:", err);
     } finally {

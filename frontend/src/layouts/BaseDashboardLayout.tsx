@@ -2,6 +2,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Sidebar, NavItem } from "../components/ui/Sidebar";
 import { Header } from "../components/ui/Header";
+import { notifyAuthTokenChanged } from "../utils/authEvents";
 
 interface BaseDashboardLayoutProps {
   navItems: NavItem[];
@@ -15,6 +16,7 @@ export function BaseDashboardLayout({ navItems, userRole }: BaseDashboardLayoutP
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userRole");
+    notifyAuthTokenChanged();
     navigate("/auth/login");
   };
 

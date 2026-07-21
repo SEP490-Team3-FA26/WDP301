@@ -19,6 +19,7 @@ import {
   Info
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import api from "../../services/core/api";
 
 interface BatchInfo {
   branchId: string;
@@ -81,19 +82,13 @@ export function LotTracking() {
     setError(null);
     setResult(null);
     try {
-      const response = await fetch(`/api/inventory-transactions/trace/${encodeURIComponent(batchNo.trim())}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(`Không tìm thấy thông tin hoặc lịch sử giao dịch cho lô "${batchNo}"`);
-        }
-        throw new Error("Lỗi hệ thống khi truy xuất nguồn gốc lô thuốc");
-      }
-      const data = await response.json();
-      setResult(data);
+      const response = await api.get(`/api/inventory-transactions/trace/${encodeURIComponent(batchNo.trim())}`);
+      setResult(response.data);
       setSearchBatchNo(batchNo);
       setActiveTab("origin");
     } catch (err: any) {
-      setError(err.message || "Đã xảy ra lỗi ngoài ý muốn");
+      const errMsg = err.response?.data?.message || err.message || `Không tìm thấy thông tin cho lô "${batchNo}"`;
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
@@ -262,18 +257,23 @@ export function LotTracking() {
                   {result.batches.length === 0 ? (
                     <div className="text-slate-400 text-center py-4 text-xs font-semibold">Lô thuốc này đã xuất bán hết.</div>
                   ) : (
-                    result.batches.map((b, i) => (
+                    result.batches.map((b: any, i) => (
                       <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-200/60 flex justify-between items-center">
                         <div>
-                          <div className="font-bold text-slate-800 text-sm">
-                            {b.branchId === "CENTRAL_WH" ? "Kho Tổng Trung Tâm" : `Chi nhánh ${b.branchId}`}
+                          <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            {b.branchId === "CENTRAL_WH" || b.branchId === "main" ? "Kho Tổng Trung Tâm" : `Chi nhánh ${b.branchId}`}
                           </div>
-                          <div className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+                          {b.medicineName && (
+                            <div className="text-xs font-semibold text-indigo-700 mt-0.5">
+                              {b.medicineName} {b.sku ? `(${b.sku})` : ''}
+                            </div>
+                          )}
+                          <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
                             <Clock size={12} /> Hạn: {formatDateOnly(b.expDate)}
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-black text-indigo-700 text-sm">{b.stock.toLocaleString('vi-VN')} {result.medicine?.unit || 'Hộp'}</div>
+                          <div className="font-black text-indigo-700 text-sm">{b.stock.toLocaleString('vi-VN')} {b.unit || result.medicine?.unit || 'Hộp'}</div>
                           <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded mt-1 border ${
                             b.status === "ACTIVE" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"
                           }`}>

@@ -10,6 +10,7 @@ import {
   Check, Info, Sparkle, Stethoscope, Star, SparklesIcon,
   ShieldAlert, XCircle, User, LogOut
 } from "lucide-react";
+import { notifyAuthTokenChanged } from "../../utils/authEvents";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -35,6 +36,7 @@ export function Landing() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userRole");
+    notifyAuthTokenChanged();
     navigate("/login");
   };
   
@@ -72,6 +74,7 @@ export function Landing() {
       });
       if (res.status === 401) {
         localStorage.removeItem("token");
+        notifyAuthTokenChanged();
         // Fallback to guest cart immediately
         const guestCartStr = localStorage.getItem("guest_cart");
         const items = guestCartStr ? JSON.parse(guestCartStr) : [];

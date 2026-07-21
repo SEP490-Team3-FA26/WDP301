@@ -487,16 +487,17 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {(r.status === "SHIPPING" || r.status === "PARTIAL_RECEIVED") && !isAdmin ? (
+                        {(r.status === "SHIPPING" || r.status === "PARTIAL_RECEIVED") ? (
                           <div className="flex items-center gap-2">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedPoForReceipt(r);
                               }}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition-all flex items-center gap-1.5"
                             >
-                              Bắt đầu kiểm hàng
+                              <ClipboardCheck size={14} />
+                              Mở phiên tiếp nhận hàng
                             </button>
                           </div>
                         ) : (
