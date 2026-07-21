@@ -228,16 +228,12 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
         onClose();
       }, 1800);
     } catch (e: any) {
-<<<<<<< HEAD
       const responseData = e?.response?.data;
       setErrorMsg(
         responseData?.message ||
         responseData?.error ||
         'Lỗi kết nối. Vui lòng kiểm tra máy chủ đang chạy.'
       );
-=======
-      setErrorMsg(e.response?.data?.message || e.response?.data?.error || 'Lỗi kết nối. Vui lòng kiểm tra máy chủ đang chạy.');
->>>>>>> 490bd68f2bba279dccf9ee7b0999f45b3f4b5871
     } finally {
       setIsSubmitting(false);
     }
