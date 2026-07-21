@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
+import '../widgets/notification_bell.dart';
 
 
 class WarehouseScreen extends StatefulWidget {
@@ -477,6 +478,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         ),
         elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [
+          NotificationBell(),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
@@ -1459,7 +1463,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                           child: Image.network(
                             item['image'].toString().startsWith('http')
                                 ? item['image']
-                                : 'http://10.0.2.2:8000${item['image']}',
+                                : '${ApiService.aiUrl}${item['image']}',
                             fit: BoxFit.cover,
                             errorBuilder: (c, e, s) => const Center(child: Icon(Icons.broken_image, size: 48)),
                           ),

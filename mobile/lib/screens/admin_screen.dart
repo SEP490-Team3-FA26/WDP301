@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/notification_bell.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -125,6 +126,7 @@ class _AdminScreenState extends State<AdminScreen> {
         elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          const NotificationBell(),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: () {

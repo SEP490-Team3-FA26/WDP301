@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/notification_bell.dart';
 
 class BranchScreen extends StatefulWidget {
   const BranchScreen({super.key});
@@ -44,6 +45,9 @@ class _BranchScreenState extends State<BranchScreen> {
         ),
         elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [
+          NotificationBell(),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(

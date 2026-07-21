@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
+import '../widgets/notification_bell.dart';
 
 class CustomerScreen extends StatefulWidget {
   const CustomerScreen({super.key});
@@ -1111,6 +1112,9 @@ class _CustomerScreenState extends State<CustomerScreen>
         ),
         elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [
+          NotificationBell(),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,

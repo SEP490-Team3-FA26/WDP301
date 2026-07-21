@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../models/user_role.dart';
 import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import 'google_webview_screen.dart';
 import 'admin_screen.dart';
 import 'director_screen.dart';
@@ -68,35 +69,7 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  Future<void> _navigateToDashboard(UserRole role) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: Colors.blue),
-      ),
-    );
-
-    try {
-      final response = await http.post(
-        Uri.parse('${ApiService.baseUrl}/api/auth/demo-token'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'role': role.name}),
-      ).timeout(const Duration(seconds: 4));
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data != null && data['access_token'] != null) {
-          ApiService.currentToken = data['access_token'];
-        }
-      }
-    } catch (e) {
-      debugPrint("Demo token retrieval failed: $e");
-    }
-
-    if (!mounted) return;
-    Navigator.pop(context); // Dismiss loading dialog
-
+  void _navigateToDashboardWithData(UserRole role) {
     Widget targetScreen;
     switch (role) {
       case UserRole.admin:
@@ -123,6 +96,101 @@ class _LoginScreenState extends State<LoginScreen>
       context,
       MaterialPageRoute(builder: (context) => targetScreen),
     );
+  }
+
+  Future<void> _navigateToDashboard(UserRole role) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.blue),
+      ),
+    );
+
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/auth/demo-token'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'role': role.name}),
+      ).timeout(const Duration(seconds: 4));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data != null && data['access_token'] != null) {
+          ApiService.currentToken = data['access_token'];
+          SocketService().connect(data['access_token']);
+        }
+      }
+    } catch (e) {
+      debugPrint("Demo token retrieval failed: $e");
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context); // Dismiss loading dialog
+
+    _navigateToDashboardWithData(role);
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _showErrorDialog('Vui lòng nhập đầy đủ email và mật khẩu.');
+      return;
+    }
+
+    _showLoadingDialog();
+
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+      Navigator.pop(context); // Dismiss loading dialog
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data != null && data['access_token'] != null) {
+          ApiService.currentToken = data['access_token'];
+          SocketService().connect(data['access_token']);
+          
+          final roleStr = data['user']?['role'];
+          final userRole = _parseRole(roleStr);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Đăng nhập thành công! Chào mừng ${data['user']?['fullName'] ?? ''}'),
+              backgroundColor: const Color(0xFF2E7D32),
+            ),
+          );
+          
+          _navigateToDashboardWithData(userRole);
+        } else {
+          _showErrorDialog('Máy chủ trả về dữ liệu không đúng định dạng.');
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        final rawMessage = errorData['message'];
+        String errorMessage;
+        if (rawMessage is List) {
+          errorMessage = rawMessage.join('\n');
+        } else {
+          errorMessage = rawMessage?.toString() ?? 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
+        }
+        _showErrorDialog(errorMessage);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Dismiss loading dialog
+      _showErrorDialog('Không thể kết nối đến máy chủ: $e');
+    }
   }
 
 
@@ -203,6 +271,9 @@ class _LoginScreenState extends State<LoginScreen>
         final token = result['token'];
         // Save token globally for all API calls
         ApiService.currentToken = token ?? '';
+        if (token != null) {
+          SocketService().connect(token);
+        }
         _showLoadingDialog();
         
         try {
@@ -380,9 +451,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                             // Login Button
                             ElevatedButton(
-                              onPressed: () {
-                                _navigateToDashboard(UserRole.pharmacist);
-                              },
+                              onPressed: _handleLogin,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF1A73E8),
                                 foregroundColor: Colors.white,

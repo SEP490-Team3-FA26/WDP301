@@ -1,12 +1,24 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 
 class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
-  static const String baseUrl = kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
+  static String get baseUrl {
+    final envUrl = dotenv.env['API_URL'];
+    if (envUrl != null && envUrl.isNotEmpty) return envUrl;
+    return kIsWeb ? 'http://localhost:4000' : 'http://10.12.48.101:4000';
+  }
+
+  static String get aiUrl {
+    final envUrl = dotenv.env['AI_URL'];
+    if (envUrl != null && envUrl.isNotEmpty) return envUrl;
+    return kIsWeb ? 'http://localhost:8000' : 'http://10.12.48.101:8000';
+  }
+
   static const String fallbackUrl = 'http://localhost:4000';
 
   // JWT token stored globally after login
@@ -405,7 +417,7 @@ class ApiService {
     } catch (_) {
       try {
         // Fallback to direct FastAPI port for local emulator testing
-        final localAiUrl = baseUrl.contains('10.0.2.2') ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+        final localAiUrl = aiUrl;
         var request = http.MultipartRequest(
           'POST',
           Uri.parse('$localAiUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection'),
@@ -450,7 +462,7 @@ class ApiService {
       return response.statusCode == 200;
     } catch (_) {
       try {
-        final localAiUrl = baseUrl.contains('10.0.2.2') ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+        final localAiUrl = aiUrl;
         final response = await http.post(
           Uri.parse('$localAiUrl/api/ai/inspections/$inspectionRecordId/verify'),
           headers: {'Content-Type': 'application/json'},
@@ -855,5 +867,94 @@ class ApiService {
       }
     }
     return null;
+  }
+
+  // Get notifications for current user
+  static Future<List<dynamic>> getMyNotifications() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/notifications/me'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded != null && decoded['success'] == true) {
+          return decoded['data'] as List<dynamic>;
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch notifications: $e");
+    }
+    return [];
+  }
+
+  // Get unread notification count
+  static Future<int> getUnreadCount() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/notifications/unread-count'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded != null && decoded['success'] == true) {
+          return decoded['data'] as int;
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to get unread notification count: $e");
+    }
+    return 0;
+  }
+
+  // Mark specific notification as read
+  static Future<bool> markNotificationAsRead(String id) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/api/notifications/$id/read'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded != null && decoded['success'] == true;
+      }
+    } catch (e) {
+      debugPrint("Failed to mark notification as read: $e");
+    }
+    return false;
+  }
+
+  // Mark all notifications as read
+  static Future<bool> markAllNotificationsAsRead() async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/api/notifications/mark-all-read'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded != null && decoded['success'] == true;
+      }
+    } catch (e) {
+      debugPrint("Failed to mark all notifications as read: $e");
+    }
+    return false;
+  }
+
+  // Delete specific notification
+  static Future<bool> deleteNotification(String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/notifications/$id'),
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded != null && decoded['success'] == true;
+      }
+    } catch (e) {
+      debugPrint("Failed to delete notification: $e");
+    }
+    return false;
   }
 }
