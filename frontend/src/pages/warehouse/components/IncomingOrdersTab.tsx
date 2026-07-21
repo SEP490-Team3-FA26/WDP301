@@ -272,16 +272,17 @@ export function IncomingOrdersTab({
                     <td className="px-4 py-3 text-right font-black text-emerald-700">{po.totalAmount?.toLocaleString("vi-VN")}đ</td>
                     <td className="px-4 py-3 text-center"><StatusBadge map={PO_STATUS} status={po.status} /></td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-1.5">
-                        {po.status === "SHIPPING" && (
+                      <div className="flex justify-end gap-1.5 items-center">
+                        {(po.status === "SHIPPING" || po.status === "PARTIAL_RECEIVED") && (
                           <button onClick={() => setSelectedPo(po)} title="Nhập kho & Kiểm đếm"
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg">
-                            <PackageCheck size={15} />
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1">
+                            <PackageCheck size={14} />
+                            Mở phiên tiếp nhận
                           </button>
                         )}
                         <button onClick={() => setSelectedPo(po)} title="Xem chi tiết"
                           className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg">
-                          <Eye size={15} />
+                          <Eye size={16} />
                         </button>
                       </div>
                     </td>

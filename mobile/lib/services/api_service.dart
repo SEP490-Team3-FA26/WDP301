@@ -6,7 +6,7 @@ import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
-  static const String baseUrl = kIsWeb ? 'http://localhost:4000' ;
+  static const String baseUrl = kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
   static const String fallbackUrl = 'http://localhost:4000';
 
   // JWT token stored globally after login
@@ -158,34 +158,10 @@ class ApiService {
         final List dataList = decoded['data'] ?? [];
         return dataList.map((m) => _mapMedicine(m)).toList();
       }
-    } catch (_) {
-      try {
-        final response = await http.get(Uri.parse('$fallbackUrl/api/medicines$queryParams')).timeout(
-          const Duration(seconds: 4),
-        );
-        if (response.statusCode == 200) {
-          final decoded = jsonDecode(response.body);
-          final List dataList = decoded['data'] ?? [];
-          return dataList.map((m) => _mapMedicine(m)).toList();
-        }
-      } catch (e) {
-        // Fallback to local mock data if server is unreachable
-        debugPrint("API service unreachable. Falling back to local offline mock. Error: $e");
-      }
+    } catch (e) {
+      throw Exception('Lỗi DB Thuốc (HTTP Lỗi): $e');
     }
-
-    // Filter local data manually for search/category/classification to match DB behaviors offline
-    return localMockMedicines.where((med) {
-      final matchesSearch = search.isEmpty ||
-          med['name'].toLowerCase().contains(search.toLowerCase()) ||
-          med['active'].toLowerCase().contains(search.toLowerCase());
-      final matchesCategory = category.isEmpty ||
-          med['category'].toLowerCase().contains(category.toLowerCase());
-      final matchesClassification = classification.isEmpty ||
-          (classification == 'PRESCRIPTION_DRUG' && med['isRx'] == true) ||
-          (classification == 'COMMON_SUPPLEMENT' && med['isRx'] == false);
-      return matchesSearch && matchesCategory && matchesClassification;
-    }).skip((page - 1) * limit).take(limit).toList();
+    return [];
   }
 
   // Check interactive compatibility of selected medicines via API
@@ -314,61 +290,10 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
-    } catch (_) {
-      try {
-        final response = await http.get(
-          Uri.parse('$fallbackUrl/api/reports/ai-forecast?periodDays=$periodDays'),
-        ).timeout(const Duration(seconds: 15));
-        if (response.statusCode == 200) {
-          return jsonDecode(response.body);
-        }
-      } catch (e) {
-        debugPrint("AI Forecast failed: $e");
-      }
+    } catch (e) {
+      throw Exception('Lỗi kết nối API AI Forecast: $e');
     }
-
-    // Offline Mock Fallback for AI Forecast
-    return {
-      'summary': 'Dựa trên phân tích xu hướng bán hàng của kỳ trước, nhu cầu đối với các loại thuốc giảm sốt, hạ nhiệt và kháng sinh dự kiến sẽ tăng trưởng đều 15% trong thời gian tới. Khuyến nghị bổ sung kho cho các dòng sản phẩm sắp cạn kiệt dưới định mức tối thiểu.',
-      'recommendations': [
-        {
-          'medicineId': 'med-1',
-          'name': 'Panadol Extra',
-          'category': 'Giảm đau / Giảm sốt',
-          'unit': 'Hộp',
-          'currentStock': 8,
-          'averageDailySales': 6.2,
-          'expectedIncoming': 0,
-          'suggestedOrderQty': 200,
-          'urgency': 'HIGH',
-          'reason': 'Tồn kho còn rất thấp (8 hộp) trong khi tốc độ bán nhanh. Sẽ hết hàng hoàn toàn trong vòng 1-2 ngày tới nếu không bổ sung gấp.'
-        },
-        {
-          'medicineId': 'med-2',
-          'name': 'Amoxicillin 500mg',
-          'category': 'Kháng sinh / Antibiotics',
-          'unit': 'Hộp',
-          'currentStock': 12,
-          'averageDailySales': 2.5,
-          'expectedIncoming': 50,
-          'suggestedOrderQty': 80,
-          'urgency': 'MEDIUM',
-          'reason': 'Tồn kho thực tế (12 hộp) dưới mức minStock (50). Đang có đơn hàng 50 hộp chuẩn bị giao về, đề xuất nhập thêm 80 hộp nữa để đảm bảo an toàn.'
-        },
-        {
-          'medicineId': 'med-3',
-          'name': 'Decolgen Forte',
-          'category': 'Hô hấp / Cough & Cold',
-          'unit': 'Vỉ',
-          'currentStock': 95,
-          'averageDailySales': 1.8,
-          'expectedIncoming': 0,
-          'suggestedOrderQty': 0,
-          'urgency': 'LOW',
-          'reason': 'Tồn kho hiện tại dồi dào, đủ đáp ứng cho chu kỳ dự kiến 30 ngày tiếp theo. Không cần nhập thêm.'
-        }
-      ]
-    };
+    return null;
   }
 
   // UC-19: Inspect Receipt Item using AI Count
@@ -530,7 +455,7 @@ class ApiService {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (e) {
-      debugPrint("Failed to fetch medicine $id details: $e");
+      throw Exception('Lỗi Lấy Thông Tin Thuốc: $e');
     }
     return null;
   }
