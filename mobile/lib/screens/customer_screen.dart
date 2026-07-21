@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import '../services/api_service.dart';
+import 'login_screen.dart';
 
 class CustomerScreen extends StatefulWidget {
   const CustomerScreen({super.key});
@@ -12,6 +14,7 @@ class CustomerScreen extends StatefulWidget {
 
 class _CustomerScreenState extends State<CustomerScreen>
     with TickerProviderStateMixin {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late TabController _tabController;
   final List<Map<String, dynamic>> _cart = [];
 
@@ -49,6 +52,9 @@ class _CustomerScreenState extends State<CustomerScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
 
     // Setup lazy loading scroll listener
     _scrollController.addListener(() {
@@ -813,71 +819,829 @@ class _CustomerScreenState extends State<CustomerScreen>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'ABC Pharmacy Store',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                color: Colors.white,
-              ),
-            ),
-            Text(
-              'CỔNG MUA SẮM KHÁCH HÀNG AI',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: Colors.white70,
-                letterSpacing: 1.0,
-              ),
-            ),
-          ],
-        ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+  Widget _buildDrawer() {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          const UserAccountsDrawerHeader(
+            decoration: BoxDecoration(color: Color(0xFF1976D2)),
+            accountName: Text('Khách hàng', style: TextStyle(fontWeight: FontWeight.bold)),
+            accountEmail: Text('khachhang@example.com'),
+            currentAccountPicture: CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Text('K', style: TextStyle(fontSize: 24, color: Color(0xFF1976D2))),
             ),
           ),
-        ),
-        elevation: 4,
-        iconTheme: const IconThemeData(color: Colors.white),
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white54,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3.5,
-          tabs: const [
-            Tab(icon: Icon(Icons.storefront), text: 'Mua Thuốc'),
-            Tab(icon: Icon(Icons.shopping_cart), text: 'Giỏ Hàng'),
-            Tab(icon: Icon(Icons.psychology), text: 'Tư Vấn AI'),
-            Tab(icon: Icon(Icons.receipt_long), text: 'Đặt Hàng'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildShopTab(),
-          _buildCartTab(),
-          _buildAIConsultTab(),
-          _buildCheckoutTab(),
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('Hồ sơ của tôi'),
+            onTap: () => Navigator.pop(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: const Text('Lịch sử mua hàng'),
+            onTap: () => Navigator.pop(context),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
+            onTap: () {
+              Navigator.pop(context);
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Đăng xuất'),
+                  content: const Text('Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Hủy'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        );
+                      },
+                      child: const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: _scaffoldKey,
+      drawer: _buildDrawer(),
+      backgroundColor: const Color(0xFFF2F4F7),
+      body: TabBarView(
+        controller: _tabController,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          _buildNewShopTab(),
+          _buildCartTabWithHeader(),
+          _buildAIConsultTabWithHeader(),
+          _buildCheckoutTabWithHeader(),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _tabController.index,
+        onTap: (index) {
+          _tabController.animateTo(index);
+        },
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF0D47A1),
+        unselectedItemColor: Colors.grey,
+        selectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.normal,
+          fontSize: 11,
+        ),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shopping_cart),
+            label: 'Giỏ hàng',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.psychology),
+            label: 'Tư vấn AI',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.receipt_long),
+            label: 'Thanh toán',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleHeader(String title) {
+    return Container(
+      padding: const EdgeInsets.only(top: 50, left: 16, right: 16, bottom: 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2962FF), Color(0xFF1E88E5), Color(0xFF42A5F5)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2962FF).withValues(alpha: 0.4),
+            blurRadius: 12,
+            offset: const Offset(4, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCartTabWithHeader() {
+    return Column(
+      children: [
+        _buildSimpleHeader('Giỏ Hàng Của Bạn'),
+        Expanded(child: _buildCartTab()),
+      ],
+    );
+  }
+
+  Widget _buildAIConsultTabWithHeader() {
+    return Column(
+      children: [
+        _buildSimpleHeader('Tư Vấn Y Khoa AI'),
+        Expanded(child: _buildAIConsultTab()),
+      ],
+    );
+  }
+
+  Widget _buildCheckoutTabWithHeader() {
+    return Column(
+      children: [
+        _buildSimpleHeader('Tiến Hành Đặt Hàng'),
+        Expanded(child: _buildCheckoutTab()),
+      ],
+    );
+  }
+
+  Widget _buildHomeHeader() {
+    return Container(
+      padding: const EdgeInsets.only(top: 50, left: 16, right: 16, bottom: 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2962FF), Color(0xFF1E88E5), Color(0xFF42A5F5)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(20),
+          bottomRight: Radius.circular(20),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2962FF).withValues(alpha: 0.4),
+            blurRadius: 15,
+            spreadRadius: 2,
+            offset: const Offset(5, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  _scaffoldKey.currentState?.openDrawer();
+                },
+                child: const Icon(Icons.menu, color: Colors.white, size: 28),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.local_pharmacy,
+                      color: Color(0xFF2962FF),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'ABC\nPHARMACY',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      height: 1.1,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+              const Icon(
+                Icons.notifications_none,
+                color: Colors.white,
+                size: 28,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: TextField(
+              onChanged: _onSearchChanged,
+              decoration: InputDecoration(
+                hintText: 'Tìm tên thuốc, bệnh lý, thực phẩm...',
+                hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.mic_none, color: Colors.blue.shade700),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.camera_alt_outlined,
+                      color: Colors.blue.shade700,
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGreetingSection() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: Colors.grey.shade200,
+                child: const Icon(Icons.person, color: Colors.grey),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Xin chào, anh phước',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.amber,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Text(
+                          'F',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Text(
+                        '0 điểm thưởng',
+                        style: TextStyle(fontSize: 12, color: Colors.black87),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          OutlinedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.receipt_long, size: 16),
+            label: const Text('Đơn của tôi'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.black87,
+              side: BorderSide(color: Colors.grey.shade300),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAIBanner() {
+    return GestureDetector(
+      onTap: () => _tabController.animateTo(2),
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4FC3F7), Color(0xFF1E88E5), Color(0xFF1565C0)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1E88E5).withValues(alpha: 0.5),
+              blurRadius: 12,
+              spreadRadius: 1,
+              offset: const Offset(4, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.chat_bubble_outline,
+              color: Colors.white,
+              size: 40,
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Text(
+                'Chat với Dược sĩ AI',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Chat ngay',
+                style: TextStyle(
+                  color: Color(0xFF1976D2),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutsRow() {
+    final items = [
+      {
+        'icon': Icons.medication,
+        'label': 'Cần mua\nthuốc',
+        'color': Colors.blue,
+      },
+      {
+        'icon': Icons.location_on,
+        'label': 'Tìm nhà\nthuốc',
+        'color': Colors.red,
+      },
+      {
+        'icon': Icons.family_restroom,
+        'label': 'Tài khoản\ngia đình',
+        'color': Colors.orange,
+      },
+      {'icon': Icons.pregnant_woman, 'label': 'Mẹ và bé', 'color': Colors.pink},
+      {
+        'icon': Icons.vaccines,
+        'label': 'Tiêm Vắc\nxin',
+        'color': Colors.blueGrey,
+      },
+      {
+        'icon': Icons.description,
+        'label': 'Đơn của\ntôi',
+        'color': Colors.green,
+      },
+    ];
+
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: items.map((item) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Column(
+              children: [
+                Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  item['icon'] as IconData,
+                  color: item['color'] as Color,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item['label'] as String,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    ),
+    );
+  }
+
+  Widget _buildPromoCarousel() {
+    return Container(
+      height: 140,
+      margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF81C784), Color(0xFF4CAF50), Color(0xFF388E3C)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.5),
+            blurRadius: 12,
+            spreadRadius: 1,
+            offset: const Offset(4, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: 16,
+            top: 16,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '3 QUÀ TẶNG\nMIỄN PHÍ*',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Đăng ký ngay',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            right: -20,
+            bottom: -20,
+            child: Icon(
+              Icons.card_giftcard,
+              size: 120,
+              color: Colors.white.withValues(alpha: 0.3),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNewShopTab() {
+    return Column(
+      children: [
+        _buildHomeHeader(),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _loadMedicines(reset: true),
+            child: ListView(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(0),
+              children: [
+                _buildGreetingSection(),
+                _buildAIBanner(),
+                _buildShortcutsRow(),
+                _buildPromoCarousel(),
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: _buildCategoryChips(),
+                ),
+                _buildNewProductGrid(),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: ['Tất cả', 'Kháng sinh', 'Giảm đau', 'Cảm cúm', 'Hô hấp'].map(
+          (cat) {
+            final isSelected =
+                (_selectedCategory == cat ||
+                (cat == 'Tất cả' && _selectedCategory.isEmpty));
+            return Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: FilterChip(
+                label: Text(
+                  cat,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : Colors.grey.shade700,
+                  ),
+                ),
+                selected: isSelected,
+                onSelected: (val) {
+                  setState(() {
+                    _selectedCategory = cat == 'Tất cả' ? '' : cat;
+                  });
+                  _loadMedicines(reset: true);
+                },
+                selectedColor: const Color(0xFF0D47A1),
+                backgroundColor: Colors.white,
+                side: BorderSide(color: Colors.grey.shade200),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            );
+          },
+        ).toList(),
+      ),
+    );
+  }
+
+  Widget _buildNewProductGrid() {
+    if (_medicines.isEmpty && !_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(32.0),
+        child: Center(
+          child: Text(
+            'Không tìm thấy sản phẩm nào',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.65,
+        ),
+        itemCount: _medicines.length + (_isLoading ? 2 : 0),
+        itemBuilder: (context, index) {
+          if (index >= _medicines.length) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Center(
+                child: CircularProgressIndicator(color: Color(0xFF0D47A1)),
+              ),
+            );
+          }
+
+          final med = _medicines[index];
+          final isRx = med['isRx'] as bool;
+          final outOfStock = med['stock'] <= 0;
+
+          return Card(
+            color: Colors.white,
+            elevation: 3,
+            shadowColor: Colors.black.withValues(alpha: 0.1),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: Colors.grey.shade100, width: 1),
+            ),
+            child: InkWell(
+              onTap: () => _showMedicineDetails(med),
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 80,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child:
+                          med['image'] != null &&
+                              med['image'].toString().isNotEmpty
+                          ? Image.network(
+                              med['image'],
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildImagePlaceholder(),
+                            )
+                          : _buildImagePlaceholder(),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isRx ? Colors.red.shade50 : Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        isRx ? 'Rx (Kê đơn)' : 'OTC (Không kê)',
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: isRx
+                              ? Colors.red.shade700
+                              : Colors.green.shade700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      med['name'],
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Color(0xFF2C3E50),
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Hoạt chất: ${med['active']}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${med['price']} ₫',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13,
+                                  color: Color(0xFF0D47A1),
+                                ),
+                              ),
+                              Text(
+                                'Tồn: ${med['stock']} ${med['unit']}',
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: outOfStock ? null : () => _addToCart(med),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: outOfStock
+                                  ? Colors.grey
+                                  : const Color(0xFF0D47A1),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      (outOfStock
+                                              ? Colors.grey
+                                              : const Color(0xFF0D47A1))
+                                          .withValues(alpha: 0.3),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              outOfStock
+                                  ? Icons.remove_shopping_cart
+                                  : Icons.add_shopping_cart,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   // TAB UIs BUILDERS
+  // ignore: unused_element
   Widget _buildShopTab() {
     return Padding(
       padding: const EdgeInsets.all(12.0),
