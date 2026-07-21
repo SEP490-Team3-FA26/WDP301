@@ -19,16 +19,23 @@ interface SidebarProps {
   getRoleLabel: (role: string) => string;
 }
 
-export function Sidebar({ 
-  navItems, 
-  userRole, 
-  isMobileMenuOpen, 
-  setIsMobileMenuOpen, 
-  handleLogout, 
-  getRoleLabel 
+export function Sidebar({
+  navItems,
+  userRole,
+  isMobileMenuOpen,
+  setIsMobileMenuOpen,
+  handleLogout,
+  getRoleLabel
 }: SidebarProps) {
   const navigate = useNavigate();
-  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+
+  const toggleMenu = (name: string) => {
+    setOpenMenus(prev => ({
+      ...prev,
+      [name]: !prev[name]
+    }));
+  };
 
   return (
     <aside className={`
@@ -41,81 +48,86 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto mt-2 scrollbar-thin scrollbar-thumb-slate-200 hover:scrollbar-thumb-slate-300">
-        {navItems.map((item) => (
-          <div key={item.name}>
-            {item.subItems ? (
-              <div>
-                <button
-                  onClick={() => setIsInventoryOpen(!isInventoryOpen)}
-                  className={`
+        {navItems.map((item) => {
+          const isOpen = openMenus[item.name] || false;
+          return (
+            <div key={item.name}>
+              {item.subItems ? (
+                <div>
+                  <button
+                    onClick={() => toggleMenu(item.name)}
+                    className={`
                     w-full flex items-center justify-between px-4 py-2.5 rounded-lg font-semibold transition-colors text-sm
                     text-slate-600 hover:bg-slate-50 hover:text-slate-900
                   `}
-                >
-                  <div className="flex items-center gap-3">
-                    {item.icon}
-                    {item.name}
-                  </div>
-                  <ChevronDown size={16} className={`transition-transform duration-200 ${isInventoryOpen ? "rotate-180" : ""}`} />
-                </button>
-                {isInventoryOpen && (
-                  <div className="mt-1 space-y-1 pl-11 pr-2">
-                    {item.subItems.map((subItem) => (
-                      <NavLink
-                        key={subItem.name}
-                        to={subItem.href}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className={({ isActive }) => `
+                  >
+                    <div className="flex items-center gap-3">
+                      {item.icon}
+                      {item.name}
+                    </div>
+                    <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="mt-1 space-y-1 pl-11 pr-2">
+                      {item.subItems.map((subItem) => (
+                        <NavLink
+                          key={subItem.name}
+                          to={subItem.href}
+                          end
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={({ isActive }) => `
                           block px-3 py-2 rounded-lg font-medium transition-colors text-[13px]
-                          ${isActive 
-                            ? "bg-[#f2f3ff] text-[#0057cd]" 
-                            : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                          }
+                          ${isActive
+                              ? "bg-[#f2f3ff] text-[#0057cd]"
+                              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                            }
                         `}
-                      >
-                        {subItem.name}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <NavLink
-                to={item.href!}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={({ isActive }) => `
+                        >
+                          {subItem.name}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <NavLink
+                  to={item.href!}
+                  end
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={({ isActive }) => `
                   flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold transition-colors text-sm
-                  ${isActive 
-                    ? "bg-[#f2f3ff] text-[#0057cd]" 
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }
+                  ${isActive
+                      ? "bg-[#f2f3ff] text-[#0057cd]"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    }
                 `}
-              >
-                {item.icon}
-                {item.name}
-              </NavLink>
-            )}
-          </div>
-        ))}
+                >
+                  {item.icon}
+                  {item.name}
+                </NavLink>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       <div className="px-3 pb-4 space-y-1">
         <div className="pt-4 mt-2 mb-2 px-2 border-t border-slate-100 flex items-center justify-between group">
-           <div 
-             className="flex items-center gap-3 cursor-pointer"
-             onClick={() => navigate("/dashboard/profile")}
-           >
-               <div className="w-10 h-10 rounded-full border border-[#cbd5e1] overflow-hidden flex-shrink-0 shadow-sm">
-                  <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User Avatar" className="w-full h-full object-cover" />
-               </div>
-               <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-slate-900 truncate">Nguyễn Văn A</div>
-                  <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">{getRoleLabel(userRole)}</div>
-               </div>
-           </div>
-           <button onClick={handleLogout} className="text-slate-400 hover:text-rose-600 transition-colors opacity-0 group-hover:opacity-100 p-1" title="Logout">
-              <LogOut size={16} />
-           </button>
+          <div
+            className="flex items-center gap-3 cursor-pointer"
+            onClick={() => navigate("/dashboard/profile")}
+          >
+            <div className="w-10 h-10 rounded-full border border-[#cbd5e1] overflow-hidden flex-shrink-0 shadow-sm">
+              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User Avatar" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-slate-900 truncate">Nguyễn Văn A</div>
+              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">{getRoleLabel(userRole)}</div>
+            </div>
+          </div>
+          <button onClick={handleLogout} className="text-slate-400 hover:text-rose-600 transition-colors opacity-0 group-hover:opacity-100 p-1" title="Logout">
+            <LogOut size={16} />
+          </button>
         </div>
       </div>
     </aside>

@@ -1,14 +1,15 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { MessagePattern, EventPattern, Payload } from '@nestjs/microservices';
 import { UserService } from './user-service.service';
 import { BranchService } from './branch.service';
+import { ExportJobStatusDto } from './dto/export-job-status.dto';
 
 @Controller()
 export class UserServiceController {
   constructor(
     private readonly userService: UserService,
     private readonly branchService: BranchService,
-  ) {}
+  ) { }
 
   @MessagePattern('user.edit_profile')
   handleEditProfile(@Payload() data: { userId: string; fullName?: string }) {
@@ -82,5 +83,56 @@ export class UserServiceController {
   handleUpdatePoints(@Payload() data: { phone?: string; userId?: string; pointsDelta: number; accumulatedDelta?: number }) {
     return this.userService.updatePoints(data);
   }
-}
 
+  // --- ADMIN EMPLOYEE MANAGEMENT ---
+
+  @MessagePattern('user.admin.employee.create')
+  handleCreateEmployee(@Payload() data: any) {
+    return this.userService.createEmployee(data);
+  }
+
+  @MessagePattern('user.admin.employee.list')
+  handleListEmployees(@Payload() data: any) {
+    return this.userService.listEmployees(data);
+  }
+
+  @MessagePattern('user.admin.employee.get')
+  handleGetEmployee(@Payload() data: { id: string }) {
+    return this.userService.getEmployeeById(data.id);
+  }
+
+  @MessagePattern('user.admin.employee.update')
+  handleUpdateEmployee(@Payload() data: any) {
+    return this.userService.updateEmployee(data.id, data);
+  }
+
+  @MessagePattern('user.admin.employee.ban_unban')
+  handleToggleBanEmployee(@Payload() data: { id: string }) {
+    return this.userService.toggleBanEmployee(data.id);
+  }
+
+  @EventPattern('user.branch.alert.low_stock')
+  handleLowStockAlertEvent(@Payload() data: any) {
+    return this.branchService.handleLowStockAlert(data);
+  }
+
+  @MessagePattern('audit.created')
+  handleCreateAuditLog(@Payload() data: any) {
+    return this.userService.createAuditLog(data);
+  }
+
+  @MessagePattern('user.audit.list')
+  handleListAuditLogs(@Payload() query: any) {
+    return this.userService.listAuditLogs(query);
+  }
+
+  @MessagePattern('user.audit.export')
+  handleExportAuditLogs(@Payload() query: any) {
+    return this.userService.exportAuditLogs(query);
+  }
+
+  @MessagePattern('user.audit.export_status')
+  async handleExportAuditLogsStatus(@Payload() data: { jobId: string }): Promise < ExportJobStatusDto > {
+    return this.userService.getExportJobStatus(data.jobId);
+  }
+}

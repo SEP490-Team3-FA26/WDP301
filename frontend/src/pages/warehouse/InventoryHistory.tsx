@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   Search, Filter, ArrowDownToLine, ArrowUpFromLine, Trash2,
   Calendar, FileText, Plus, ChevronRight, X, Package,
   Building, CheckCircle2, DollarSign, ListFilter, ClipboardCheck,
-  AlertTriangle, Loader2
+  AlertTriangle, Loader2, Image
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { supplierService } from "../../services/supplier.service";
-import { medicineService } from "../../services/medicine.service";
-import { purchaseOrderService } from "../../services/purchaseOrder.service";
-import { goodsReceiptService } from "../../services/goodsReceipt.service";
+import { supplierService } from "../../services/purchase/supplier.service";
+import { medicineService } from "../../services/inventory/medicine.service";
+import { purchaseOrderService } from "../../services/purchase/purchaseOrder.service";
+import { goodsReceiptService } from "../../services/purchase/goodsReceipt.service";
+import api from "../../services/core/api";
 
 interface InventoryHistoryProps {
   type: "import" | "export" | "dispose";
@@ -18,7 +19,11 @@ interface InventoryHistoryProps {
 
 export function InventoryHistory({ type }: InventoryHistoryProps) {
   const navigate = useNavigate();
-  const [activeSubTab, setActiveSubTab] = useState<"grn" | "po">("grn");
+  const location = useLocation();
+  const isAdmin = location.pathname.includes('/admin');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeSubTab = (searchParams.get("tab") as "grn" | "po") || "grn";
+  const setActiveSubTabHandler = (tab: "grn" | "po") => setSearchParams({ tab });
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
 
@@ -42,6 +47,51 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   // Modal details view
   const [selectedGrnDetails, setSelectedGrnDetails] = useState<any | null>(null);
   const [selectedPoDetails, setSelectedPoDetails] = useState<any | null>(null);
+
+  // UC-19 ERP states
+  const [editGrnItems, setEditGrnItems] = useState<any[]>([]);
+  const [editLoading, setEditLoading] = useState(false);
+  const [discrepancyReason, setDiscrepancyReason] = useState("");
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [showOnlyDifferences, setShowOnlyDifferences] = useState(false);
+  const [selectedInspectionRecord, setSelectedInspectionRecord] = useState<any | null>(null);
+  const [selectedMedicineNameForRecord, setSelectedMedicineNameForRecord] = useState("");
+  const [recordLoading, setRecordLoading] = useState(false);
+
+  const handleViewInspectionRecord = async (grnId: string, itemId: string, medName: string) => {
+    setRecordLoading(true);
+    setSelectedMedicineNameForRecord(medName);
+    try {
+      const res = await api.get(`/api/goods-receipts/${grnId}/items/${itemId}/inspection`);
+      const body = res.data;
+      if (body.success && body.data) {
+        setSelectedInspectionRecord(body.data);
+      } else {
+        alert("Không tìm thấy dữ liệu ảnh đếm AI của dòng sản phẩm này.");
+      }
+    } catch (e) {
+      alert("Lỗi khi tải dữ liệu ảnh đếm AI từ máy chủ.");
+    } finally {
+      setRecordLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setShowOnlyDifferences(false);
+    if (selectedGrnDetails && (selectedGrnDetails.status === "DRAFT" || selectedGrnDetails.status === "INSPECTING")) {
+      setEditGrnItems(
+        selectedGrnDetails.items.map((it: any) => ({
+          medicineId: it.medicineId,
+          batchNo: it.batchNo || "",
+          expDate: it.expDate ? it.expDate.substring(0, 10) : "",
+          quantity: it.quantity,
+          unitPrice: it.unitPrice
+        }))
+      );
+    } else {
+      setEditGrnItems([]);
+    }
+  }, [selectedGrnDetails]);
 
   useEffect(() => {
     // Fetch base lists to resolve IDs
@@ -83,7 +133,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
 
   const Icon = type === "import" ? ArrowDownToLine : type === "export" ? ArrowUpFromLine : Trash2;
   const theme = type === "import" ? "blue" : type === "export" ? "emerald" : "rose";
-  const themeClasses = {
+  const themeClasses: Record<string, string> = {
     blue: "bg-[#0057cd] hover:bg-[#00419e] text-white",
     emerald: "bg-emerald-600 hover:bg-emerald-700 text-white",
     rose: "bg-rose-600 hover:bg-rose-700 text-white",
@@ -92,9 +142,44 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
     roseLight: "text-rose-700 bg-rose-100",
   };
 
+  const getGrnStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case "DRAFT":
+        return "bg-slate-100 text-slate-700 border-slate-200";
+      case "INSPECTING":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      case "PENDING_APPROVAL":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "COMPLETED":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "CANCELLED":
+        return "bg-rose-50 text-rose-700 border-rose-200";
+      default:
+        return "bg-slate-50 text-slate-500 border-slate-200";
+    }
+  };
+
+  const getGrnStatusLabel = (status: string) => {
+    switch (status) {
+      case "DRAFT":
+        return "Nháp";
+      case "INSPECTING":
+        return "Đang kiểm";
+      case "PENDING_APPROVAL":
+        return "Chờ duyệt";
+      case "COMPLETED":
+        return "Hoàn thành";
+      case "CANCELLED":
+        return "Đã hủy";
+      default:
+        return status;
+    }
+  };
+
   const handleCreate = () => {
     if (type === "import") {
-      navigate("new");
+      const basePath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;
+      navigate(`${basePath}new`);
     }
   };
 
@@ -103,27 +188,113 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
     setRejectLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/purchase-orders/reject-delivery", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          poId: selectedPoForReject._id,
-          reason: rejectReason,
-        }),
+      await api.post("/api/purchase-orders/reject-delivery", {
+        poId: selectedPoForReject._id,
+        reason: rejectReason,
       });
-
-      if (res.ok) {
-        setSelectedPoForReject(null);
-        setRejectReason("");
-        fetchData();
-      } else {
-        const errData = await res.json();
-        setError(errData?.message || "Từ chối nhận hàng thất bại.");
-      }
-    } catch (err) {
-      setError("Lỗi kết nối khi từ chối nhận hàng.");
+      setSelectedPoForReject(null);
+      setRejectReason("");
+      fetchData();
+    } catch (err: any) {
+      const errorResponse = err?.response?.data;
+      setError(errorResponse?.message || err.message || "Từ chối nhận hàng thất bại.");
     } finally {
       setRejectLoading(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!selectedGrnDetails) return;
+    setEditLoading(true);
+    try {
+      // Validate
+      for (const it of editGrnItems) {
+        if (!it.batchNo || !it.batchNo.trim()) {
+          alert(`Số lô cho thuốc "${getMedicineName(it.medicineId)}" không được trống.`);
+          setEditLoading(false);
+          return;
+        }
+        if (!it.expDate) {
+          alert(`Hạn sử dụng cho thuốc "${getMedicineName(it.medicineId)}" không được trống.`);
+          setEditLoading(false);
+          return;
+        }
+        if (it.quantity <= 0) {
+          alert(`Số lượng dự kiến cho thuốc "${getMedicineName(it.medicineId)}" phải lớn hơn 0.`);
+          setEditLoading(false);
+          return;
+        }
+      }
+      
+      const payload = {
+        items: editGrnItems.map(it => ({
+          medicineId: it.medicineId,
+          batchNo: it.batchNo,
+          expDate: new Date(it.expDate).toISOString(),
+          quantity: it.quantity
+        }))
+      };
+      
+      await goodsReceiptService.updateGoodsReceipt(selectedGrnDetails._id, payload);
+      alert("Cập nhật tài liệu tiếp nhận thành công.");
+      setSelectedGrnDetails(null);
+      fetchData();
+    } catch (err: any) {
+      alert("Lỗi khi cập nhật tài liệu tiếp nhận: " + (err.response?.data?.message || err.message));
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleApproveGRN = async () => {
+    if (!selectedGrnDetails) return;
+    
+    // Check discrepancy
+    let hasDiscrepancy = false;
+    for (const item of selectedGrnDetails.items) {
+      if (item.actualQty !== item.quantity) {
+        hasDiscrepancy = true;
+        break;
+      }
+    }
+    if (hasDiscrepancy && !discrepancyReason.trim()) {
+      alert("Phát hiện chênh lệch số lượng kiểm nhận. Vui lòng điền lý do chênh lệch trước khi phê duyệt.");
+      return;
+    }
+    
+    setApprovalLoading(true);
+    try {
+      await goodsReceiptService.approveGoodsReceipt(selectedGrnDetails._id, discrepancyReason);
+      alert("Phê duyệt nhập kho thành công. Tồn kho đã được cập nhật.");
+      setSelectedGrnDetails(null);
+      setDiscrepancyReason("");
+      fetchData();
+    } catch (err: any) {
+      alert("Lỗi khi phê duyệt: " + (err.response?.data?.message || err.message));
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  const handleRejectGRN = async (action: "reinspect" | "cancel") => {
+    if (!selectedGrnDetails) return;
+    const rejectReasonPrompt = prompt("Vui lòng nhập lý do từ chối/yêu cầu hành động này:");
+    if (rejectReasonPrompt === null) return; // cancelled prompt
+    if (!rejectReasonPrompt.trim()) {
+      alert("Lý do không được để trống.");
+      return;
+    }
+    
+    setApprovalLoading(true);
+    try {
+      await goodsReceiptService.rejectGoodsReceipt(selectedGrnDetails._id, action, rejectReasonPrompt);
+      alert(action === "reinspect" ? "Đã yêu cầu kiểm đếm lại." : "Đã hủy phiếu tiếp nhận.");
+      setSelectedGrnDetails(null);
+      fetchData();
+    } catch (err: any) {
+      alert("Lỗi khi thực hiện từ chối: " + (err.response?.data?.message || err.message));
+    } finally {
+      setApprovalLoading(false);
     }
   };
 
@@ -165,7 +336,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
       {type === "import" && (
         <div className="flex border-b border-slate-200 mb-6 gap-2">
           <button
-            onClick={() => setActiveSubTab("grn")}
+            onClick={() => setActiveSubTabHandler("grn")}
             className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${activeSubTab === "grn"
                 ? "border-[#0057cd] text-[#0057cd]"
                 : "border-transparent text-slate-500 hover:text-slate-700"
@@ -175,7 +346,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
             Phiếu Nhập Kho (GRN)
           </button>
           <button
-            onClick={() => setActiveSubTab("po")}
+            onClick={() => setActiveSubTabHandler("po")}
             className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${activeSubTab === "po"
                 ? "border-[#0057cd] text-[#0057cd]"
                 : "border-transparent text-slate-500 hover:text-slate-700"
@@ -250,8 +421,8 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                       <td className="px-6 py-4 text-center font-bold text-slate-700">{r.items?.length || 0}</td>
                       <td className="px-6 py-4 text-right font-bold text-[#0057cd]">{r.totalAmount?.toLocaleString("vi-VN")}đ</td>
                       <td className="px-6 py-4 text-center">
-                        <span className="inline-flex px-2.5 py-1 rounded-full border text-[11px] font-bold bg-emerald-50 text-emerald-700 border-emerald-200">
-                          {r.status}
+                        <span className={`inline-flex px-2.5 py-1 rounded-full border text-[11px] font-bold ${getGrnStatusBadgeClass(r.status)}`}>
+                          {getGrnStatusLabel(r.status)}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -302,15 +473,17 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : r.status === "SHIPPING"
                               ? "bg-blue-50 text-blue-700 border-blue-200"
-                              : r.status === "PENDING_APPROVAL"
-                                ? "bg-amber-50 text-amber-700 border-amber-200"
-                                : r.status === "PARTIAL_RECEIVED"
-                                  ? "bg-orange-50 text-orange-700 border-orange-200"
-                                  : r.status === "RETURNED"
-                                    ? "bg-rose-50 text-rose-700 border-rose-200"
-                                    : "bg-slate-50 text-slate-500 border-slate-200"
+                              : r.status === "RECEIVING"
+                                ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                : r.status === "PENDING_APPROVAL"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : r.status === "PARTIAL_RECEIVED"
+                                    ? "bg-orange-50 text-orange-700 border-orange-200"
+                                    : r.status === "RETURNED"
+                                      ? "bg-rose-50 text-rose-700 border-rose-200"
+                                      : "bg-slate-50 text-slate-500 border-slate-200"
                           }`}>
-                          {r.status === "PARTIAL_RECEIVED" ? "Giao thiếu" : r.status === "SHIPPING" ? "Đang giao" : r.status === "PENDING_APPROVAL" ? "Chờ duyệt" : r.status === "COMPLETED" ? "Hoàn thành" : r.status === "RETURNED" ? "Trả hàng" : r.status}
+                          {r.status === "PARTIAL_RECEIVED" ? "Giao thiếu" : r.status === "SHIPPING" ? "Đang giao" : r.status === "RECEIVING" ? "Đang kiểm" : r.status === "PENDING_APPROVAL" ? "Chờ duyệt" : r.status === "COMPLETED" ? "Hoàn thành" : r.status === "RETURNED" ? "Trả hàng" : r.status}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -321,19 +494,10 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                                 e.stopPropagation();
                                 setSelectedPoForReceipt(r);
                               }}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition-all flex items-center gap-1.5"
                             >
-                              {r.status === "PARTIAL_RECEIVED" ? "Nhận tiếp" : "Nhận hàng"}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedPoForReject(r);
-                                setRejectReason("");
-                              }}
-                              className="bg-rose-100 hover:bg-rose-200 text-rose-700 text-xs font-bold px-3 py-1.5 rounded-lg transition-all border border-rose-200"
-                            >
-                              Từ chối
+                              <ClipboardCheck size={14} />
+                              Mở phiên tiếp nhận hàng
                             </button>
                           </div>
                         ) : (
@@ -458,54 +622,241 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                 </button>
               </div>
               <div className="p-6 overflow-y-auto space-y-6">
-                <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="grid grid-cols-3 gap-4 text-sm bg-slate-50 p-4 rounded-xl border border-slate-200 font-medium">
                   <div>
-                    <span className="text-slate-500 font-bold block text-xs uppercase">Đơn đặt hàng liên kết:</span>
+                    <span className="text-slate-500 font-bold block text-xs uppercase mb-0.5">Đơn đặt hàng liên kết:</span>
                     <span className="font-bold text-slate-800">PO-{selectedGrnDetails.poId.substring(18).toUpperCase()}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 font-bold block text-xs uppercase">Người nhận hàng:</span>
+                    <span className="text-slate-500 font-bold block text-xs uppercase mb-0.5">Người nhận hàng:</span>
                     <span className="font-semibold text-slate-800">{selectedGrnDetails.receivedBy}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 font-bold block text-xs uppercase">Ngày nhập kho:</span>
+                    <span className="text-slate-500 font-bold block text-xs uppercase mb-0.5">Trạng thái phiếu:</span>
+                    <span className={`inline-flex px-2.5 py-0.5 rounded-full border text-[10px] font-black uppercase ${getGrnStatusBadgeClass(selectedGrnDetails.status)}`}>
+                      {getGrnStatusLabel(selectedGrnDetails.status)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-bold block text-xs uppercase mb-0.5">
+                      {selectedGrnDetails.status === "COMPLETED" ? "Ngày nhập kho:" : "Ngày lập phiếu:"}
+                    </span>
                     <span className="font-semibold text-slate-800">{new Date(selectedGrnDetails.createdAt).toLocaleString("vi-VN")}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 font-bold block text-xs uppercase">Tổng tiền thanh toán:</span>
+                    <span className="text-slate-500 font-bold block text-xs uppercase mb-0.5">Tổng tiền thanh toán:</span>
                     <span className="font-black text-[#0057cd]">{selectedGrnDetails.totalAmount?.toLocaleString("vi-VN")}đ</span>
                   </div>
                 </div>
 
+                {selectedGrnDetails.discrepancyReason && (
+                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-amber-800 text-xs">
+                    <span className="font-bold">Lý do chênh lệch (Quản lý phê duyệt):</span> {selectedGrnDetails.discrepancyReason}
+                  </div>
+                )}
+
                 <div>
-                  <h4 className="font-bold text-slate-700 mb-3 text-sm flex items-center gap-2">
-                    <Package size={16} className="text-[#0057cd]" />
-                    Danh sách sản phẩm thực nhận:
-                  </h4>
-                  <table className="w-full text-xs text-left border border-slate-100 rounded-lg overflow-hidden">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                      <Package size={16} className="text-[#0057cd]" />
+                      Danh sách sản phẩm thực nhận:
+                    </h4>
+                    {(selectedGrnDetails.status === "PENDING_APPROVAL" || selectedGrnDetails.status === "COMPLETED") && (
+                      <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-all select-none">
+                        <input
+                          type="checkbox"
+                          checked={showOnlyDifferences}
+                          onChange={(e) => setShowOnlyDifferences(e.target.checked)}
+                          className="rounded text-[#0057cd] focus:ring-[#0057cd] w-3.5 h-3.5"
+                        />
+                        Chỉ hiển thị dòng hàng chênh lệch
+                      </label>
+                    )}
+                  </div>
+                  <table className="w-full text-xs text-left border border-slate-100 rounded-lg overflow-hidden animate-fade-in">
                     <thead className="bg-slate-100 text-slate-600 font-bold">
                       <tr>
                         <th className="p-3">Tên thuốc</th>
                         <th className="p-3">Số Lô (Batch)</th>
                         <th className="p-3">Hạn sử dụng</th>
-                        <th className="p-3 text-right">Số lượng nhận</th>
+                        {selectedGrnDetails.status === "PENDING_APPROVAL" || selectedGrnDetails.status === "COMPLETED" || selectedGrnDetails.status === "CANCELLED" ? (
+                          <>
+                            <th className="p-3 text-right">Số lượng yêu cầu</th>
+                            <th className="p-3 text-right">Số lượng thực nhận</th>
+                          </>
+                        ) : (
+                          <th className="p-3 text-right">Số lượng dự kiến</th>
+                        )}
                         <th className="p-3 text-right">Đơn giá</th>
                         <th className="p-3 text-right">Thành tiền</th>
+                        {(selectedGrnDetails.status === "PENDING_APPROVAL" || selectedGrnDetails.status === "COMPLETED" || selectedGrnDetails.status === "CANCELLED") && (
+                          <th className="p-3 text-center">Bằng chứng AI</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {selectedGrnDetails.items?.map((item: any, idx: number) => (
-                        <tr key={idx} className="hover:bg-slate-50">
-                          <td className="p-3 font-semibold text-slate-800">{getMedicineName(item.medicineId)}</td>
-                          <td className="p-3"><span className="px-2 py-0.5 bg-amber-50 text-amber-700 font-bold border border-amber-200 rounded">{item.batchNo}</span></td>
-                          <td className="p-3 font-medium text-slate-600">{new Date(item.expDate).toLocaleDateString("vi-VN")}</td>
-                          <td className="p-3 text-right font-bold text-slate-800">{item.quantity}</td>
-                          <td className="p-3 text-right text-slate-600">{item.unitPrice?.toLocaleString("vi-VN")}đ</td>
-                          <td className="p-3 text-right font-bold text-[#0057cd]">{(item.quantity * item.unitPrice)?.toLocaleString("vi-VN")}đ</td>
-                        </tr>
-                      ))}
+                      {(selectedGrnDetails.status === "DRAFT" || selectedGrnDetails.status === "INSPECTING") ? (
+                        editGrnItems.map((item: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="p-3 font-semibold text-slate-800">{getMedicineName(item.medicineId)}</td>
+                            <td className="p-3">
+                              <input
+                                type="text"
+                                value={item.batchNo}
+                                onChange={(e) => {
+                                  const updated = [...editGrnItems];
+                                  updated[idx].batchNo = e.target.value;
+                                  setEditGrnItems(updated);
+                                }}
+                                className="px-2 py-1 border border-slate-200 rounded w-28 bg-slate-50 text-xs focus:outline-none focus:ring-1 focus:ring-[#0057cd] focus:bg-white font-semibold"
+                              />
+                            </td>
+                            <td className="p-3">
+                              <input
+                                type="date"
+                                value={item.expDate}
+                                onChange={(e) => {
+                                  const updated = [...editGrnItems];
+                                  updated[idx].expDate = e.target.value;
+                                  setEditGrnItems(updated);
+                                }}
+                                className="px-2 py-1 border border-slate-200 rounded text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#0057cd] focus:bg-white font-semibold"
+                              />
+                            </td>
+                            <td className="p-3 text-right">
+                              <input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const updated = [...editGrnItems];
+                                  updated[idx].quantity = Number(e.target.value);
+                                  setEditGrnItems(updated);
+                                }}
+                                className="px-2 py-1 border border-slate-200 rounded w-16 text-right bg-slate-50 text-xs focus:outline-none focus:ring-1 focus:ring-[#0057cd] focus:bg-white font-bold"
+                              />
+                            </td>
+                            <td className="p-3 text-right text-slate-600">{item.unitPrice?.toLocaleString("vi-VN")}đ</td>
+                            <td className="p-3 text-right font-bold text-[#0057cd]">{(item.quantity * item.unitPrice)?.toLocaleString("vi-VN")}đ</td>
+                          </tr>
+                        ))
+                      ) : (
+                        selectedGrnDetails.items?.filter((item: any) => {
+                          if (!showOnlyDifferences) return true;
+                          const expectedQty = item.quantity;
+                          const actualQty = item.actualQty;
+                          return actualQty !== undefined && actualQty !== null && actualQty !== expectedQty;
+                        }).map((item: any, idx: number) => {
+                          const isMismatched = (selectedGrnDetails.status === "PENDING_APPROVAL" || selectedGrnDetails.status === "COMPLETED") && item.actualQty !== undefined && item.actualQty !== null && item.actualQty !== item.quantity;
+                          return (
+                            <tr key={idx} className={`hover:bg-slate-50 ${isMismatched ? "bg-amber-50/40 hover:bg-amber-50/60" : ""}`}>
+                              <td className="p-3 font-semibold text-slate-800">{getMedicineName(item.medicineId)}</td>
+                              <td className="p-3">
+                                <span className="px-2 py-0.5 bg-amber-50 text-amber-700 font-bold border border-amber-200 rounded">
+                                  {item.batchNo}
+                                </span>
+                              </td>
+                              <td className="p-3 font-medium text-slate-600">{new Date(item.expDate).toLocaleDateString("vi-VN")}</td>
+                              {selectedGrnDetails.status === "PENDING_APPROVAL" || selectedGrnDetails.status === "COMPLETED" || selectedGrnDetails.status === "CANCELLED" ? (
+                                <>
+                                  <td className="p-3 text-right text-slate-600">{item.quantity}</td>
+                                  <td className={`p-3 text-right font-black ${isMismatched ? "text-amber-700 bg-amber-100/50" : "text-emerald-700"}`}>
+                                    {item.actualQty ?? "-"}
+                                  </td>
+                                </>
+                              ) : (
+                                <td className="p-3 text-right font-bold text-slate-800">{item.quantity}</td>
+                              )}
+                              <td className="p-3 text-right text-slate-600">{item.unitPrice?.toLocaleString("vi-VN")}đ</td>
+                              <td className="p-3 text-right font-bold text-[#0057cd]">{(item.quantity * item.unitPrice)?.toLocaleString("vi-VN")}đ</td>
+                              {(selectedGrnDetails.status === "PENDING_APPROVAL" || selectedGrnDetails.status === "COMPLETED" || selectedGrnDetails.status === "CANCELLED") && (
+                                <td className="p-3 text-center">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewInspectionRecord(selectedGrnDetails._id, item._id, getMedicineName(item.medicineId));
+                                    }}
+                                    className="text-[11px] font-black text-[#0057cd] hover:text-[#00419e] hover:underline bg-[#f2f3ff] px-2.5 py-1 rounded-md border border-[#e2e5ff] transition-all"
+                                  >
+                                    Xem ảnh
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
+                </div>
+
+                {selectedGrnDetails.status === "PENDING_APPROVAL" && (
+                  <div className="space-y-2 border-t border-slate-100 pt-4">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">
+                      Lý do chênh lệch (Bắt buộc nếu có chênh lệch giữa số lượng yêu cầu và thực nhận):
+                    </label>
+                    <textarea
+                      value={discrepancyReason}
+                      onChange={(e) => setDiscrepancyReason(e.target.value)}
+                      placeholder="Nhập lý do chênh lệch (Ví dụ: Nhà cung cấp giao thiếu, hàng bị vỡ/hỏng...)"
+                      rows={2}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#0057cd] text-xs font-semibold placeholder:font-normal"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* MODAL FOOTER */}
+              <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                <div className="text-xs text-slate-500 font-semibold">
+                  {(selectedGrnDetails.status === "DRAFT" || selectedGrnDetails.status === "INSPECTING") && "💡 Đang kiểm đếm lô hàng. Quản lý có thể sửa lô/hạn dùng/số lượng."}
+                  {selectedGrnDetails.status === "PENDING_APPROVAL" && "🔔 Chờ duyệt. Hãy rà soát chênh lệch số lượng trước khi Approve."}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setSelectedGrnDetails(null)}
+                    className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all text-sm"
+                  >
+                    Đóng
+                  </button>
+
+                  {(selectedGrnDetails.status === "DRAFT" || selectedGrnDetails.status === "INSPECTING") && (
+                    <button
+                      onClick={handleSaveDraft}
+                      disabled={editLoading}
+                      className="px-5 py-2 font-bold text-white bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-300 rounded-xl transition-all shadow-sm flex items-center gap-2 text-sm"
+                    >
+                      {editLoading && <Loader2 size={16} className="animate-spin" />}
+                      Lưu thay đổi
+                    </button>
+                  )}
+
+                  {selectedGrnDetails.status === "PENDING_APPROVAL" && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleRejectGRN("reinspect")}
+                        disabled={approvalLoading}
+                        className="px-4 py-2 font-bold text-amber-700 bg-amber-100 hover:bg-amber-250 rounded-xl transition-all text-sm"
+                      >
+                        Yêu cầu kiểm lại
+                      </button>
+                      <button
+                        onClick={() => handleRejectGRN("cancel")}
+                        disabled={approvalLoading}
+                        className="px-4 py-2 font-bold text-rose-700 bg-rose-100 hover:bg-rose-250 rounded-xl transition-all text-sm"
+                      >
+                        Từ chối/Hủy phiên
+                      </button>
+                      <button
+                        onClick={handleApproveGRN}
+                        disabled={approvalLoading}
+                        className="px-5 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 rounded-xl transition-all shadow-sm flex items-center gap-2 text-sm"
+                      >
+                        {approvalLoading && <Loader2 size={16} className="animate-spin" />}
+                        Phê duyệt nhập kho
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -549,7 +900,17 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                   </div>
                   <div>
                     <span className="text-slate-500 font-bold block text-xs uppercase">Trạng thái:</span>
-                    <span className="font-black text-emerald-700 uppercase">{selectedPoDetails.status}</span>
+                    <span className="font-black text-[#0057cd] uppercase">
+                      {selectedPoDetails.status === "SHIPPING"
+                        ? "Đang giao"
+                        : selectedPoDetails.status === "RECEIVING"
+                          ? "Đang kiểm"
+                          : selectedPoDetails.status === "PARTIAL_RECEIVED"
+                            ? "Giao thiếu"
+                            : selectedPoDetails.status === "COMPLETED"
+                              ? "Hoàn thành"
+                              : selectedPoDetails.status}
+                    </span>
                   </div>
                 </div>
 
@@ -578,6 +939,92 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Inspection Record Modal */}
+        {selectedInspectionRecord && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedInspectionRecord(null)} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden"
+            >
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-2 text-slate-800 font-bold">
+                  <Image size={18} className="text-[#0057cd]" />
+                  <span>Bằng chứng kiểm đếm AI - {selectedMedicineNameForRecord}</span>
+                </div>
+                <button
+                  onClick={() => setSelectedInspectionRecord(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center min-h-[300px]">
+                    <img
+                      src={
+                        selectedInspectionRecord.evidenceImage
+                          ? selectedInspectionRecord.evidenceImage.startsWith("http")
+                            ? selectedInspectionRecord.evidenceImage
+                            : "http://localhost:8000" + selectedInspectionRecord.evidenceImage
+                          : ""
+                      }
+                      className="max-w-full max-h-[40vh] object-contain animate-fade-in"
+                      alt="AI Verification Evidence"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2 text-center italic">
+                    Hình ảnh chụp thực tế từ camera thiết bị di động của thủ kho
+                  </p>
+                </div>
+                <div className="space-y-4 text-xs">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                    <h5 className="font-bold text-slate-800 text-sm border-b border-slate-200 pb-2">Thông số đối soát AI</h5>
+                    <div className="grid grid-cols-2 gap-y-2">
+                      <span className="text-slate-500 font-bold">Số lượng đặt:</span>
+                      <span className="font-bold text-slate-800 text-right">{selectedInspectionRecord.expectedQty} hộp</span>
+
+                      <span className="text-slate-500 font-bold">AI đếm:</span>
+                      <span className="font-black text-[#0057cd] text-right">{selectedInspectionRecord.aiCount} hộp</span>
+
+                      <span className="text-slate-500 font-bold">Thủ kho xác nhận:</span>
+                      <span className="font-black text-emerald-700 text-right">{selectedInspectionRecord.actualQty ?? "Chưa xác nhận"} hộp</span>
+
+                      <span className="text-slate-500 font-bold">Chênh lệch:</span>
+                      <span className={`font-black text-right ${selectedInspectionRecord.actualQty !== null && selectedInspectionRecord.actualQty !== selectedInspectionRecord.expectedQty ? "text-amber-600" : "text-emerald-600"}`}>
+                        {selectedInspectionRecord.actualQty !== null 
+                          ? `${selectedInspectionRecord.actualQty - selectedInspectionRecord.expectedQty} hộp` 
+                          : "N/A"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                    <h5 className="font-bold text-slate-800 text-sm border-b border-slate-200 pb-2">Thông tin Audit Log</h5>
+                    <div className="grid grid-cols-2 gap-y-2">
+                      <span className="text-slate-500 font-bold">Thủ kho thực hiện:</span>
+                      <span className="font-semibold text-slate-800 text-right">{selectedInspectionRecord.verifiedBy || "Chưa xác nhận"}</span>
+
+                      <span className="text-slate-500 font-bold">Thời gian kiểm:</span>
+                      <span className="font-semibold text-slate-800 text-right">
+                        {selectedInspectionRecord.verifiedAt 
+                          ? new Date(selectedInspectionRecord.verifiedAt).toLocaleString("vi-VN") 
+                          : new Date(selectedInspectionRecord.createdAt).toLocaleString("vi-VN")}
+                      </span>
+
+                      <span className="text-slate-500 font-bold">Phiên bản Model:</span>
+                      <span className="font-bold text-[#0057cd] text-right">Roboflow RF-v4.1</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -639,11 +1086,11 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
         return;
       }
       if (it.quantity <= 0) {
-        setErrorMessage(`Số lượng thực nhận của thuốc "${getMedicineName(it.medicineId)}" phải lớn hơn 0.`);
+        setErrorMessage(`Số lượng dự kiến nhận của thuốc "${getMedicineName(it.medicineId)}" phải lớn hơn 0.`);
         return;
       }
       if (it.quantity > it.maxQuantity) {
-        setErrorMessage(`Số lượng thực nhận cho thuốc "${getMedicineName(it.medicineId)}" (${it.quantity}) vượt quá số lượng đặt hàng (${it.maxQuantity})!`);
+        setErrorMessage(`Số lượng dự kiến nhận cho thuốc "${getMedicineName(it.medicineId)}" (${it.quantity}) vượt quá số lượng đặt hàng (${it.maxQuantity})!`);
         return;
       }
     }
@@ -695,7 +1142,7 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
               <ClipboardCheck size={20} />
             </div>
             <div>
-              <h2 className="text-lg font-black text-slate-900">Xác Nhận Nhận Hàng & Nhập Kho</h2>
+              <h2 className="text-lg font-black text-slate-900">Mở Phiên Tiếp Nhận Hàng (Receiving Session)</h2>
               <p className="text-xs font-bold text-emerald-800">Từ đơn đặt hàng: PO-{po._id.substring(18).toUpperCase()}</p>
             </div>
           </div>
@@ -707,7 +1154,7 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
         {/* Content */}
         <div className="p-6 overflow-y-auto bg-slate-50/50 space-y-4">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Nhập số lô, hạn sử dụng và số lượng thực nhận từ nhà cung cấp cho mỗi sản phẩm:
+            Nhập thông tin lô hàng và hạn dùng dự kiến để khởi tạo phiên tiếp nhận cho thủ kho kiểm đếm:
           </p>
 
           <div className="space-y-4">
@@ -744,7 +1191,7 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
 
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="text-xs font-bold text-slate-500 block">THỰC NHẬN*</label>
+                    <label className="text-xs font-bold text-slate-500 block">DỰ KIẾN NHẬN*</label>
                     <span className="text-[10px] font-bold text-slate-400">Đơn đặt: {item.maxQuantity}</span>
                   </div>
                   <input
@@ -766,7 +1213,7 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
               className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-bold space-y-2">
               <div className="flex items-center gap-2 text-amber-700 font-black"><AlertTriangle size={18} /> CẢNH BÁO HÀNG CẬN DATE</div>
               {warnings.map((w, i) => <p key={i} className="text-xs leading-relaxed">{w}</p>)}
-              <p className="text-xs text-amber-600 mt-2">Nhập kho đã hoàn tất. Tự động đóng sau 3 giây...</p>
+              <p className="text-xs text-amber-600 mt-2">Phiên tiếp nhận đã được khởi tạo thành công. Tự động đóng sau 3 giây...</p>
             </motion.div>
           )}
 
@@ -802,12 +1249,12 @@ function GoodsReceiptModal({ po, getMedicineName, onClose, onSuccess }: { po: an
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
-                Đang lưu kho...
+                Đang tạo phiên...
               </>
             ) : (
               <>
                 <CheckCircle2 size={18} />
-                Xác nhận nhận hàng & Nhập kho
+                 Bắt đầu kiểm hàng
               </>
             )}
           </button>

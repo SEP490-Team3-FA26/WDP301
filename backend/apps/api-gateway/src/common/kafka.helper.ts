@@ -44,22 +44,24 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
  */
 export async function sendKafkaMessage(client: ClientKafka, topic: string, data: any) {
   try {
-    console.log(`[API-Gateway][sendKafkaMessage] Sending to topic "${topic}" with data: ${JSON.stringify(data)}`);
+    console.log(`[API-Gateway][sendKafkaMessage] Sending to topic "${topic}"`);
     const result: any = await lastValueFrom(
       client.send(topic, data).pipe(timeout(15000))
     );
-    console.log(`[API-Gateway][sendKafkaMessage] Received response from topic "${topic}": ${JSON.stringify(result)}`);
-    // Trường hợp microservice trả về object lỗi thông thường (không phải throw)
+    console.log(`[API-Gateway][sendKafkaMessage] Received response from topic "${topic}"`);
     if (result?.error) {
-      console.warn(`[API-Gateway][sendKafkaMessage] Microservice returned error object: ${JSON.stringify(result)}`);
       throw new HttpException(result.message || 'Internal Microservice Error', result.statusCode || 400);
     }
     return result;
   } catch (err: any) {
-    console.error(`[API-Gateway][sendKafkaMessage] Error on topic "${topic}": ${err.message}`, err.stack);
-    // Trường hợp microservice throw RpcException → NestJS Kafka đẩy thành Observable error
-    // err.message có thể là JSON string hoặc plain string
-    if (err instanceof HttpException) throw err; // Đã được xử lý ở trên
+    if (err instanceof HttpException) {
+      if (err.getStatus() < 500) {
+        console.warn(`[API-Gateway][sendKafkaMessage] Validation warning on topic "${topic}": ${err.message} (${err.getStatus()})`);
+      } else {
+        console.error(`[API-Gateway][sendKafkaMessage] Server error on topic "${topic}": ${err.message}`, err.stack);
+      }
+      throw err;
+    }
 
     let message = 'Lỗi hệ thống từ microservice';
     let statusCode = 500;

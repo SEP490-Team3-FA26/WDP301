@@ -242,6 +242,19 @@ export class PricingService {
   }
 
   /**
+   * Lấy cấu hình tồn kho tối thiểu cho 1 thuốc tại 1 chi nhánh (UC-38)
+   */
+  async getMinStock(branchId: string | undefined, medicineId: string): Promise<number> {
+    if (!branchId) return 0;
+    const priceEntry = await this.priceListModel.findOne({
+      branchId,
+      medicineId,
+      isActive: true,
+    }).exec();
+    return priceEntry?.minStock || 0;
+  }
+
+  /**
    * Sao chép bảng giá từ chi nhánh này sang chi nhánh khác
    */
   async copyPriceList(data: { fromBranchId: string; toBranchId: string; updatedBy?: string }) {

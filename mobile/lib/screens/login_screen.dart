@@ -1,6 +1,11 @@
 import 'dart:math' as math;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../models/user_role.dart';
+import '../services/api_service.dart';
+import '../services/socket_service.dart';
+import 'google_webview_screen.dart';
 import 'admin_screen.dart';
 import 'director_screen.dart';
 import 'warehouse_screen.dart';
@@ -25,9 +30,22 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<double> _logoScaleAnimation;
   late Animation<Offset> _slideAnimation;
 
+  final Map<UserRole, Map<String, String>> demoCredentials = const {
+    UserRole.admin:      {'email': 'admin@vinapharmacy.com',      'password': '123456'},
+    UserRole.headBranch: {'email': 'director@vinapharmacy.com',   'password': '123456'},
+    UserRole.warehouse:  {'email': 'warehouse@vinapharmacy.com',  'password': '123456'},
+    UserRole.branch:     {'email': 'manager@vinapharmacy.com',    'password': '123456'},
+    UserRole.pharmacist: {'email': 'pharmacist@vinapharmacy.com', 'password': '123456'},
+    UserRole.customer:   {'email': 'user@vinapharmacy.com',       'password': '123456'},
+  };
+
   @override
   void initState() {
     super.initState();
+    // Clear token and disconnect socket on landing/returning to LoginScreen
+    SocketService().disconnect();
+    ApiService.currentToken = '';
+
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -64,7 +82,90 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  void _navigateToDashboard(UserRole role) {
+  Future<void> _handleRealLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      _showErrorDialog('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+      return;
+    }
+
+    _showLoadingDialog();
+
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      ).timeout(const Duration(seconds: 5));
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data != null && data['access_token'] != null) {
+          final token = data['access_token'];
+          ApiService.currentToken = token;
+          
+          final profile = await ApiService.getProfile(token);
+          Navigator.of(context).pop(); // dismiss loading
+          
+          if (profile != null) {
+            final userRole = _parseRole(profile['role']);
+            // Initialize socket connection after login
+            SocketService().initSocket(token);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Đăng nhập thành công! Chào mừng ${profile['fullName'] ?? ''}'),
+                backgroundColor: const Color(0xFF2E7D32),
+              ),
+            );
+            _goToScreen(userRole);
+          } else {
+            _showErrorDialog('Không thể tải thông tin tài khoản (Profile rỗng).');
+          }
+        } else {
+          Navigator.of(context).pop();
+          _showErrorDialog('Đăng nhập thất bại: Không nhận được token.');
+        }
+      } else {
+        Navigator.of(context).pop();
+        _showErrorDialog('Sai email hoặc mật khẩu (401)!');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      _showErrorDialog('Lỗi kết nối tới máy chủ DB: $e');
+    }
+  }
+
+  Future<void> _handleDemoLogin(UserRole role) async {
+    _showLoadingDialog();
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/auth/demo-token'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'role': role.name}),
+      ).timeout(const Duration(seconds: 4));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data != null && data['access_token'] != null) {
+          ApiService.currentToken = data['access_token'];
+          // Initialize socket connection for demo login
+          SocketService().initSocket(data['access_token']);
+        }
+      }
+    } catch (e) {
+      debugPrint("Demo token retrieval failed: $e");
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context); // Dismiss loading dialog
+    _goToScreen(role);
+  }
+
+  void _goToScreen(UserRole role) {
     Widget targetScreen;
     switch (role) {
       case UserRole.admin:
@@ -93,6 +194,117 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          color: Colors.white,
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF1A73E8)),
+                SizedBox(height: 16),
+                Text(
+                  'Đang xử lý thông tin...',
+                  style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Lỗi đăng nhập', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Đóng', style: TextStyle(color: Color(0xFF1A73E8))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  UserRole _parseRole(String? roleStr) {
+    switch (roleStr) {
+      case 'admin':
+        return UserRole.admin;
+      case 'head_branch':
+        return UserRole.headBranch;
+      case 'warehouse':
+        return UserRole.warehouse;
+      case 'branch':
+        return UserRole.branch;
+      case 'pharmacist':
+        return UserRole.pharmacist;
+      case 'user':
+      default:
+        return UserRole.customer;
+    }
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    final String loginUrl = '${ApiService.baseUrl}/api/auth/google';
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GoogleWebViewScreen(loginUrl: loginUrl),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result != null && result is Map<String, dynamic>) {
+      if (result['success'] == true) {
+        final token = result['token'];
+        // Save token globally for all API calls
+        ApiService.currentToken = token ?? '';
+        _showLoadingDialog();
+        
+        try {
+          final profile = await ApiService.getProfile(token);
+          if (!mounted) return;
+          Navigator.of(context).pop(); // dismiss loading dialog
+
+          if (profile != null) {
+            final roleStr = profile['role'];
+            final userRole = _parseRole(roleStr);
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Đăng nhập thành công! Chào mừng ${profile['fullName'] ?? ''}'),
+                backgroundColor: const Color(0xFF2E7D32),
+              ),
+            );
+            _goToScreen(userRole);
+          } else {
+            _showErrorDialog('Không thể tải thông tin tài khoản sau khi đăng nhập Google.');
+          }
+        } catch (e) {
+          if (!mounted) return;
+          Navigator.of(context).pop(); // dismiss loading dialog
+          _showErrorDialog('Có lỗi xảy ra khi kết nối tới máy chủ: $e');
+        }
+      } else {
+        _showErrorDialog(result['error'] ?? 'Đăng nhập Google thất bại');
+      }
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -108,19 +320,14 @@ class _LoginScreenState extends State<LoginScreen>
         child: FloatingBackground(
           child: SafeArea(
             child: SingleChildScrollView(
-              child: Container(
-                height:
-                    MediaQuery.of(context).size.height -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24.0,
-                  vertical: 16.0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Spacer(),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 24.0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 24),
 
                     // Animated Logo & Title
                     FadeTransition(
@@ -172,7 +379,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
 
-                    const Spacer(),
+                    const SizedBox(height: 32),
 
                     // Animated Form Inputs
                     FadeTransition(
@@ -242,9 +449,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                             // Login Button
                             ElevatedButton(
-                              onPressed: () {
-                                _navigateToDashboard(UserRole.pharmacist);
-                              },
+                              onPressed: _handleRealLogin,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF1A73E8),
                                 foregroundColor: Colors.white,
@@ -264,12 +469,63 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                             ),
+                            const SizedBox(height: 16),
+                            const Row(
+                              children: [
+                                Expanded(child: Divider(color: Colors.black12)),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    'Hoặc',
+                                    style: TextStyle(
+                                      color: Colors.black45,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Divider(color: Colors.black12)),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            OutlinedButton(
+                              onPressed: _handleGoogleLogin,
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.black87,
+                                side: const BorderSide(color: Color(0xFFDADCE0)),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.g_mobiledata,
+                                    size: 32,
+                                    color: Colors.red,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Đăng nhập bằng Google',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ),
 
-                    const Spacer(),
+                    const SizedBox(height: 32),
 
                     // Animated Demo Panel
                     FadeTransition(
@@ -346,7 +602,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    onPressed: () => _navigateToDashboard(role),
+                                    onPressed: () => _handleDemoLogin(role),
                                   );
                                 }).toList(),
                               ),
@@ -361,9 +617,8 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 }
 
 // FLOATING BACKDROP PARTICLES SYSTEM

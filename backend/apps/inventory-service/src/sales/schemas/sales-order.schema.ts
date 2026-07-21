@@ -8,6 +8,9 @@ export class SalesOrderBatchItem {
 
   @Prop({ type: Number, required: true })
   quantity: number;
+
+  @Prop({ type: Number, required: true, default: 0 })
+  importPrice: number;
 }
 export const SalesOrderBatchItemSchema = SchemaFactory.createForClass(SalesOrderBatchItem);
 
@@ -64,6 +67,9 @@ export class SalesOrder extends Document {
 
   @Prop({ type: String })
   soldBy: string;
+
+  @Prop({ type: String })
+  branchId?: string;
 
   @Prop({ type: Number })
   orderCode: number; // Linked to orders.orderCode to guarantee idempotency and avoid duplicate deductions

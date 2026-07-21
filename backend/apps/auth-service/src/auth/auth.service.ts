@@ -296,6 +296,68 @@ export class AuthService {
   }
 
   // ============================================================
+  // ĐỔI MẬT KHẨU (CHO USER ĐÃ ĐĂNG NHẬP)
+  // ============================================================
+  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<{ message: string }> {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản!');
+    }
+
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Mật khẩu cũ không chính xác!');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    user.passwordHash = passwordHash;
+    await user.save();
+
+    // Gửi email xác nhận đổi mật khẩu thành công
+    try {
+      if (this.emailService.isEnabled) {
+        await this.emailService.sendEmail({
+          to: user.email,
+          subject: 'Xác nhận thay đổi mật khẩu thành công',
+          html: `
+            <div style="background-color: #f8fafc; padding: 40px 20px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+              <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);">
+                <div style="background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); padding: 32px 24px; text-align: center;">
+                  <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">ABC Pharmacy</h1>
+                </div>
+                <div style="padding: 40px 32px;">
+                  <h2 style="color: #0f172a; font-size: 22px; font-weight: 700; margin-top: 0; margin-bottom: 16px; text-align: center;">Thay đổi mật khẩu thành công</h2>
+                  <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 32px; text-align: center;">
+                    Xin chào <strong>${user.fullName}</strong>,<br>
+                    Mật khẩu của tài khoản <strong>${user.email}</strong> đã được thay đổi thành công vào lúc ${new Date().toLocaleString('vi-VN')}.
+                  </p>
+                  <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; margin-bottom: 32px;">
+                    <p style="color: #b45309; font-size: 14px; margin: 0; text-align: center;">
+                      Nếu bạn không thực hiện thay đổi này, vui lòng liên hệ ngay với chúng tôi để bảo mật tài khoản.
+                    </p>
+                  </div>
+                  <hr style="border: none; border-top: 1px solid #e2e8f0; margin-bottom: 24px;">
+                  <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
+                    Trân trọng,<br>
+                    <strong style="color: #0f172a;">Đội ngũ ABC Pharmacy</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+          `,
+        });
+        console.log(`✉️ [Email] Đã gửi thông báo đổi mật khẩu đến ${user.email} (SQS→Lambda→SES)`);
+      } else {
+        console.warn(`⚠️ [MOCK EMAIL] Thông báo đổi mật khẩu thành công đã được gửi đến ${user.email}.`);
+      }
+    } catch (error: any) {
+      console.error(`❌ [Email Error] Lỗi gửi email xác nhận đổi mật khẩu: ${error.message}`);
+    }
+
+    return { message: 'Đổi mật khẩu thành công!' };
+  }
+
+  // ============================================================
   // LẤY THÔNG TIN USER THEO ID
   // ============================================================
   async getUserById(id: string): Promise<any> {

@@ -54,6 +54,12 @@ export class Medicine extends Document {
   @Prop({ default: 0, min: 0 })
   stock: number;
 
+  @Prop({ default: 50 })
+  safetyStock: number;
+
+  @Prop({ default: 100 })
+  reorderPoint: number;
+
   @Prop()
   unit: string;
 

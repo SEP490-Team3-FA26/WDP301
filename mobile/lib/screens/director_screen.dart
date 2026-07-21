@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
+import '../widgets/notification_badge.dart';
 
 class DirectorScreen extends StatefulWidget {
   const DirectorScreen({super.key});
@@ -8,32 +10,8 @@ class DirectorScreen extends StatefulWidget {
 }
 
 class _DirectorScreenState extends State<DirectorScreen> {
-  final List<Map<String, dynamic>> _poPendingApprovals = [
-    {
-      'id': 'PO-88231',
-      'branch': 'Cơ sở Quận 1',
-      'supplier': 'Dược phẩm Minh Dân',
-      'amount': '84,500,000 ₫',
-      'date': '12/06/2026',
-      'items': 'Thuốc kháng sinh Amoxicillin (x500), Paracetamol 500mg (x1000)',
-    },
-    {
-      'id': 'PO-88232',
-      'branch': 'Cơ sở Quận 3',
-      'supplier': 'Tập đoàn OPC',
-      'amount': '120,000,000 ₫',
-      'date': '12/06/2026',
-      'items': 'Hoạt huyết dưỡng não (x2000), Dầu khuynh diệp (x1500)',
-    },
-    {
-      'id': 'PO-88233',
-      'branch': 'Cơ sở Quận 10',
-      'supplier': 'Dược Hậu Giang (DHG)',
-      'amount': '45,000,000 ₫',
-      'date': '11/06/2026',
-      'items': 'Hapacol 250 (x1000), Klamentin 625 (x800)',
-    },
-  ];
+  bool _isLoading = false;
+  final List<Map<String, dynamic>> _poPendingApprovals = [];
 
   final List<Map<String, dynamic>> _branchPerformances = [
     {'name': 'Cơ sở Quận 1', 'revenue': '420,000,000 ₫', 'transactions': '1,450', 'growth': '+12.4%'},
@@ -42,30 +20,79 @@ class _DirectorScreenState extends State<DirectorScreen> {
     {'name': 'Cơ sở Quận 7', 'revenue': '190,000,000 ₫', 'transactions': '520', 'growth': '+8.6%'},
   ];
 
-  void _approvePO(int index, String poId) {
-    setState(() {
-      _poPendingApprovals.removeAt(index);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Đã PHÊ DUYỆT đơn nhập hàng $poId', style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _loadPurchaseOrders();
   }
 
-  void _rejectPO(int index, String poId) {
+  Future<void> _loadPurchaseOrders() async {
     setState(() {
-      _poPendingApprovals.removeAt(index);
+      _isLoading = true;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Đã TỪ CHỐI đơn nhập hàng $poId', style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    try {
+      final poList = await ApiService.getPurchaseOrders();
+      if (mounted) {
+        setState(() {
+          _poPendingApprovals.clear();
+          for (var po in poList) {
+            final itemsList = po['items'] as List? ?? [];
+            final itemsSummary = itemsList.map((i) => "${i['medicineName'] ?? i['name']} (x${i['qty'] ?? i['quantity'] ?? 1})").join(", ");
+            _poPendingApprovals.add({
+              'id': po['_id'] != null ? 'PO-${po['_id'].toString().substring(po['_id'].toString().length - 5).toUpperCase()}' : po['id'] ?? 'PO-001',
+              'rawId': po['_id'] ?? po['id'],
+              'branch': po['branch'] ?? 'Cơ sở Tổng',
+              'supplier': po['supplier'] ?? 'Nhà cung cấp Dược',
+              'amount': '${(po['totalAmount'] ?? 50000000).toString()} ₫',
+              'date': po['createdAt'] != null ? po['createdAt'].toString().substring(0, 10) : '12/06/2026',
+              'items': itemsSummary.isNotEmpty ? itemsSummary : 'Các loại thuốc kháng sinh và thiết bị y tế',
+            });
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading POs: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _approvePO(int index, String poId) async {
+    final rawId = _poPendingApprovals[index]['rawId'] ?? poId;
+    await ApiService.approvePurchaseOrder(rawId, "APPROVE", paymentType: "PAID");
+    if (mounted) {
+      setState(() {
+        _poPendingApprovals.removeAt(index);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã PHÊ DUYỆT thành công đơn nhập hàng $poId', style: const TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _rejectPO(int index, String poId) async {
+    final rawId = _poPendingApprovals[index]['rawId'] ?? poId;
+    await ApiService.approvePurchaseOrder(rawId, "REJECT", rejectionReason: "Từ chối bởi Giám Đốc trên di động");
+    if (mounted) {
+      setState(() {
+        _poPendingApprovals.removeAt(index);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã TỪ CHỐI đơn nhập hàng $poId', style: const TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -91,6 +118,9 @@ class _DirectorScreenState extends State<DirectorScreen> {
         ),
         elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [
+          NotificationBadge(iconColor: Colors.white),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(

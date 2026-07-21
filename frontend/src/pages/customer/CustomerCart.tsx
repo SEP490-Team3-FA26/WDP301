@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShoppingCart, Trash2, ArrowRight, Minus, Plus, ShieldAlert, Sparkles, XCircle, Info, HeartPulse } from "lucide-react";
-import { cartService } from "../../services/cart.service";
-import { medicineService } from "../../services/medicine.service";
-import { voucherService } from "../../services/voucher.service";
+import { cartService } from "../../services/sales/cart.service";
+import { medicineService } from "../../services/inventory/medicine.service";
+import { voucherService } from "../../services/sales/voucher.service";
 
 export function CustomerCart() {
   const navigate = useNavigate();
   const [cartItems, setCartItems] = useState<any[]>([]);
+  const updateQuantityTimerRef = useRef<any>(null);
   
   // AI Interaction check states
   const [checkingInteraction, setCheckingInteraction] = useState(false);
@@ -52,55 +53,51 @@ export function CustomerCart() {
     loadCart();
   }, []);
 
-  const updateQuantity = async (id: string, newQty: number) => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      if (newQty <= 0) {
-        handleDelete(id);
-        return;
-      }
-      const item = cartItems.find((it) => it.id === id || it._id === id);
-      if (item && newQty > item.stock) {
-        showAlert(`Chỉ còn ${item.stock} sản phẩm khả dụng trong kho!`);
-        return;
-      }
-      try {
-        const guestCartStr = localStorage.getItem("guest_cart");
-        const cart = guestCartStr ? JSON.parse(guestCartStr) : [];
-        const cartItem = cart.find((it: any) => it.id === id || it._id === id);
-        if (cartItem) {
-          cartItem.quantity = newQty;
-        }
-        localStorage.setItem("guest_cart", JSON.stringify(cart));
-        setCartItems(cart);
-        window.dispatchEvent(new Event("cartUpdated"));
-      } catch (err) {
-        console.error("Error updating guest cart item quantity:", err);
-      }
+  const updateQuantity = async (id: string, newQty: number | string) => {
+    // Nếu truyền chuỗi rỗng để user xoá số nhập lại
+    if (newQty === "") {
+      setCartItems(prev => prev.map(it => it.id === id ? { ...it, quantity: "" } : it));
       return;
     }
 
-    if (newQty <= 0) {
+    const numericQty = typeof newQty === "string" ? parseInt(newQty, 10) : newQty;
+    if (isNaN(numericQty)) return;
+
+    if (numericQty <= 0) {
       handleDelete(id);
       return;
     }
 
     // Check client-side stock first before sending request
     const item = cartItems.find((it) => it.id === id);
-    if (item && newQty > item.stock) {
+    if (item && numericQty > item.stock) {
       showAlert(`Chỉ còn ${item.stock} sản phẩm khả dụng trong kho!`);
+      // Revert back to stock limit
+      setCartItems(prev => prev.map(it => it.id === id ? { ...it, quantity: item.stock } : it));
       return;
     }
 
-    try {
-      await cartService.updateCartItem(id, newQty);
-      
-      await loadCart();
-      window.dispatchEvent(new Event("cartUpdated"));
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || "Lỗi cập nhật giỏ hàng";
-      showAlert(msg);
+    // Optimistic UI update cho mượt (cập nhật state ngay lập tức)
+    setCartItems(prev => prev.map(it => it.id === id ? { ...it, quantity: numericQty } : it));
+
+    // Clear previous debounce timer
+    if (updateQuantityTimerRef.current) {
+      clearTimeout(updateQuantityTimerRef.current);
     }
+
+    // Debounce the backend call
+    updateQuantityTimerRef.current = setTimeout(async () => {
+      try {
+        await cartService.updateCartItem(id, numericQty);
+        await loadCart();
+        window.dispatchEvent(new Event("cartUpdated"));
+      } catch (err: any) {
+        // Rollback nếu có lỗi
+        await loadCart();
+        const msg = err.response?.data?.message || err.message || "Lỗi cập nhật giỏ hàng";
+        showAlert(msg);
+      }
+    }, 300);
   };
 
   const handleDelete = async (id: string) => {
@@ -212,7 +209,7 @@ export function CustomerCart() {
   };
 
   // Pricing calculations
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const subtotal = cartItems.reduce((acc, item) => acc + item.price * (Number(item.quantity) || 0), 0);
   const memberDiscount = Math.round(subtotal * 0.05); // 5% discount
   const voucherDiscount = appliedVoucher ? appliedVoucher.discount : 0;
   const vat = Math.round(Math.max(0, subtotal - memberDiscount - voucherDiscount) * 0.08); // 8% VAT
@@ -385,14 +382,24 @@ export function CustomerCart() {
                       <td className="px-4 py-5 text-center">
                         <div className="flex items-center justify-center gap-2.5">
                           <button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.id, (Number(item.quantity) || 1) - 1)}
                             className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-90 transition-transform"
                           >
                             <Minus size={12} />
                           </button>
-                          <span className="font-bold text-[14px] text-slate-900 w-6 text-center">{item.quantity}</span>
+                          <input
+                            type="text"
+                            value={item.quantity}
+                            onChange={(e) => updateQuantity(item.id, e.target.value)}
+                            onBlur={(e) => {
+                              if (e.target.value === "" || Number(e.target.value) <= 0) {
+                                updateQuantity(item.id, 1);
+                              }
+                            }}
+                            className="font-bold text-[14px] text-slate-900 w-10 text-center bg-transparent border border-transparent hover:border-slate-200 focus:border-[#0d6efd] focus:outline-none rounded transition-all py-0.5"
+                          />
                           <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.id, (Number(item.quantity) || 0) + 1)}
                             className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-90 transition-transform"
                           >
                             <Plus size={12} />
@@ -404,7 +411,7 @@ export function CustomerCart() {
                         <span className="text-[10px] text-slate-400 block mt-0.5">/{item.unit}</span>
                       </td>
                       <td className="px-6 py-5 text-right font-black text-slate-900">
-                        {(item.price * item.quantity).toLocaleString()}₫
+                        {(item.price * (Number(item.quantity) || 0)).toLocaleString()}₫
                       </td>
                       <td className="px-4 py-5 text-center">
                         <button

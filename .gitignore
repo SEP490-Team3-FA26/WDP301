@@ -24,3 +24,23 @@ infra/**/.build/
 phuc/
 agents.md
 taste-skill/
+
+# Python Virtual Environments & Packages
+**/venv/
+**/.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDEs
+.idea/
+.vscode/
+!.vscode/settings.json
+
+docker-compose.yml
+next
+
+# Docker Compose personal overrides
+docker-compose.override.yml
+

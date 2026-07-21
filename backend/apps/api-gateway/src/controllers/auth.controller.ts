@@ -24,9 +24,11 @@ import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 import { VerifyTwoFactorDto, AuthenticateTwoFactorDto } from '../dto/two-factor.dto';
 import { VerifyEmailDto, ResendVerificationDto } from '../dto/verify-email.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { JwtService } from '@nestjs/jwt';
 
 @ApiTags('🔐 Authentication')
 @Controller('api/auth')
@@ -37,6 +39,7 @@ export class AuthController implements OnModuleInit {
   constructor(
     @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private readonly jwtService: JwtService,
   ) { }
 
   /**
@@ -52,6 +55,7 @@ export class AuthController implements OnModuleInit {
       'auth.get.user.by.id',
       'auth.forgot.password',
       'auth.reset.password',
+      'auth.change.password',
       'auth.2fa.generate',
       'auth.2fa.enable',
       'auth.2fa.disable',
@@ -130,6 +134,43 @@ export class AuthController implements OnModuleInit {
   }
 
   // ============================================================
+  // POST /api/auth/demo-token — Tạo token demo cho môi trường Dev/Test
+  // ============================================================
+  @Post('demo-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Tạo token JWT giả lập cho demo/test' })
+  async demoToken(@Body('role') roleStr: string) {
+    const mockUserId = '65f01234567890abcdef1234';
+    const role = roleStr?.toLowerCase() || 'customer';
+    
+    let mappedRole = 'user';
+    if (role === 'admin') mappedRole = 'admin';
+    else if (role === 'head_branch' || role === 'headbranch') mappedRole = 'head_branch';
+    else if (role === 'warehouse') mappedRole = 'warehouse';
+    else if (role === 'pharmacist') mappedRole = 'pharmacist';
+
+    const payload = {
+      sub: mockUserId,
+      email: `${role}@example.com`,
+      role: mappedRole,
+      fullName: `Demo ${roleStr || 'Customer'}`,
+      branchId: 'BR-001',
+    };
+
+    const token = this.jwtService.sign(payload);
+    return {
+      access_token: token,
+      user: {
+        id: mockUserId,
+        email: payload.email,
+        fullName: payload.fullName,
+        role: mappedRole,
+        branchId: 'BR-001',
+      }
+    };
+  }
+
+  // ============================================================
   // POST /api/auth/login — Đăng nhập
   // ============================================================
   @Post('login')
@@ -196,6 +237,33 @@ export class AuthController implements OnModuleInit {
     // Lưu vào cache
     await this.cacheManager.set(cacheKey, profile, this.CACHE_TTL);
     return profile;
+  }
+
+  // ============================================================
+  // POST /api/auth/change-password — Đổi mật khẩu
+  // ============================================================
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Đổi mật khẩu tài khoản' })
+  @ApiResponse({ status: 200, description: 'Đổi mật khẩu thành công' })
+  @ApiResponse({ status: 401, description: 'Mật khẩu cũ không chính xác hoặc chưa đăng nhập' })
+  async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+    const { sub: userId, email } = req.user;
+    
+    // Gửi qua Kafka -> Auth Microservice
+    const result: any = await sendKafkaMessage(
+      this.kafkaClient, 
+      'auth.change.password', 
+      JSON.stringify({ userId, oldPassword: dto.oldPassword, newPassword: dto.newPassword })
+    );
+
+    // Xóa session cache của user trong Redis để đảm bảo an toàn sau khi đổi mật khẩu
+    await this.cacheManager.del(`auth:session:${email}`);
+    await this.cacheManager.del(`auth:profile:${userId}`);
+
+    return result;
   }
 
   // ============================================================

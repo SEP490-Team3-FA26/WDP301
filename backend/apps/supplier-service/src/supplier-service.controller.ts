@@ -20,4 +20,9 @@ export class SupplierServiceController {
   async create(@Payload() data: any) {
     return await this.supplierService.create(data);
   }
+
+  @MessagePattern('supplier.update')
+  async update(@Payload() payload: { id: string, data: any }) {
+    return await this.supplierService.update(payload.id, payload.data);
+  }
 }

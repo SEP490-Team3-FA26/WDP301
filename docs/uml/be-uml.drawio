@@ -1,0 +1,100 @@
+<mxfile host="Electron">
+  <diagram name="Page-1" id="QdZv7DHIhqwVSRVc1nLr">
+    <mxGraphModel dx="1032" dy="699" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="540" background="none" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="text;html=1;align=center;verticalAlign=top;fontSize=14;fontStyle=1;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="&lt;b&gt;WDP301 — BE Package Diagram&lt;/b&gt;&lt;hr&gt;" vertex="1">
+          <mxGeometry height="32" width="1020" x="40" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="shape=folder;fontStyle=0;tabWidth=90;tabHeight=26;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=10;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#333333;" value="&lt;b&gt;«gateway» API Gateway&lt;/b&gt;&lt;hr&gt;NestJS — port 4000&lt;br&gt;JWT Auth + Redis Cache&lt;br&gt;Swagger: /api/docs" vertex="1">
+          <mxGeometry height="100" width="200" x="40" y="212" as="geometry" />
+        </mxCell>
+        <mxCell id="200" parent="1" style="swimlane;startSize=38;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#333333;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;«service» Service Layer&lt;/b&gt;&lt;hr&gt;Giao tiếp qua Kafka — Lưu trữ MongoDB" vertex="1">
+          <mxGeometry height="298" width="310" x="340" y="113" as="geometry" />
+        </mxCell>
+        <mxCell id="14" parent="200" style="shape=folder;fontStyle=0;tabWidth=70;tabHeight=20;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#333333;" value="&lt;b&gt;Auth Service&lt;/b&gt;&lt;br&gt;&lt;i&gt;Login / JWT / 2FA / OAuth&lt;/i&gt;" vertex="1">
+          <mxGeometry height="50" width="130" x="15" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="15" parent="200" style="shape=folder;fontStyle=0;tabWidth=70;tabHeight=20;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#333333;" value="&lt;b&gt;User Service&lt;/b&gt;&lt;br&gt;&lt;i&gt;Users / Branches / Carts&lt;/i&gt;" vertex="1">
+          <mxGeometry height="50" width="130" x="165" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="17" parent="200" style="shape=folder;fontStyle=0;tabWidth=70;tabHeight=20;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#333333;" value="&lt;b&gt;Supplier Service&lt;/b&gt;&lt;br&gt;&lt;i&gt;CRUD + Công nợ Credit&lt;/i&gt;" vertex="1">
+          <mxGeometry height="50" width="130" x="15" y="135" as="geometry" />
+        </mxCell>
+        <mxCell id="18" parent="200" style="shape=folder;fontStyle=0;tabWidth=70;tabHeight=20;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#333333;" value="&lt;b&gt;Orders Service&lt;/b&gt;&lt;br&gt;&lt;i&gt;Orders / Vouchers&lt;/i&gt;" vertex="1">
+          <mxGeometry height="50" width="130" x="165" y="135" as="geometry" />
+        </mxCell>
+        <mxCell id="16" parent="200" style="shape=folder;fontStyle=0;tabWidth=70;tabHeight=20;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#333333;" value="&lt;b&gt;Inventory Service&lt;/b&gt;&lt;br&gt;&lt;i&gt;Medicines / Purchase / Sales&lt;/i&gt;" vertex="1">
+          <mxGeometry height="50" width="130" x="15" y="215" as="geometry" />
+        </mxCell>
+        <mxCell id="19" parent="200" style="shape=folder;fontStyle=0;tabWidth=70;tabHeight=20;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#333333;" value="&lt;b&gt;AI Service (Python)&lt;/b&gt;&lt;br&gt;&lt;i&gt;STT + RAG + LLM — port 8000&lt;/i&gt;" vertex="1">
+          <mxGeometry height="50" width="130" x="165" y="215" as="geometry" />
+        </mxCell>
+        <mxCell id="500" parent="200" style="text;html=1;align=center;verticalAlign=middle;fontSize=8;fontStyle=0;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="&lt;b&gt;Inter-service (Kafka):&lt;/b&gt; Orders ↔ User/Auth/Inventory, User → Inventory" vertex="1">
+          <mxGeometry height="30" width="280" x="15" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="300" parent="1" style="swimlane;startSize=28;fillColor=#647687;strokeColor=#314354;fontColor=#ffffff;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;«infrastructure» Infrastructure Layer&lt;/b&gt;" vertex="1">
+          <mxGeometry height="418" width="290" x="740" y="82" as="geometry" />
+        </mxCell>
+        <mxCell id="20" parent="300" style="shape=folder;fontStyle=0;tabWidth=80;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" value="&lt;b&gt;«database» MongoDB&lt;/b&gt;&lt;hr&gt;Database chính (Mongoose ODM)&lt;br&gt;Tất cả service đọc/ghi" vertex="1">
+          <mxGeometry height="75" width="240" x="20" y="48" as="geometry" />
+        </mxCell>
+        <mxCell id="22" parent="300" style="shape=folder;fontStyle=0;tabWidth=80;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" value="&lt;b&gt;«cache» Redis&lt;/b&gt;&lt;hr&gt;Cache-Aside — Gateway cache" vertex="1">
+          <mxGeometry height="70" width="240" x="20" y="143" as="geometry" />
+        </mxCell>
+        <mxCell id="23" parent="300" style="shape=folder;fontStyle=0;tabWidth=80;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" value="&lt;b&gt;«database» Qdrant&lt;/b&gt;&lt;hr&gt;Vector DB — AI RAG knowledge base" vertex="1">
+          <mxGeometry height="65" width="240" x="20" y="238" as="geometry" />
+        </mxCell>
+        <mxCell id="24" parent="300" style="shape=folder;fontStyle=0;tabWidth=80;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;whiteSpace=wrap;overflow=hidden;fontSize=9;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" value="&lt;b&gt;«cloud» AWS Cloud&lt;/b&gt;&lt;hr&gt;S3 / SQS / SES / Lambda / EC2" vertex="1">
+          <mxGeometry height="70" width="240" x="20" y="333" as="geometry" />
+        </mxCell>
+        <mxCell id="33" edge="1" parent="1" source="13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="200" value="«message» Kafka">
+          <mxGeometry relative="1" y="-8" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="39" edge="1" parent="1" source="13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;endArrow=open;endFill=0;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.25;exitDx=0;exitDy=0;" target="22" value="«call»">
+          <mxGeometry relative="1" x="0.0035" y="-10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="240" y="242" />
+              <mxPoint x="290" y="242" />
+              <mxPoint x="290" y="70" />
+              <mxPoint x="710" y="70" />
+              <mxPoint x="710" y="260" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="40" edge="1" parent="1" source="13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;endArrow=open;endFill=0;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="24" value="«call» S3">
+          <mxGeometry relative="1" x="0.0103" y="-10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="140" y="460" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="41" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;endArrow=open;endFill=0;fontSize=10;labelBackgroundColor=#ffffff;entryX=0.005;entryY=0.44;entryDx=0;entryDy=0;entryPerimeter=0;" target="20" value="«access» MongoDB">
+          <mxGeometry relative="1" x="-0.1007" y="-10" as="geometry">
+            <mxPoint x="-1" as="offset" />
+            <Array as="points">
+              <mxPoint x="650" y="163" />
+            </Array>
+            <mxPoint x="650" y="163" as="sourcePoint" />
+            <mxPoint x="760" y="170" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="47" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;endArrow=open;endFill=0;fontSize=10;labelBackgroundColor=#ffffff;entryX=0.008;entryY=0.465;entryDx=0;entryDy=0;entryPerimeter=0;" target="23" value="«call» REST">
+          <mxGeometry relative="1" x="-0.1061" y="-10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="650" y="350" />
+              <mxPoint x="706" y="350" />
+            </Array>
+            <mxPoint x="650" y="350" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

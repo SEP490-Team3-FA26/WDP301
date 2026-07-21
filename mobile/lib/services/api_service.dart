@@ -274,4 +274,24 @@ class ApiService {
     }
     return null;
   }
+
+  // Fetch user profile using token
+  static Future<Map<String, dynamic>?> getProfile(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/auth/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch profile: $e");
+    }
+    return null;
+  }
 }

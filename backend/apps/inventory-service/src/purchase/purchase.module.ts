@@ -8,7 +8,9 @@ import { PurchaseOrder, PurchaseOrderSchema } from './schemas/purchase-order.sch
 import { GoodsReceiptNote, GoodsReceiptNoteSchema } from './schemas/goods-receipt-note.schema';
 import { InventoryTransaction, InventoryTransactionSchema } from './schemas/inventory-transaction.schema';
 import { StockTransfer, StockTransferSchema } from './schemas/stock-transfer.schema';
+import { InspectionRecord, InspectionRecordSchema } from './schemas/inspection-record.schema';
 import { MedicineModule } from '../medicine/medicine.module';
+import { QuotaModule } from '../quota/quota.module';
 
 @Module({
   imports: [
@@ -18,8 +20,10 @@ import { MedicineModule } from '../medicine/medicine.module';
       { name: GoodsReceiptNote.name, schema: GoodsReceiptNoteSchema },
       { name: InventoryTransaction.name, schema: InventoryTransactionSchema },
       { name: StockTransfer.name, schema: StockTransferSchema },
+      { name: InspectionRecord.name, schema: InspectionRecordSchema },
     ]),
     MedicineModule, // To access Medicine and MedicineBatch schemas
+    QuotaModule, // To enforce quota limits
     ClientsModule.register([
       {
         name: 'SUPPLIER_SERVICE',

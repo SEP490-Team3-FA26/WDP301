@@ -1,5 +1,33 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: light;
+  --foreground: #171717;
+  --background: #ffffff;
+}
+
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+}
+
+/* Force high-contrast text color for form inputs and dropdowns on light backgrounds */
+input, select, textarea, button {
+  color: #0f172a !important;
+}
+
+option {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+}
+
+/* Ensure placeholders are visible but slightly muted */
+input::placeholder, textarea::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+
 /* Custom scrollbar - slim & elegant */
 .custom-scrollbar {
   scrollbar-width: thin;
@@ -103,5 +131,19 @@
 .glow-on-hover:hover {
   box-shadow: 0 20px 45px -12px rgba(15, 118, 110, 0.18);
   border-color: rgba(45, 212, 191, 0.4) !important;
+}
+
+/* Live Audit Log Row Animations */
+@keyframes audit-row-highlight {
+  0% {
+    background-color: rgba(34, 197, 94, 0.2); /* Soft green highlight */
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.audit-row-new {
+  animation: fade-in 0.5s ease-out forwards, audit-row-highlight 2s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
 }
 
