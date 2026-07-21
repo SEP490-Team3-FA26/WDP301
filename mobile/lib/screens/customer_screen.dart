@@ -993,53 +993,51 @@ class _CustomerScreenState extends State<CustomerScreen>
   Widget _buildHomeHeader() {
     return Container(
       padding: const EdgeInsets.only(top: 50, left: 16, right: 16, bottom: 16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF2962FF), Color(0xFF1E88E5), Color(0xFF42A5F5)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(20),
-          bottomRight: Radius.circular(20),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2962FF).withValues(alpha: 0.4),
-            blurRadius: 15,
-            spreadRadius: 2,
-            offset: const Offset(5, 5),
-          ),
-        ],
+      decoration: const BoxDecoration(
+        color: Color(0xFF2962FF),
       ),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Stack(
+            alignment: Alignment.center,
             children: [
-              GestureDetector(
-                onTap: () {
-                  _scaffoldKey.currentState?.openDrawer();
-                },
-                child: const Icon(Icons.menu, color: Colors.white, size: 28),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      _scaffoldKey.currentState?.openDrawer();
+                    },
+                    child: const Icon(Icons.menu, color: Colors.white, size: 28),
+                  ),
+                  const Icon(
+                    Icons.notifications_none,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ],
               ),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Icon(
-                      Icons.local_pharmacy,
-                      color: Color(0xFF2962FF),
-                      size: 20,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(width: 8, height: 16, color: Colors.orange),
+                        Container(width: 8, height: 16, color: Colors.blue),
+                        Container(width: 8, height: 16, color: Colors.green),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 8),
                   const Text(
-                    'ABC\nPHARMACY',
+                    'NHÀ THUỐC\nLONG CHÂU',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -1049,11 +1047,6 @@ class _CustomerScreenState extends State<CustomerScreen>
                     textAlign: TextAlign.center,
                   ),
                 ],
-              ),
-              const Icon(
-                Icons.notifications_none,
-                color: Colors.white,
-                size: 28,
               ),
             ],
           ),
@@ -1067,23 +1060,22 @@ class _CustomerScreenState extends State<CustomerScreen>
             child: TextField(
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Tìm tên thuốc, bệnh lý, thực phẩm...',
-                hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                hintText: 'Mua trước trả sau 0% lãi suất',
+                hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                contentPadding: const EdgeInsets.only(left: 16, top: 14, bottom: 14),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.mic_none, color: Colors.blue.shade700),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Icon(
-                      Icons.camera_alt_outlined,
+                      Icons.qr_code_scanner,
                       color: Colors.blue.shade700,
                     ),
                     const SizedBox(width: 12),
                   ],
                 ),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
@@ -1098,8 +1090,8 @@ class _CustomerScreenState extends State<CustomerScreen>
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(16),
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
         ),
       ),
       child: Row(
@@ -1109,8 +1101,8 @@ class _CustomerScreenState extends State<CustomerScreen>
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: Colors.grey.shade200,
-                child: const Icon(Icons.person, color: Colors.grey),
+                backgroundColor: Colors.transparent,
+                child: const Icon(Icons.account_circle, color: Colors.grey, size: 40),
               ),
               const SizedBox(width: 12),
               Column(
