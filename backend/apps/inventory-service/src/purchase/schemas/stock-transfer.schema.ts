@@ -46,7 +46,7 @@ export class StockTransfer extends Document {
   @Prop({
     type: String,
     default: 'SHIPPING',
-    enum: ['SHIPPING', 'COMPLETED', 'OUT_OF_STOCK', 'REJECTED'],
+    enum: ['SHIPPING', 'DELIVERED', 'COMPLETED', 'OUT_OF_STOCK', 'REJECTED'],
   })
   status: string;
 

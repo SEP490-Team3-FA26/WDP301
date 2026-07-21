@@ -10,13 +10,13 @@ class ApiService {
   static String get baseUrl {
     final envUrl = dotenv.env['API_URL'];
     if (envUrl != null && envUrl.isNotEmpty) return envUrl;
-    return kIsWeb ? 'http://localhost:4000' : 'http://10.12.48.101:4000';
+    return kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
   }
 
   static String get aiUrl {
     final envUrl = dotenv.env['AI_URL'];
     if (envUrl != null && envUrl.isNotEmpty) return envUrl;
-    return kIsWeb ? 'http://localhost:8000' : 'http://10.12.48.101:8000';
+    return kIsWeb ? 'http://localhost:8000' : 'http://10.0.2.2:8000';
   }
 
   static const String fallbackUrl = 'http://localhost:4000';

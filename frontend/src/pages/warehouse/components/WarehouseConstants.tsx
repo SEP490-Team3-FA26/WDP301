@@ -13,6 +13,16 @@ export const PR_STATUS: Record<string, { label: string; cls: string }> = {
 export const PO_STATUS: Record<string, { label: string; cls: string }> = {
   PENDING_APPROVAL: { label: "Chờ Admin duyệt", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   SHIPPING: { label: "Đang về", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  RECEIVING: { label: "Đang kiểm đếm", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  PARTIAL_RECEIVED: { label: "Đã nhận một phần", cls: "bg-orange-50 text-orange-700 border-orange-200" },
+  COMPLETED: { label: "Đã nhập kho ✓", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  CANCELLED: { label: "Đã hủy ✗", cls: "bg-rose-50 text-rose-700 border-rose-200" },
+};
+
+export const GRN_STATUS: Record<string, { label: string; cls: string }> = {
+  DRAFT: { label: "Bản nháp", cls: "bg-slate-50 text-slate-600 border-slate-200" },
+  INSPECTING: { label: "Đang kiểm đếm", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  PENDING_APPROVAL: { label: "Chờ Admin duyệt", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   COMPLETED: { label: "Đã nhập kho ✓", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   CANCELLED: { label: "Đã hủy ✗", cls: "bg-rose-50 text-rose-700 border-rose-200" },
 };
