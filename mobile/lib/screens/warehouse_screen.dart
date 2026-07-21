@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
+import '../widgets/notification_badge.dart';
 
 
 class WarehouseScreen extends StatefulWidget {
@@ -481,6 +482,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         ),
         elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [
+          NotificationBadge(iconColor: Colors.white),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
