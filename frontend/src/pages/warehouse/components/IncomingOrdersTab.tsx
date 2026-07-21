@@ -274,11 +274,36 @@ export function IncomingOrdersTab({
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1.5 items-center">
                         {(po.status === "SHIPPING" || po.status === "PARTIAL_RECEIVED") && (
-                          <button onClick={() => setSelectedPo(po)} title="Nhập kho & Kiểm đếm"
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1">
-                            <PackageCheck size={14} />
-                            Mở phiên tiếp nhận
-                          </button>
+                          <div className="flex gap-2">
+                            <button onClick={async () => {
+                              try {
+                                setActionLoading(true);
+                                await goodsReceiptService.createGoodsReceipt({
+                                  poId: po._id,
+                                  receivedBy: "Thủ Kho",
+                                  items: po.items.map((it: any) => ({
+                                    medicineId: it.medicineId,
+                                    quantity: it.quantity
+                                  }))
+                                });
+                                onMsg({ type: "success", text: "Đã mở phiên trên Mobile thành công!" });
+                                fetchData();
+                              } catch (e: any) {
+                                onMsg({ type: "error", text: e.response?.data?.message || "Lỗi khi mở phiên" });
+                              } finally {
+                                setActionLoading(false);
+                              }
+                            }} disabled={actionLoading} title="Chuyển thủ kho kiểm đếm trên Mobile"
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1">
+                              <PackageCheck size={14} />
+                              Chuyển Mobile
+                            </button>
+                            <button onClick={() => setSelectedPo(po)} title="Nhập thủ công trên Web"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1">
+                              <PackageCheck size={14} />
+                              Nhập thủ công (Web)
+                            </button>
+                          </div>
                         )}
                         <button onClick={() => setSelectedPo(po)} title="Xem chi tiết"
                           className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg">

@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/api_service.dart';
+import 'login_screen.dart';
 import '../widgets/notification_badge.dart';
 
 
@@ -195,7 +197,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
 
         mapped.add({
           'id': gr['_id']?.toString() ?? '',
-          'poId': gr['poId']?.toString() ?? 'PO-Unknown',
+          'poId': gr['poCode']?.toString() ?? (gr['poId'] != null ? 'PO-${gr['poId'].toString().length > 18 ? gr['poId'].toString().substring(18).toUpperCase() : gr['poId'].toString().toUpperCase()}' : 'PO-Unknown'),
           'supplier': gr['supplier']?.toString() ?? 'Đối tác Dược phẩm',
           'status': grStatus,
           'date': gr['createdAt'] != null
@@ -1306,38 +1308,44 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   color: Colors.grey.shade50,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton.icon(
-                        onPressed: _currentInspectionIndex > 0 ? _goToPrev : null,
-                        icon: const Icon(Icons.chevron_left, size: 16),
-                        label: const Text('Trước đó', style: TextStyle(fontSize: 11)),
-                        style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF00838F),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _currentInspectionIndex > 0 ? _goToPrev : null,
+                          icon: const Icon(Icons.chevron_left, size: 16),
+                          label: const Text('Trước đó', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF00838F),
+                          ),
                         ),
-                      ),
-                      TextButton.icon(
-                        onPressed: _skipCurrentItem,
-                        icon: const Icon(Icons.redo_rounded, size: 14),
-                        label: const Text('Bỏ qua', style: TextStyle(fontSize: 11)),
-                        style: TextButton.styleFrom(foregroundColor: Colors.orange.shade700),
-                      ),
-                      TextButton.icon(
-                        onPressed: _goToWorksheet,
-                        icon: const Icon(Icons.list_alt_rounded, size: 14),
-                        label: const Text('Danh sách', style: TextStyle(fontSize: 11)),
-                        style: TextButton.styleFrom(foregroundColor: Colors.blueGrey),
-                      ),
-                      TextButton.icon(
-                        onPressed: _currentInspectionIndex < items.length - 1 ? _goToNext : null,
-                        icon: const Icon(Icons.chevron_right, size: 16),
-                        label: const Text('Tiếp theo', style: TextStyle(fontSize: 11)),
-                        style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF00838F),
+                        const SizedBox(width: 4),
+                        TextButton.icon(
+                          onPressed: _skipCurrentItem,
+                          icon: const Icon(Icons.redo_rounded, size: 14),
+                          label: const Text('Bỏ qua', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(foregroundColor: Colors.orange.shade700),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        TextButton.icon(
+                          onPressed: _goToWorksheet,
+                          icon: const Icon(Icons.list_alt_rounded, size: 14),
+                          label: const Text('Danh sách', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(foregroundColor: Colors.blueGrey),
+                        ),
+                        const SizedBox(width: 4),
+                        TextButton.icon(
+                          onPressed: _currentInspectionIndex < items.length - 1 ? _goToNext : null,
+                          icon: const Icon(Icons.chevron_right, size: 16),
+                          label: const Text('Tiếp theo', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF00838F),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const Divider(height: 1),
@@ -1749,8 +1757,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         imageQuality: 85,
       );
       if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
         setState(() {
           _selectedImagePath = pickedFile.path;
+          _selectedImageBytes = bytes;
         });
       }
     } catch (e) {
@@ -1760,28 +1770,34 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
 
   // Mock a mock sample photo for testing in emulators where file picker/camera might fail
   Future<void> _mockCaptureSamplePhoto() async {
-    // Generate a simple mock text file or just pretend we have a picture to invoke testing
-    // To be compatible with http MultipartFile, we write a small mock png/jpg file in the app data directory
     try {
-      final tempDir = Directory.systemTemp;
-      final mockFile = File('${tempDir.path}/mock_medicine_cluster.jpg');
+      final bytes = Uint8List.fromList(List.generate(100, (index) => index));
+      String path = 'mock_grn_image.jpg';
       
-      // Write some mock pixel bytes representing a JPEG
-      await mockFile.writeAsBytes(List.generate(100, (index) => index));
+      if (!kIsWeb) {
+        final Directory tempDir = await getTemporaryDirectory();
+        final File mockFile = File('${tempDir.path}/mock_grn_image.jpg');
+        if (!await mockFile.exists()) {
+          await mockFile.writeAsBytes(bytes);
+        }
+        path = mockFile.path;
+      }
+      
       setState(() {
-        _selectedImagePath = mockFile.path;
+        _selectedImagePath = path;
+        _selectedImageBytes = bytes;
       });
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Đã tải ảnh giả lập thành công! Hãy nhấn Bắt đầu phân tích AI để test.'),
+          content: Text('Da tai anh gia lap thanh cong!'),
           backgroundColor: Colors.purple,
           duration: Duration(seconds: 2),
         ),
       );
     } catch (e) {
-      debugPrint("Mock photo capture failed: $e");
+      debugPrint('Mock error: ' + e.toString());
     }
   }
 
@@ -1796,6 +1812,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         receiptId: _selectedReceipt!['id'],
         receiptItemId: _selectedItem!['id'],
         filePath: _selectedImagePath!,
+        fileBytes: _selectedImageBytes,
       );
       
       setState(() {
@@ -2359,7 +2376,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
             _buildDetailRow('Thủ kho nhận', origin['receivedBy'] ?? '—'),
             const Divider(height: 20),
             Text('Mã phiếu nhập (GRN): ${origin['grnId'].toString().substring(18).toUpperCase()}', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
-            Text('Mã đơn hàng (PO): ${origin['poId'].toString().substring(18).toUpperCase()}', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
+            Text('Mã đơn hàng (PO): ${origin['poId'].toString().length > 18 ? origin['poId'].toString().substring(18).toUpperCase() : origin['poId'].toString().toUpperCase()}', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
           ],
         ),
       ),

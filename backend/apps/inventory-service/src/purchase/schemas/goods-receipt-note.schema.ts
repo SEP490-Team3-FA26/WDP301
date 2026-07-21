@@ -6,11 +6,11 @@ export class GoodsReceiptNoteItem {
   @Prop({ type: String, required: true })
   medicineId: string;
 
-  @Prop({ type: String, required: true })
-  batchNo: string;
+  @Prop({ type: String })
+  batchNo?: string;
 
-  @Prop({ type: Date, required: true })
-  expDate: Date;
+  @Prop({ type: Date })
+  expDate?: Date;
 
   @Prop({ type: Number, required: true, min: 1 })
   quantity: number;

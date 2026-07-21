@@ -150,9 +150,7 @@ class ApiService {
     final queryParams = '?page=$page&limit=$limit&search=${Uri.encodeComponent(search)}&category=${Uri.encodeComponent(category)}&classification=${Uri.encodeComponent(classification)}';
     
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/medicines$queryParams')).timeout(
-        const Duration(seconds: 4),
-      );
+      final response = await http.get(Uri.parse('$baseUrl/api/medicines$queryParams'), headers: _authHeaders).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         final List dataList = decoded['data'] ?? [];
@@ -169,9 +167,9 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/medicines/check-interaction'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _authHeaders,
         body: jsonEncode({'medicines': medicineNames}),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -180,9 +178,9 @@ class ApiService {
       try {
         final response = await http.post(
           Uri.parse('$fallbackUrl/api/medicines/check-interaction'),
-          headers: {'Content-Type': 'application/json'},
+          headers: _authHeaders,
           body: jsonEncode({'medicines': medicineNames}),
-        ).timeout(const Duration(seconds: 5));
+        ).timeout(const Duration(seconds: 30));
 
         if (response.statusCode == 201 || response.statusCode == 200) {
           return jsonDecode(response.body);
@@ -199,7 +197,8 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}'),
-      ).timeout(const Duration(seconds: 5));
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -207,7 +206,8 @@ class ApiService {
       try {
         final response = await http.get(
           Uri.parse('$fallbackUrl/api/inventory-transactions/trace/${Uri.encodeComponent(batchNo.trim())}'),
-        ).timeout(const Duration(seconds: 5));
+          headers: _authHeaders,
+        ).timeout(const Duration(seconds: 30));
         if (response.statusCode == 200) {
           return jsonDecode(response.body);
         }
@@ -284,9 +284,7 @@ class ApiService {
   // Get AI Demand Forecast
   static Future<Map<String, dynamic>?> getAIForecast(int periodDays) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/reports/ai-forecast?periodDays=$periodDays'),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http.get(Uri.parse('$baseUrl/api/reports/ai-forecast?periodDays=$periodDays'), headers: _authHeaders).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -301,6 +299,7 @@ class ApiService {
     required String receiptId,
     required String receiptItemId,
     required String filePath,
+    Uint8List? fileBytes,
   }) async {
     final lowerPath = filePath.toLowerCase();
     MediaType mediaType = MediaType('image', 'jpeg');
@@ -313,11 +312,23 @@ class ApiService {
         'POST',
         Uri.parse('$baseUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection'),
       );
-      request.files.add(await http.MultipartFile.fromPath(
-        'file',
-        filePath,
-        contentType: mediaType,
-      ));
+      request.headers.addAll(_authHeaders);
+      request.headers['x-internal-token'] = 'wdp301-super-secret-key-change-in-production';
+      
+      if (fileBytes != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'file',
+          fileBytes,
+          filename: 'upload.jpg',
+          contentType: mediaType,
+        ));
+      } else {
+        request.files.add(await http.MultipartFile.fromPath(
+          'file',
+          filePath,
+          contentType: mediaType,
+        ));
+      }
       
       var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
       var response = await http.Response.fromStream(streamedResponse);
@@ -335,11 +346,23 @@ class ApiService {
           'POST',
           Uri.parse('$localAiUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection'),
         );
-        request.files.add(await http.MultipartFile.fromPath(
-          'file',
-          filePath,
-          contentType: mediaType,
-        ));
+        request.headers.addAll(_authHeaders);
+        request.headers['x-internal-token'] = 'wdp301-super-secret-key-change-in-production';
+        
+        if (fileBytes != null) {
+          request.files.add(http.MultipartFile.fromBytes(
+            'file',
+            fileBytes,
+            filename: 'upload.jpg',
+            contentType: mediaType,
+          ));
+        } else {
+          request.files.add(await http.MultipartFile.fromPath(
+            'file',
+            filePath,
+            contentType: mediaType,
+          ));
+        }
         
         var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
         var response = await http.Response.fromStream(streamedResponse);
@@ -366,22 +389,32 @@ class ApiService {
       'actualQty': actualQty,
       'verifiedBy': userId,
     });
+    
+    final headers = {
+      ..._authHeaders,
+      'x-internal-token': 'wdp301-super-secret-key-change-in-production',
+    };
+    
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/ai/inspections/$inspectionRecordId/verify'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: body,
-      ).timeout(const Duration(seconds: 5));
-      return response.statusCode == 200;
+      ).timeout(const Duration(seconds: 30));
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        throw Exception("API Gateway returned ${response.statusCode}");
+      }
     } catch (_) {
       try {
         final localAiUrl = baseUrl.contains('10.0.2.2') ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
         final response = await http.post(
           Uri.parse('$localAiUrl/api/ai/inspections/$inspectionRecordId/verify'),
-          headers: {'Content-Type': 'application/json'},
+          headers: headers,
           body: body,
-        ).timeout(const Duration(seconds: 5));
-        return response.statusCode == 200;
+        ).timeout(const Duration(seconds: 30));
+        return response.statusCode == 200 || response.statusCode == 201;
       } catch (e) {
         debugPrint("Failed to verify count: $e");
         return false;
@@ -394,16 +427,16 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/goods-receipts/$receiptId/approve'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
-      return response.statusCode == 200;
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 30));
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
       try {
         final response = await http.post(
           Uri.parse('$fallbackUrl/api/goods-receipts/$receiptId/approve'),
-          headers: {'Content-Type': 'application/json'},
-        ).timeout(const Duration(seconds: 10));
-        return response.statusCode == 200;
+          headers: _authHeaders,
+        ).timeout(const Duration(seconds: 30));
+        return response.statusCode == 200 || response.statusCode == 201;
       } catch (e) {
         debugPrint("Failed to approve GRN: $e");
         return false;
@@ -433,9 +466,7 @@ class ApiService {
   // UC-19: Fetch all Goods Receipt Notes from database
   static Future<List<dynamic>> getGoodsReceipts() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/goods-receipts'),
-      ).timeout(const Duration(seconds: 5));
+      final response = await http.get(Uri.parse('$baseUrl/api/goods-receipts'), headers: _authHeaders).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as List<dynamic>;
       }
@@ -448,9 +479,7 @@ class ApiService {
   // UC-19: Fetch single medicine details by ID
   static Future<Map<String, dynamic>?> getMedicineById(String id) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/medicines/$id'),
-      ).timeout(const Duration(seconds: 5));
+      final response = await http.get(Uri.parse('$baseUrl/api/medicines/$id'), headers: _authHeaders).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
@@ -465,16 +494,16 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/goods-receipts/$receiptId/submit-inspection'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
-      return response.statusCode == 200;
+        headers: _authHeaders,
+      ).timeout(const Duration(seconds: 30));
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
       try {
         final response = await http.post(
           Uri.parse('$fallbackUrl/api/goods-receipts/$receiptId/submit-inspection'),
-          headers: {'Content-Type': 'application/json'},
-        ).timeout(const Duration(seconds: 10));
-        return response.statusCode == 200;
+          headers: _authHeaders,
+        ).timeout(const Duration(seconds: 30));
+        return response.statusCode == 200 || response.statusCode == 201;
       } catch (e) {
         debugPrint("Failed to submit inspection: $e");
         return false;
@@ -492,7 +521,7 @@ class ApiService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -505,7 +534,7 @@ class ApiService {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
           },
-        ).timeout(const Duration(seconds: 5));
+        ).timeout(const Duration(seconds: 30));
 
         if (response.statusCode == 200) {
           return jsonDecode(response.body) as Map<String, dynamic>;
@@ -520,7 +549,7 @@ class ApiService {
   // Fetch Purchase Orders for Director / HQ Approval
   static Future<List<dynamic>> getPurchaseOrders() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/purchase-orders')).timeout(const Duration(seconds: 5));
+      final response = await http.get(Uri.parse('$baseUrl/api/purchase-orders'), headers: _authHeaders).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) return decoded;
@@ -564,14 +593,14 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/purchase-orders/approve-pay'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _authHeaders,
         body: jsonEncode({
           'poId': poId,
           'action': action,
           'paymentType': paymentType,
           'rejectionReason': rejectionReason
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       debugPrint("Failed to process PO approval: $e");
@@ -582,7 +611,7 @@ class ApiService {
   // Fetch Purchase Requisitions (PR) for Branch Screen
   static Future<List<dynamic>> getPurchaseRequisitions() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/purchase-requisitions')).timeout(const Duration(seconds: 5));
+      final response = await http.get(Uri.parse('$baseUrl/api/purchase-requisitions'), headers: _authHeaders).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) return decoded;
@@ -612,9 +641,9 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/purchase-requisitions'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _authHeaders,
         body: jsonEncode(prData),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       debugPrint("Failed to create PR: $e");
@@ -629,7 +658,7 @@ class ApiService {
         Uri.parse('$baseUrl/api/orders'),
         headers: _authHeaders,
         body: jsonEncode(orderData),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
@@ -647,7 +676,7 @@ class ApiService {
         Uri.parse('$baseUrl/api/orders/payos-link'),
         headers: _authHeaders,
         body: jsonEncode(orderData),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
@@ -661,7 +690,7 @@ class ApiService {
   // Fetch Expiration Report for Warehouse Screen
   static Future<List<dynamic>> getExpirationReport() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/medicines/expiration-report')).timeout(const Duration(seconds: 5));
+      final response = await http.get(Uri.parse('$baseUrl/api/medicines/expiration-report'), headers: _authHeaders).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) return decoded;
@@ -709,7 +738,7 @@ class ApiService {
     ];
     for (var s in services) {
       try {
-        final res = await http.get(Uri.parse('$baseUrl/api/health')).timeout(const Duration(seconds: 1));
+        final res = await http.get(Uri.parse('$baseUrl/api/health'), headers: _authHeaders).timeout(const Duration(seconds: 30));
         if (res.statusCode == 200) {
           s['status'] = 'ACTIVE';
         }
@@ -761,7 +790,7 @@ class ApiService {
         Uri.parse('$baseUrl/api/prescriptions/symptom-consult'),
         headers: _authHeaders,
         body: jsonEncode({'symptoms': symptoms}),
-      ).timeout(const Duration(seconds: 20));
+      ).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
@@ -771,7 +800,7 @@ class ApiService {
           Uri.parse('$fallbackUrl/api/prescriptions/symptom-consult'),
           headers: _authHeaders,
           body: jsonEncode({'symptoms': symptoms}),
-        ).timeout(const Duration(seconds: 20));
+        ).timeout(const Duration(seconds: 30));
         if (response.statusCode == 200) {
           return jsonDecode(response.body) as Map<String, dynamic>;
         }
