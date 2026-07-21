@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
@@ -27,6 +28,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
   Map<String, dynamic>? _selectedItem;
   final TextEditingController _actualQtyController = TextEditingController();
   String? _selectedImagePath;
+  Uint8List? _selectedImageBytes;
   
   int _currentInspectionIndex = 0;
   bool _isAiAnalyzing = false;
@@ -57,32 +59,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
   Map<String, dynamic>? _forecastResult;
   String? _forecastError;
 
-  final List<Map<String, dynamic>> _expiredBatches = [
-    {
-      'medicineName': 'Panadol Extra',
-      'batchNo': 'Lô B0 (Hết hạn)',
-      'expDate': '01/05/2026',
-      'stock': 20,
-      'unit': 'Hộp',
-      'status': 'EXPIRED',
-    },
-    {
-      'medicineName': 'Amoxicillin 500mg',
-      'batchNo': 'Lô A0 (Hết hạn)',
-      'expDate': '20/04/2026',
-      'stock': 15,
-      'unit': 'Hộp',
-      'status': 'EXPIRED',
-    },
-    {
-      'medicineName': 'Cefuroxim 500mg',
-      'batchNo': 'Lô C0 (Cận hạn)',
-      'expDate': '30/06/2026',
-      'stock': 50,
-      'unit': 'Hộp',
-      'status': 'SOON_TO_EXPIRE',
-    }
-  ];
+  final List<Map<String, dynamic>> _expiredBatches = [];
 
   @override
   void initState() {
@@ -122,6 +99,15 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
       }
     } catch (e) {
       debugPrint("Error loading expiration report: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi kết nối DB (Hạn dùng): $e', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 
@@ -224,6 +210,15 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
       });
     } catch (e) {
       debugPrint("Error loading goods receipts: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi kết nối DB (Phiếu Nhập Kho): $e', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -268,6 +263,15 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
       setState(() {
         _isLoading = false;
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi kết nối DB (Danh Mục Thuốc): $e', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 
@@ -982,6 +986,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
             _selectedReceipt = gr;
             _selectedItem = null;
             _selectedImagePath = null;
+            _selectedImageBytes = null;
             _actualQtyController.clear();
           });
         } : () {
@@ -1030,6 +1035,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                           _selectedReceipt = null;
                           _selectedItem = null;
                           _selectedImagePath = null;
+                          _selectedImageBytes = null;
                         });
                       },
                     ),
@@ -1058,6 +1064,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                               _selectedItem = items[idx];
                               _currentInspectionIndex = idx;
                               _selectedImagePath = null;
+                              _selectedImageBytes = null;
                               _actualQtyController.clear();
                               _aiErrorCountForCurrentItem = 0;
                             });
@@ -1205,6 +1212,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                                       _selectedItem = item;
                                       _currentInspectionIndex = idx;
                                       _selectedImagePath = null;
+                                      _selectedImageBytes = null;
                                       _actualQtyController.clear();
                                       _aiErrorCountForCurrentItem = 0;
                                       if (isChecked) {
@@ -1445,13 +1453,17 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade200),
               ),
-              child: _selectedImagePath != null
+              child: _selectedImagePath != null && _selectedImageBytes != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.file(
-                        File(_selectedImagePath!),
-                        fit: BoxFit.cover,
-                      ),
+                      child: kIsWeb
+                        ? Image.memory(_selectedImageBytes!, width: double.infinity, height: double.infinity, fit: BoxFit.cover)
+                        : Image.file(
+                            File(_selectedImagePath!),
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
                     )
                   : (item['image'] != null && item['image'].toString().isNotEmpty
                       ? ClipRRect(
@@ -1621,6 +1633,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                     item['recordId'] = null;
                     item['image'] = null;
                     _selectedImagePath = null;
+                    _selectedImageBytes = null;
                     _actualQtyController.clear();
                   });
                 },
@@ -2147,8 +2160,17 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
       });
     } catch (e) {
       setState(() {
-        _forecastError = 'Lỗi khi tải dự báo nhu cầu nhập hàng.';
+        _forecastError = 'Lỗi kết nối API AI Forecast DB: $e';
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi AI Forecast DB: $e', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
       setState(() {
         _isForecasting = false;
