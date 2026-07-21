@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
 import { RpcException, ClientKafka } from '@nestjs/microservices';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model, Types } from 'mongoose';
 import { SalesOrder } from './schemas/sales-order.schema';
 import { Prescription } from './schemas/prescription.schema';
 import { Medicine } from '../medicine/schemas/medicine.schema';
@@ -200,23 +200,75 @@ export class SalesService implements OnModuleInit {
 
     // Xuất kho FIFO
     for (const item of data.items) {
-      const medicine = await this.medicineModel.findById(item.medicineId).exec();
-      if (!medicine) {
-        throw new RpcException({ message: `Không tìm thấy thuốc có ID: ${item.medicineId}` });
+      let medicine: any = null;
+      if (item.medicineId && mongoose.Types.ObjectId.isValid(item.medicineId)) {
+        medicine = await this.medicineModel.findById(item.medicineId).exec();
       }
+      if (!medicine) {
+        medicine = await this.medicineModel.findOne({
+          $or: [
+            { id: item.medicineId },
+            { name: item.name },
+            { name: new RegExp(`^${item.name}$`, 'i') }
+          ]
+        }).exec();
+      }
+
+      if (!medicine) {
+        throw new RpcException({ message: `Không tìm thấy thuốc có ID/tên: ${item.medicineId || item.name}` });
+      }
+
+      const medIdStr = medicine._id.toString();
 
       // Truy cập các lô hoạt động sắp xếp tăng dần hạn sử dụng expDate ASC -> FIFO/FEFO
       const batchQuery: any = {
-        medicineId: item.medicineId,
+        $or: [
+          { medicineId: medIdStr },
+          { medicineId: medicine._id },
+          { medicineId: item.medicineId }
+        ],
         status: 'ACTIVE',
         stock: { $gt: 0 }
       };
       if (data.branchId) {
         batchQuery.branchId = data.branchId;
       }
-      const batches = await this.batchModel.find(batchQuery).sort({ expDate: 1 }).exec();
+      let batches = await this.batchModel.find(batchQuery).sort({ expDate: 1 }).exec();
 
-      const totalAvailable = batches.reduce((sum, b) => sum + b.stock, 0);
+      // Fallback 1: Nếu tìm theo chi nhánh mà không có lô nào, thử tìm trên toàn bộ kho
+      if (batches.length === 0 && data.branchId) {
+        delete batchQuery.branchId;
+        batches = await this.batchModel.find(batchQuery).sort({ expDate: 1 }).exec();
+      }
+
+      // Fallback 2: Nếu số lượng lô < số lượng cần trừ nhưng tồn kho tổng medicine.stock >= quantity,
+      // tự động tạo/cập nhật INIT-BATCH để trừ tồn kho FIFO bình thường!
+      let totalAvailable = batches.reduce((sum, b) => sum + b.stock, 0);
+      if (totalAvailable < item.quantity && (medicine.stock || 0) >= item.quantity) {
+        let initBatch = await this.batchModel.findOne({ medicineId: medIdStr, batchNo: 'INIT-BATCH' }).exec();
+        if (!initBatch) {
+          initBatch = new this.batchModel({
+            medicineId: medIdStr,
+            batchNo: 'INIT-BATCH',
+            expDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            stock: Math.max(medicine.stock || 0, item.quantity),
+            status: 'ACTIVE',
+            importPrice: medicine.importPrice || 0,
+            branchId: data.branchId || null,
+          });
+        } else {
+          initBatch.stock = Math.max(initBatch.stock, medicine.stock || 0, item.quantity);
+          initBatch.status = 'ACTIVE';
+        }
+        await initBatch.save();
+        batches = await this.batchModel.find({
+          $or: [{ medicineId: medIdStr }, { medicineId: medicine._id }],
+          status: 'ACTIVE',
+          stock: { $gt: 0 }
+        }).sort({ expDate: 1 }).exec();
+        totalAvailable = batches.reduce((sum, b) => sum + b.stock, 0);
+      }
+
       if (totalAvailable < item.quantity) {
         throw new RpcException({
           message: `Thuốc "${medicine.name}" không đủ tồn kho khả dụng (Yêu cầu: ${item.quantity}, Khả dụng: ${totalAvailable})`
@@ -259,7 +311,7 @@ export class SalesService implements OnModuleInit {
 
         transactionLogs.push({
           type: 'SALE_EXPORT',
-          medicineId: item.medicineId,
+          medicineId: medIdStr,
           medicineName: medicine.name,
           batchNo: batch.batchNo,
           quantityChange: -deductQty,
@@ -278,7 +330,7 @@ export class SalesService implements OnModuleInit {
       }
 
       // Cập nhật tồn kho tổng của thuốc để đồng bộ ngay lập tức
-      await this.medicineModel.updateOne({ _id: item.medicineId }, { $inc: { stock: -item.quantity } }).exec();
+      await this.medicineModel.updateOne({ _id: medicine._id }, { $inc: { stock: -item.quantity } }).exec();
 
       // Resolve giá theo chi nhánh và loại bán hàng (UC-48)
       const itemPrice = await this.pricingService.resolvePrice(

@@ -91,7 +91,7 @@ export class PurchaseService {
       if (!medicine) {
         throw new RpcException({ message: `Không tìm thấy thuốc có ID: ${item.medicineId}` });
       }
-      
+
       const qty = item.requestedQuantity || item.quantity;
       totalEstimatedCost += qty * (medicine.price || 0);
 
@@ -107,7 +107,7 @@ export class PurchaseService {
     const today = new Date();
     const currentCycle = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     const branchId = data.branchId || 'BRANCH_HQ';
-    
+
     if (branchId !== 'BRANCH_HQ') {
       const quotas = await this.quotaService.findAll({ branchId, cycle: currentCycle });
       if (!quotas || quotas.length === 0) {
@@ -121,8 +121,8 @@ export class PurchaseService {
 
       const remainingBudget = quota.totalBudget - (quota.usedAmount || 0);
       if (totalEstimatedCost > remainingBudget) {
-        throw new RpcException({ 
-          message: `Vượt quá hạn mức ngân sách! Tổng giá trị yêu cầu là ${totalEstimatedCost.toLocaleString()}đ, nhưng ngân sách còn lại chỉ là ${remainingBudget.toLocaleString()}đ.` 
+        throw new RpcException({
+          message: `Vượt quá hạn mức ngân sách! Tổng giá trị yêu cầu là ${totalEstimatedCost.toLocaleString()}đ, nhưng ngân sách còn lại chỉ là ${remainingBudget.toLocaleString()}đ.`
         });
       }
 
@@ -193,17 +193,17 @@ export class PurchaseService {
   async updatePurchaseRequisitionStatus(id: string, status: string) {
     const pr = await this.prModel.findById(id).exec();
     if (!pr) throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${id}` });
-    
+
     // Nếu chuyển sang trạng thái REJECTED hoặc CANCELLED, hoàn lại ngân sách hạn mức
     if ((status === 'REJECTED' || status === 'CANCELLED') && pr.status !== 'REJECTED' && pr.status !== 'CANCELLED') {
       if (pr.branchId !== 'BRANCH_HQ') {
         const prDate = new Date((pr as any).createdAt || new Date());
         const cycle = `${prDate.getFullYear()}-${String(prDate.getMonth() + 1).padStart(2, '0')}`;
         const quotas = await this.quotaService.findAll({ branchId: pr.branchId, cycle });
-        
+
         if (quotas && quotas.length > 0) {
           const quota = quotas[0];
-          
+
           // Tính lại tổng giá trị PR để hoàn lại
           let totalEstimatedCost = 0;
           for (const item of pr.items) {
@@ -212,7 +212,7 @@ export class PurchaseService {
               totalEstimatedCost += item.requestedQuantity * (medicine.price || 0);
             }
           }
-          
+
           // Hoàn lại ngân sách
           const newUsedAmount = Math.max(0, (quota.usedAmount || 0) - totalEstimatedCost);
           await this.quotaService.update((quota as any)._id.toString(), { usedAmount: newUsedAmount });
@@ -272,7 +272,7 @@ export class PurchaseService {
       const prDate = new Date((pr as any).createdAt || new Date());
       const cycle = `${prDate.getFullYear()}-${String(prDate.getMonth() + 1).padStart(2, '0')}`;
       const quotas = await this.quotaService.findAll({ branchId, cycle });
-      
+
       if (!quotas || quotas.length === 0) {
         throw new RpcException({ message: `Không tìm thấy hạn mức chu kỳ ${cycle} cho chi nhánh.` });
       }
@@ -296,7 +296,7 @@ export class PurchaseService {
     pr.items = enrichedItems as any;
     pr.reason = data.reason || pr.reason;
     if (data.notes !== undefined) pr.notes = data.notes;
-    
+
     if (data.isUrgent !== undefined) {
       pr.isUrgent = !!data.isUrgent;
       if (pr.status === 'SUBMITTED' || pr.status === 'URGENT_PENDING') {
@@ -327,7 +327,7 @@ export class PurchaseService {
       const prDate = new Date((pr as any).createdAt || new Date());
       const cycle = `${prDate.getFullYear()}-${String(prDate.getMonth() + 1).padStart(2, '0')}`;
       const quotas = await this.quotaService.findAll({ branchId: pr.branchId, cycle });
-      
+
       if (quotas && quotas.length > 0) {
         const quota = quotas[0];
         let totalEstimatedCost = 0;
@@ -497,6 +497,7 @@ export class PurchaseService {
     }
 
     const createdPoIds: string[] = [];
+    const createdPos: any[] = [];
     for (const [supplierId, items] of supplierGroups.entries()) {
       let supplier: any = null;
       try {
@@ -539,17 +540,22 @@ export class PurchaseService {
 
       const po = new this.poModel({
         supplierId,
+        supplierName: supplier.name || supplier.companyName || 'Nhà Cung Cấp',
+        supplierCode: supplier.code || supplier.tax_code || 'SUP-PARTNER',
         items: enrichedItems,
         totalAmount,
         expectedIncoming,
         status: 'PENDING_APPROVAL',
-        createdBy: data.createdBy || '',
+        paymentType: 'CREDIT',
+        createdBy: data.createdBy || 'Kho Tổng',
         linkedPrIds: data.prIds || [],
         linkedPrCodes: prCodes,
+        remarks: prCodes.length > 0 ? `Được tạo tự động từ PR: ${prCodes.join(', ')}` : 'Đơn đặt hàng PO trực tiếp'
       });
 
       await po.save();
       createdPoIds.push(po._id.toString());
+      createdPos.push(po.toObject ? po.toObject() : po);
     }
 
     if (data.prIds && data.prIds.length > 0) {
@@ -563,6 +569,7 @@ export class PurchaseService {
       success: true,
       message: `Đã tự động tạo ${createdPoIds.length} Đơn đặt hàng (PO) chờ duyệt.`,
       poIds: createdPoIds,
+      pos: createdPos,
     };
   }
 
@@ -678,7 +685,7 @@ export class PurchaseService {
     // Auto-generate items for full receipt
     const expDate = new Date();
     expDate.setFullYear(expDate.getFullYear() + 1); // Mock 1 year expDate
-    
+
     const items = po.items.map((item, index) => ({
       medicineId: item.medicineId,
       batchNo: `BATCH-${new Date().getTime().toString().slice(-6)}-${index}`,
@@ -1058,7 +1065,7 @@ export class PurchaseService {
     if (grn.status !== 'DRAFT' && grn.status !== 'INSPECTING') {
       throw new RpcException({ message: 'Chỉ được phép chỉnh sửa tài liệu tiếp nhận khi ở trạng thái DRAFT hoặc INSPECTING' });
     }
-    
+
     // Update items
     if (data.items) {
       for (const item of data.items) {
@@ -1070,14 +1077,14 @@ export class PurchaseService {
         }
       }
     }
-    
+
     // Recalculate totalAmount
     let totalAmount = 0;
     for (const item of grn.items) {
       totalAmount += item.quantity * item.unitPrice;
     }
     grn.totalAmount = totalAmount;
-    
+
     await grn.save();
     return {
       success: true,
@@ -1144,13 +1151,13 @@ export class PurchaseService {
 
   async traceLot(batchNo: string) {
     this.logger.log(`Tracing lot: ${batchNo}`);
-    
+
     // 1. Tìm các lô hàng thực tế ở các chi nhánh
     const batches = await this.batchModel.find({ batchNo }).exec();
-    
+
     // Lấy tất cả giao dịch liên quan đến lô này
     const txns = await this.txnModel.find({ batchNo }).sort({ createdAt: 1 }).exec();
-    
+
     if (batches.length === 0 && txns.length === 0) {
       return {
         batchNo,
@@ -1188,7 +1195,7 @@ export class PurchaseService {
               this.logger.error(`Error fetching supplier for trace: ${err.message}`);
             }
           }
-          
+
           const grnItem = grn.items.find(item => item.medicineId === medicineId && item.batchNo === batchNo);
 
           origin = {
@@ -2082,7 +2089,7 @@ export class PurchaseService {
   async createInspectionRecord(grnId: string, inspectedBy: string) {
     const grn = await this.grnModel.findById(grnId).exec();
     if (!grn) throw new RpcException({ message: 'GRN không tồn tại' });
-    
+
     if (grn.status !== 'INSPECTING') {
       throw new RpcException({ message: `GRN đang ở trạng thái ${grn.status}, không thể mở phiên kiểm đếm` });
     }
@@ -2105,7 +2112,7 @@ export class PurchaseService {
       // Giả lập AI đếm ngẫu nhiên lệch +- 10%
       const variance = Math.floor(item.quantity * 0.1);
       const aiCount = item.quantity + (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * variance);
-      
+
       let label = 'MATCH';
       if (aiCount === item.quantity) label = 'MATCH';
       else if (Math.abs(aiCount - item.quantity) <= 2) label = 'WARNING';
@@ -2167,7 +2174,7 @@ export class PurchaseService {
   async submitInspectionReport(recordId: string) {
     const record = await this.inspectionModel.findById(recordId).exec();
     if (!record) throw new RpcException({ message: 'Không tìm thấy phiên kiểm đếm' });
-    
+
     record.status = 'WAITING';
     await record.save();
 
@@ -2177,7 +2184,7 @@ export class PurchaseService {
   async approveGoodsReceipt(recordId: string, approvedBy: string) {
     const session = await this.grnModel.db.startSession();
     session.startTransaction();
-    
+
     try {
       const record = await this.inspectionModel.findById(recordId).session(session).exec();
       if (!record) throw new RpcException({ message: 'Không tìm thấy phiên kiểm đếm' });
