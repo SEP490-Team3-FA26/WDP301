@@ -19,6 +19,7 @@ import {
   Info
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import api from "../../services/core/api";
 
 interface BatchInfo {
   branchId: string;
@@ -81,19 +82,13 @@ export function LotTracking() {
     setError(null);
     setResult(null);
     try {
-      const response = await fetch(`/api/inventory-transactions/trace/${encodeURIComponent(batchNo.trim())}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(`Không tìm thấy thông tin hoặc lịch sử giao dịch cho lô "${batchNo}"`);
-        }
-        throw new Error("Lỗi hệ thống khi truy xuất nguồn gốc lô thuốc");
-      }
-      const data = await response.json();
-      setResult(data);
+      const response = await api.get(`/api/inventory-transactions/trace/${encodeURIComponent(batchNo.trim())}`);
+      setResult(response.data);
       setSearchBatchNo(batchNo);
       setActiveTab("origin");
     } catch (err: any) {
-      setError(err.message || "Đã xảy ra lỗi ngoài ý muốn");
+      const errMsg = err.response?.data?.message || err.message || `Không tìm thấy thông tin cho lô "${batchNo}"`;
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
