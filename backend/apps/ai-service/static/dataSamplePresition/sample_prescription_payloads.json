@@ -1,0 +1,307 @@
+{
+  "qr_rx_01_respiratory.png": {
+    "patient_info": {
+      "name": "Tran Gia Huy",
+      "age": "32",
+      "gender": "Nam",
+      "phone": "Không rõ",
+      "address": "Quan 7, TP. Ho Chi Minh",
+      "weight": "Không rõ",
+      "insurance_id": "Không rõ"
+    },
+    "clinic_info": {
+      "name": "ABC PHARMACY CLINIC",
+      "department": "Ngoai tru",
+      "doctor": "Dr. Nguyen Minh",
+      "phone": "Không rõ",
+      "address": "Không rõ",
+      "date": "22/07/2026"
+    },
+    "diagnosis": "Viem hong cap, ho khan, sot nhe",
+    "medications": [
+      {
+        "index": 1,
+        "name": "Viên nén Paracetamol Stada",
+        "active_ingredient": "Không rõ",
+        "strength": "500mg",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien khi sot tren 38.5 do C, toi da 4 vien/ngay.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 2,
+        "name": "Thuốc Ameflu Không Gây Buồn Ngủ OPV",
+        "active_ingredient": "Không rõ",
+        "strength": "",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien x 2 lan/ngay sau an trong 5 ngay.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 3,
+        "name": "Thuốc tiêm Vitamin C Kabi",
+        "active_ingredient": "Không rõ",
+        "strength": "500mg/5ml",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien moi sang sau an trong 7 ngay.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      }
+    ],
+    "follow_up_date": "Không rõ",
+    "doctor_notes": "Uong nhieu nuoc am, suc hong nuoc muoi sinh ly, tai kham neu sot cao hoac kho tho.",
+    "confidence_score": 1.0
+  },
+  "qr_rx_02_gastric.png": {
+    "patient_info": {
+      "name": "Le Thu Ha",
+      "age": "45",
+      "gender": "Nu",
+      "phone": "Không rõ",
+      "address": "Phuong Linh Trung, TP. Thu Duc",
+      "weight": "Không rõ",
+      "insurance_id": "Không rõ"
+    },
+    "clinic_info": {
+      "name": "Nha thuoc ABC - Phong tu van",
+      "department": "Tu van",
+      "doctor": "Dr. Nguyen Minh",
+      "phone": "Không rõ",
+      "address": "Không rõ",
+      "date": "22/07/2026"
+    },
+    "diagnosis": "Dau thuong vi, nghi viem da day",
+    "medications": [
+      {
+        "index": 1,
+        "name": "Omeprazole",
+        "active_ingredient": "Không rõ",
+        "strength": "20mg",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien truoc an sang 30 phut, dung 14 ngay.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 2,
+        "name": "Domperidone",
+        "active_ingredient": "Không rõ",
+        "strength": "10mg",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien truoc an 15 phut, ngay 2 lan khi buon non.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 3,
+        "name": "Gaviscon",
+        "active_ingredient": "Không rõ",
+        "strength": "Goi",
+        "quantity": 10,
+        "unit": "Gói",
+        "dosage": "Uong 1 goi sau an hoac truoc khi ngu neu nong rat.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      }
+    ],
+    "follow_up_date": "Không rõ",
+    "doctor_notes": "Tranh ruou bia, ca phe, thuc an cay chua. Khong tu y dung NSAID khi dau bao tu.",
+    "confidence_score": 1.0
+  },
+  "qr_rx_03_pediatric.png": {
+    "patient_info": {
+      "name": "Pham Bao An",
+      "age": "7",
+      "gender": "Nam",
+      "phone": "Không rõ",
+      "address": "Tan Binh, TP. Ho Chi Minh",
+      "weight": "Không rõ",
+      "insurance_id": "Không rõ"
+    },
+    "clinic_info": {
+      "name": "Phong kham Nhi ABC",
+      "department": "Nhi",
+      "doctor": "Dr. Nguyen Minh",
+      "phone": "Không rõ",
+      "address": "Không rõ",
+      "date": "22/07/2026"
+    },
+    "diagnosis": "Viem mui di ung, nghet mui ve dem",
+    "medications": [
+      {
+        "index": 1,
+        "name": "Cetirizine",
+        "active_ingredient": "Không rõ",
+        "strength": "5mg",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1/2 vien buoi toi sau an trong 5 ngay.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 2,
+        "name": "Natri clorid",
+        "active_ingredient": "Không rõ",
+        "strength": "0.9%",
+        "quantity": 1,
+        "unit": "Chai",
+        "dosage": "Nho rua mui moi ben 2-3 giot, ngay 4 lan.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 3,
+        "name": "Siro ho thao duoc",
+        "active_ingredient": "Không rõ",
+        "strength": "",
+        "quantity": 1,
+        "unit": "Chai",
+        "dosage": "Uong 5ml x 2 lan/ngay neu ho nhieu.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      }
+    ],
+    "follow_up_date": "Không rõ",
+    "doctor_notes": "Theo doi phat ban, buon ngu. Khong dung qua lieu khang histamine cho tre.",
+    "confidence_score": 1.0
+  },
+  "qr_rx_04_diabetes.png": {
+    "patient_info": {
+      "name": "Nguyen Van Binh",
+      "age": "58",
+      "gender": "Nam",
+      "phone": "Không rõ",
+      "address": "Bien Hoa, Dong Nai",
+      "weight": "Không rõ",
+      "insurance_id": "Không rõ"
+    },
+    "clinic_info": {
+      "name": "ABC Pharmacy Care",
+      "department": "Noi tong quat",
+      "doctor": "Dr. Nguyen Minh",
+      "phone": "Không rõ",
+      "address": "Không rõ",
+      "date": "22/07/2026"
+    },
+    "diagnosis": "Dai thao duong type 2, tang huyet ap",
+    "medications": [
+      {
+        "index": 1,
+        "name": "Metformin",
+        "active_ingredient": "Không rõ",
+        "strength": "500mg",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien x 2 lan/ngay sau an sang va toi.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 2,
+        "name": "Amlodipine",
+        "active_ingredient": "Không rõ",
+        "strength": "5mg",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien buoi sang, theo doi huyet ap hang ngay.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 3,
+        "name": "Atorvastatin",
+        "active_ingredient": "Không rõ",
+        "strength": "10mg",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien buoi toi sau an.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      }
+    ],
+    "follow_up_date": "Sau 4 tuan",
+    "doctor_notes": "Kiem tra duong huyet luc doi, an giam tinh bot nhanh.",
+    "confidence_score": 1.0
+  },
+  "qr_rx_05_antibiotic.png": {
+    "patient_info": {
+      "name": "Vo Minh Khang",
+      "age": "26",
+      "gender": "Nam",
+      "phone": "Không rõ",
+      "address": "Quan Hai Chau, Da Nang",
+      "weight": "Không rõ",
+      "insurance_id": "Không rõ"
+    },
+    "clinic_info": {
+      "name": "Trung tam Y khoa ABC",
+      "department": "Ngoai da lieu",
+      "doctor": "Dr. Nguyen Minh",
+      "phone": "Không rõ",
+      "address": "Không rõ",
+      "date": "22/07/2026"
+    },
+    "diagnosis": "Nhiem khuan da nhe vung cang tay",
+    "medications": [
+      {
+        "index": 1,
+        "name": "Amoxicillin Clavulanate",
+        "active_ingredient": "Không rõ",
+        "strength": "625mg",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien x 2 lan/ngay sau an trong 7 ngay.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 2,
+        "name": "Povidone iodine",
+        "active_ingredient": "Không rõ",
+        "strength": "10%",
+        "quantity": 1,
+        "unit": "Chai",
+        "dosage": "Sat khuan vet thuong ngay 2 lan.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      },
+      {
+        "index": 3,
+        "name": "Loratadine",
+        "active_ingredient": "Không rõ",
+        "strength": "10mg",
+        "quantity": 1,
+        "unit": "Hộp",
+        "dosage": "Uong 1 vien/ngay neu ngua nhieu.",
+        "frequency": "Không rõ",
+        "duration": "Không rõ",
+        "notes": ""
+      }
+    ],
+    "follow_up_date": "Không rõ",
+    "doctor_notes": "Uong du lieu trinh khang sinh. Ngung thuoc va bao bac si neu noi me day hoac kho tho.",
+    "confidence_score": 1.0
+  }
+}

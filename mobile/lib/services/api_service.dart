@@ -7,8 +7,11 @@ class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
   static const String baseUrl = kIsWeb
       ? 'http://localhost:4000'
-      : 'http://127.0.0.1:4000';
+      : 'http://192.168.0.172';
   static const String fallbackUrl = 'http://localhost:4000';
+  static const String aiBaseUrl = kIsWeb
+      ? 'http://localhost:8000'
+      : 'http://10.0.2.2:8000';
 
   // JWT token stored globally after login
   static String currentToken = '';
