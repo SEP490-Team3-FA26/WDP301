@@ -442,3 +442,322 @@ async def analyze_seasonal_trends(dataset: list, weather_region: str, current_se
         "stock_recommendations": llm_json.get("stock_recommendations", []),
         "enriched_dataset": enriched_dataset
     }
+
+
+# ==========================================
+# PRESCRIPTION SCAN – RAG MATCHING & MARKDOWN EXPORT
+# ==========================================
+
+PRESCRIPTION_MATCH_PROMPT = """Bạn là Dược sĩ AI chuyên đối chiếu đơn thuốc với kho thuốc.
+
+NHIỆM VỤ:
+Dưới đây là danh sách thuốc trích xuất từ đơn thuốc (OCR) và CƠ SỞ DỮ LIỆU thuốc trong kho (RAG Context).
+Hãy đối chiếu từng thuốc trong đơn với kho. Tìm thuốc khớp hoặc tương đương dựa trên tên thuốc, hoạt chất, hàm lượng.
+
+NGUYÊN TẮC BẮT BUỘC:
+1. Chỉ khớp thuốc khi TÊN hoặc HOẠT CHẤT tương đồng rõ ràng (ít nhất 80% giống nhau).
+2. Ghi nhận thuốc không tìm thấy trong kho vào danh sách "unmatched".
+3. Kiểm tra tương tác thuốc nguy hiểm giữa TẤT CẢ các thuốc trong đơn.
+4. Tên thuốc khớp phải CHÍNH XÁC 100% với tên trong CƠ SỞ DỮ LIỆU.
+
+--- THUỐC TRONG ĐƠN (OCR) ---
+{ocr_medications}
+------------------------------
+
+--- CƠ SỞ DỮ LIỆU THUỐC (KHO) ---
+{rag_context}
+-----------------------------------
+
+BẮT BUỘC TRẢ VỀ JSON HỢP LỆ THEO SCHEMA SAU:
+{
+  "matched_drugs": [
+    {
+      "prescription_name": "Tên thuốc trong đơn",
+      "matched_name": "Tên thuốc chính xác trong kho",
+      "active_ingredient": "Hoạt chất",
+      "match_confidence": 0.95,
+      "dosage": "Liều dùng từ đơn",
+      "quantity": 6,
+      "unit": "Đơn vị",
+      "match_reason": "Lý do khớp (VD: Tên trùng khớp, cùng hoạt chất)"
+    }
+  ],
+  "unmatched_drugs": [
+    {
+      "prescription_name": "Tên thuốc không tìm thấy",
+      "reason": "Lý do không khớp",
+      "suggestion": "Gợi ý thuốc thay thế nếu có"
+    }
+  ],
+  "interaction_warnings": [
+    {
+      "drug_a": "Thuốc 1",
+      "drug_b": "Thuốc 2",
+      "severity": "Cao/Trung bình/Thấp",
+      "description": "Mô tả tương tác",
+      "recommendation": "Khuyến nghị"
+    }
+  ],
+  "general_notes": "Ghi chú tổng quan về đơn thuốc"
+}"""
+
+
+async def match_prescription_with_inventory(ocr_data: dict, rag_context: str) -> dict:
+    """
+    Đối chiếu thuốc từ đơn (OCR) với kho (RAG context) bằng LLM.
+    """
+    medications = ocr_data.get("medications", [])
+    if not medications:
+        return {
+            "matched_drugs": [],
+            "unmatched_drugs": [],
+            "interaction_warnings": [],
+            "general_notes": "Không tìm thấy thuốc nào trong đơn.",
+        }
+
+    ocr_meds_str = json.dumps(medications, ensure_ascii=False, indent=2)
+
+    system_prompt = PRESCRIPTION_MATCH_PROMPT.replace(
+        "{ocr_medications}", ocr_meds_str
+    ).replace("{rag_context}", rag_context or "Không có dữ liệu kho thuốc.")
+
+    try:
+        response = await client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": "Hãy đối chiếu đơn thuốc với kho và phân tích tương tác thuốc.",
+                },
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+
+        content = response.choices[0].message.content
+        result = json.loads(content)
+
+        # Post-process: Validate matched names against RAG context
+        context_names = re.findall(r"\*\*(.+?)\*\*\s*\(", rag_context or "")
+        validated_matched = []
+        demoted_to_unmatched = []
+
+        for drug in result.get("matched_drugs", []):
+            matched_name = str(drug.get("matched_name") or "").strip()
+            matched_folded = matched_name.casefold()
+            exact_name = next(
+                (
+                    name
+                    for name in context_names
+                    if name.casefold() == matched_folded
+                    or name.casefold().startswith(matched_folded)
+                    or matched_folded.startswith(name.casefold())
+                ),
+                None,
+            )
+            if exact_name:
+                drug["matched_name"] = exact_name
+                validated_matched.append(drug)
+            else:
+                demoted_to_unmatched.append(
+                    {
+                        "prescription_name": drug.get("prescription_name", matched_name),
+                        "reason": "Tên thuốc LLM gợi ý không khớp chính xác với dữ liệu vector kho.",
+                        "suggestion": f"Kiểm tra lại: {matched_name}",
+                    }
+                )
+
+        result["matched_drugs"] = validated_matched
+        result["unmatched_drugs"] = result.get("unmatched_drugs", []) + demoted_to_unmatched
+
+        return result
+
+    except json.JSONDecodeError:
+        return {
+            "error": "Lỗi phân tích JSON từ LLM",
+            "matched_drugs": [],
+            "unmatched_drugs": [],
+            "interaction_warnings": [],
+        }
+    except Exception as exc:
+        print(f"Prescription matching failed: {exc}")
+        return {
+            "error": str(exc),
+            "matched_drugs": [],
+            "unmatched_drugs": [],
+            "interaction_warnings": [],
+        }
+
+
+def generate_prescription_markdown(
+    ocr_result: dict,
+    match_result: dict,
+    inventory_status: dict | None = None,
+) -> str:
+    """
+    Tạo file Markdown chuyên nghiệp từ kết quả phân tích đơn thuốc.
+    """
+    from datetime import datetime
+
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    patient = ocr_result.get("patient_info", {})
+    clinic = ocr_result.get("clinic_info", {})
+    diagnosis = ocr_result.get("diagnosis", "Không rõ")
+    medications = ocr_result.get("medications", [])
+    matched = match_result.get("matched_drugs", [])
+    unmatched = match_result.get("unmatched_drugs", [])
+    warnings = match_result.get("interaction_warnings", [])
+
+    lines = []
+    lines.append("# 📋 KẾT QUẢ PHÂN TÍCH ĐƠN THUỐC AI")
+    lines.append("")
+    lines.append(f"> Phân tích bởi AI Dược sĩ lúc **{now}**")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    # ── Thông tin phòng khám ──
+    lines.append("## 🏥 Thông Tin Phòng Khám")
+    lines.append("")
+    lines.append(f"| Mục | Chi Tiết |")
+    lines.append(f"|---|---|")
+    lines.append(f"| **Cơ sở y tế** | {clinic.get('name', 'Không rõ')} |")
+    if clinic.get("department"):
+        lines.append(f"| **Khoa** | {clinic['department']} |")
+    lines.append(f"| **Bác sĩ** | {clinic.get('doctor', 'Không rõ')} |")
+    lines.append(f"| **Ngày kê đơn** | {clinic.get('date', 'Không rõ')} |")
+    if clinic.get("phone"):
+        lines.append(f"| **SĐT** | {clinic['phone']} |")
+    lines.append("")
+
+    # ── Thông tin bệnh nhân ──
+    lines.append("## 👤 Thông Tin Bệnh Nhân")
+    lines.append("")
+    lines.append(f"| Mục | Chi Tiết |")
+    lines.append(f"|---|---|")
+    lines.append(f"| **Họ tên** | {patient.get('name', 'Không rõ')} |")
+    if patient.get("age"):
+        lines.append(f"| **Tuổi** | {patient['age']} |")
+    if patient.get("gender"):
+        lines.append(f"| **Giới tính** | {patient['gender']} |")
+    if patient.get("phone"):
+        lines.append(f"| **SĐT** | {patient['phone']} |")
+    if patient.get("address"):
+        lines.append(f"| **Địa chỉ** | {patient['address']} |")
+    if patient.get("insurance_id"):
+        lines.append(f"| **Mã BHYT** | {patient['insurance_id']} |")
+    lines.append("")
+
+    # ── Chẩn đoán ──
+    lines.append("## 🔍 Chẩn Đoán")
+    lines.append("")
+    lines.append(f"> **{diagnosis}**")
+    lines.append("")
+
+    # ── Danh sách thuốc OCR ──
+    lines.append("## 💊 Danh Sách Thuốc Trong Đơn")
+    lines.append("")
+    if medications:
+        lines.append("| STT | Tên Thuốc | Hàm Lượng | SL | Đơn Vị | Liều Dùng |")
+        lines.append("|:---:|---|---|:---:|---|---|")
+        for med in medications:
+            idx = med.get("index", "")
+            name = med.get("name", "N/A")
+            strength = med.get("strength", "")
+            qty = med.get("quantity", "")
+            unit = med.get("unit", "")
+            dosage = med.get("dosage", "")
+            lines.append(f"| {idx} | **{name}** | {strength} | {qty} | {unit} | {dosage} |")
+    else:
+        lines.append("*Không trích xuất được thuốc từ đơn.*")
+    lines.append("")
+
+    # ── Kết quả đối chiếu kho ──
+    lines.append("## ✅ Kết Quả Đối Chiếu Với Kho Thuốc")
+    lines.append("")
+
+    if matched:
+        lines.append("### Thuốc Có Trong Kho")
+        lines.append("")
+        lines.append("| Tên Đơn | Tên Trong Kho | Hoạt Chất | Độ Khớp | SL | Ghi Chú |")
+        lines.append("|---|---|---|:---:|:---:|---|")
+        for drug in matched:
+            conf = drug.get("match_confidence", 0)
+            conf_pct = f"{conf * 100:.0f}%" if isinstance(conf, (int, float)) else str(conf)
+            lines.append(
+                f"| {drug.get('prescription_name', '')} "
+                f"| **{drug.get('matched_name', '')}** "
+                f"| {drug.get('active_ingredient', '')} "
+                f"| {conf_pct} "
+                f"| {drug.get('quantity', '')} "
+                f"| {drug.get('match_reason', '')} |"
+            )
+        lines.append("")
+
+    if unmatched:
+        lines.append("### ❌ Thuốc Không Tìm Thấy Trong Kho")
+        lines.append("")
+        for drug in unmatched:
+            lines.append(f"- **{drug.get('prescription_name', 'N/A')}**: {drug.get('reason', '')}")
+            if drug.get("suggestion"):
+                lines.append(f"  - 💡 Gợi ý: {drug['suggestion']}")
+        lines.append("")
+
+    # ── Tồn kho ──
+    if inventory_status:
+        available = inventory_status.get("available", [])
+        if available:
+            lines.append("### 📦 Thông Tin Tồn Kho")
+            lines.append("")
+            lines.append("| Tên Thuốc | Tồn Kho | Giá | Danh Mục |")
+            lines.append("|---|:---:|---:|---|")
+            for inv in available:
+                price_str = f"{inv.get('price', 0):,}đ"
+                lines.append(
+                    f"| {inv.get('name', '')} "
+                    f"| {inv.get('stock', 0)} {inv.get('unit', '')} "
+                    f"| {price_str} "
+                    f"| {inv.get('category', '')} |"
+                )
+            lines.append("")
+
+    # ── Cảnh báo tương tác thuốc ──
+    if warnings:
+        lines.append("## ⚠️ Cảnh Báo Tương Tác Thuốc")
+        lines.append("")
+        for w in warnings:
+            severity = w.get("severity", "")
+            icon = "🔴" if severity == "Cao" else "🟡" if severity == "Trung bình" else "🟢"
+            lines.append(f"### {icon} {w.get('drug_a', '')} × {w.get('drug_b', '')}")
+            lines.append(f"- **Mức độ:** {severity}")
+            lines.append(f"- **Mô tả:** {w.get('description', '')}")
+            lines.append(f"- **Khuyến nghị:** {w.get('recommendation', '')}")
+            lines.append("")
+
+    # ── Ghi chú ──
+    notes = match_result.get("general_notes", "")
+    doctor_notes = ocr_result.get("doctor_notes", "")
+    follow_up = ocr_result.get("follow_up_date", "")
+
+    if notes or doctor_notes or follow_up:
+        lines.append("## 📝 Ghi Chú")
+        lines.append("")
+        if doctor_notes:
+            lines.append(f"- **Lời dặn bác sĩ:** {doctor_notes}")
+        if follow_up:
+            lines.append(f"- **Ngày tái khám:** {follow_up}")
+        if notes:
+            lines.append(f"- **AI ghi chú:** {notes}")
+        lines.append("")
+
+    # ── Footer ──
+    lines.append("---")
+    lines.append("")
+    lines.append(
+        "*Tài liệu được tạo tự động bởi hệ thống AI Dược sĩ – "
+        "ABC Pharmacy. Vui lòng xác nhận lại với Dược sĩ trước khi sử dụng.*"
+    )
+
+    return "\n".join(lines)

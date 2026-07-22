@@ -14,14 +14,24 @@ app = FastAPI(title="AI Prescription Service", version="1.0.0")
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex="http://localhost:.*",
+    allow_origins=["*"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+from fastapi.staticfiles import StaticFiles
+
 app.include_router(prescription.router)
+
+# Mount static directories for sample prescriptions and uploads
+static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "static"))
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+else:
+    print(f"Warning: static directory {static_dir} not found!")
 
 @app.get("/health")
 def health_check():
