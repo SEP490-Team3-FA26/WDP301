@@ -86,7 +86,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
   }
 
 
-  async editProfile(userId: string, data: { fullName?: string }) {
+  async editProfile(userId: string, data: { fullName?: string; phone?: string; address?: string }) {
     this.logger.log(`Editing profile for user ${userId}`);
 
     const user = await this.userModel.findById(userId);
@@ -96,6 +96,12 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
 
     if (data.fullName) {
       user.fullName = data.fullName;
+    }
+    if (data.phone) {
+      user.phone = data.phone;
+    }
+    if (data.address) {
+      user.address = data.address;
     }
 
     await user.save();

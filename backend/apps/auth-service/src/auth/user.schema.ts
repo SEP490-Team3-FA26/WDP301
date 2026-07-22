@@ -45,6 +45,9 @@ export class User extends Document {
   @Prop({ unique: true, sparse: true })
   phone?: string;
 
+  @Prop()
+  address?: string;
+
   @Prop({ default: 0 })
   points: number;
 

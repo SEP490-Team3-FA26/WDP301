@@ -6,14 +6,30 @@ import 'package:http_parser/http_parser.dart';
 import 'env_service.dart';
 
 class ApiService {
-  // Configurable base URL: dynamically falls back to localhost on Web
-  static const String baseUrl = kIsWeb
-      ? 'http://localhost:4000'
-      : '192.168.1.104';                                                        // ae mô gặp vấn đề về khúc ni thì mở terminal ping cái lệnh này để lấy địa chỉ mạng nhé ipconfig getifaddr en0
+  // Configurable base URL: dynamically read from EnvService (.env) with smart fallback
+  static String get baseUrl {
+    final envUrl = EnvService.get('API_URL') ?? EnvService.get('API_BASE_URL');
+    if (envUrl != null && envUrl.isNotEmpty) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        return envUrl.replaceAll('127.0.0.1', '10.0.2.2').replaceAll('localhost', '10.0.2.2');
+      }
+      return envUrl;
+    }
+    return kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
+  }
+
   static const String fallbackUrl = 'http://localhost:4000';
-  static const String aiBaseUrl = kIsWeb
-      ? 'http://localhost:8000'
-      : 'http://10.0.2.2:8000';
+
+  static String get aiBaseUrl {
+    final envUrl = EnvService.get('AI_URL') ?? EnvService.get('AI_BASE_URL');
+    if (envUrl != null && envUrl.isNotEmpty) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        return envUrl.replaceAll('127.0.0.1', '10.0.2.2').replaceAll('localhost', '10.0.2.2');
+      }
+      return envUrl;
+    }
+    return kIsWeb ? 'http://localhost:8000' : 'http://10.0.2.2:8000';
+  }
 
   // JWT token stored globally after login
   static String currentToken = '';
@@ -445,9 +461,7 @@ class ApiService {
     } catch (_) {
       try {
         // Fallback to direct FastAPI port for local emulator testing
-        final localAiUrl = baseUrl.contains('10.0.2.2')
-            ? 'http://10.0.2.2:8000'
-            : 'http://localhost:8000';
+        final localAiUrl = aiBaseUrl;
         var request = http.MultipartRequest(
           'POST',
           Uri.parse(
@@ -524,9 +538,7 @@ class ApiService {
       }
     } catch (_) {
       try {
-        final localAiUrl = baseUrl.contains('10.0.2.2')
-            ? 'http://10.0.2.2:8000'
-            : 'http://localhost:8000';
+        final localAiUrl = aiBaseUrl;
         final response = await http
             .post(
               Uri.parse(
@@ -649,6 +661,153 @@ class ApiService {
     }
   }
 
+  // Auth: Register
+  static Future<Map<String, dynamic>> register({
+    required String fullName,
+    required String email,
+    required String password,
+    String? phone,
+    String role = 'user',
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/register'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'fullName': fullName,
+              'email': email,
+              'password': password,
+              if (phone != null && phone.isNotEmpty) 'phone': phone,
+              'role': role,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      }
+      return {
+        'success': false,
+        'message': data is Map ? (data['message'] ?? 'Đăng ký thất bại.') : 'Đăng ký thất bại.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối: $e'};
+    }
+  }
+
+  // Auth: Verify Email OTP
+  static Future<Map<String, dynamic>> verifyEmail({
+    required String email,
+    required String token,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/verify-email'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email, 'token': token}),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      }
+      return {
+        'success': false,
+        'message': data is Map ? (data['message'] ?? 'Xác thực email thất bại.') : 'Xác thực email thất bại.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối: $e'};
+    }
+  }
+
+  // Auth: Resend OTP Verification
+  static Future<Map<String, dynamic>> resendVerification({
+    required String email,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/resend-verification'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email}),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      }
+      return {
+        'success': false,
+        'message': data is Map ? (data['message'] ?? 'Gửi lại OTP thất bại.') : 'Gửi lại OTP thất bại.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối: $e'};
+    }
+  }
+
+  // Auth: Forgot Password (Request OTP)
+  static Future<Map<String, dynamic>> forgotPassword({
+    required String email,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/forgot-password'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email}),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      }
+      return {
+        'success': false,
+        'message': data is Map ? (data['message'] ?? 'Yêu cầu thất bại.') : 'Yêu cầu thất bại.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối: $e'};
+    }
+  }
+
+  // Auth: Reset Password
+  static Future<Map<String, dynamic>> resetPassword({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/reset-password'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email,
+              'token': token,
+              'newPassword': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      }
+      return {
+        'success': false,
+        'message': data is Map ? (data['message'] ?? 'Đặt lại mật khẩu thất bại.') : 'Đặt lại mật khẩu thất bại.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối: $e'};
+    }
+  }
+
   // Get User Profile using JWT token
   static Future<Map<String, dynamic>?> getProfile([String? token]) async {
     final activeToken = (token != null && token.isNotEmpty)
@@ -657,7 +816,7 @@ class ApiService {
     try {
       final response = await http
           .get(
-            Uri.parse('$baseUrl/api/auth/profile'),
+            Uri.parse('$baseUrl/api/auth/profile?refresh=true'),
             headers: {
               'Content-Type': 'application/json',
               if (activeToken.isNotEmpty)
@@ -673,7 +832,7 @@ class ApiService {
       try {
         final response = await http
             .get(
-              Uri.parse('$fallbackUrl/api/auth/profile'),
+              Uri.parse('$fallbackUrl/api/auth/profile?refresh=true'),
               headers: {
                 'Content-Type': 'application/json',
                 if (activeToken.isNotEmpty)
@@ -932,6 +1091,68 @@ class ApiService {
       }
     }
     return null;
+  }
+
+  // Update Profile
+  static Future<Map<String, dynamic>> updateProfile({
+    String? fullName,
+    String? phone,
+    String? address,
+  }) async {
+    try {
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/api/users/profile'),
+            headers: _authHeaders,
+            body: jsonEncode({
+              if (fullName != null) 'fullName': fullName,
+              if (phone != null) 'phone': phone,
+              if (address != null) 'address': address,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      }
+      return {
+        'success': false,
+        'message': data is Map ? (data['message'] ?? 'Cập nhật thất bại.') : 'Cập nhật thất bại.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối: $e'};
+    }
+  }
+
+  // Change Password
+  static Future<Map<String, dynamic>> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/change-password'),
+            headers: _authHeaders,
+            body: jsonEncode({
+              'oldPassword': oldPassword,
+              'newPassword': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      }
+      return {
+        'success': false,
+        'message': data is Map ? (data['message'] ?? 'Đổi mật khẩu thất bại.') : 'Đổi mật khẩu thất bại.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối: $e'};
+    }
   }
 
   // Validate Voucher Code
@@ -1471,9 +1692,7 @@ class ApiService {
       }
     } catch (_) {
       try {
-        final localAiUrl = baseUrl.contains('10.0.2.2')
-            ? 'http://10.0.2.2:8000'
-            : 'http://localhost:8000';
+        final localAiUrl = aiBaseUrl;
         final response = await http
             .get(
               Uri.parse('$localAiUrl/api/ai/sample-prescriptions'),
@@ -1521,9 +1740,7 @@ class ApiService {
       }
     } catch (_) {
       try {
-        final localAiUrl = baseUrl.contains('10.0.2.2')
-            ? 'http://10.0.2.2:8000'
-            : 'http://localhost:8000';
+        final localAiUrl = aiBaseUrl;
         final response = await http
             .post(
               Uri.parse('$localAiUrl/api/ai/scan-sample-prescription'),

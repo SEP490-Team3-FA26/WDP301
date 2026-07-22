@@ -12,6 +12,7 @@ import {
   Request,
   Req,
   Res,
+  Query,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ClientKafka } from '@nestjs/microservices';
@@ -220,15 +221,17 @@ export class AuthController implements OnModuleInit {
   @ApiOperation({ summary: 'Lấy thông tin tài khoản đang đăng nhập' })
   @ApiResponse({ status: 200, description: 'Thông tin profile' })
   @ApiResponse({ status: 401, description: 'Chưa đăng nhập' })
-  async getProfile(@Request() req) {
+  async getProfile(@Request() req, @Query('refresh') refresh?: string) {
     const { sub: userId } = req.user;
 
-    // Kiểm tra cache
+    // Kiểm tra cache (nếu không có query refresh=true)
     const cacheKey = `auth:profile:${userId}`;
-    const cachedProfile = await this.cacheManager.get(cacheKey);
-    if (cachedProfile) {
-      console.log(`⚡ [Cache Hit] Lấy profile ${userId} từ Redis`);
-      return cachedProfile;
+    if (refresh !== 'true') {
+      const cachedProfile = await this.cacheManager.get(cacheKey);
+      if (cachedProfile) {
+        console.log(`⚡ [Cache Hit] Lấy profile ${userId} từ Redis`);
+        return cachedProfile;
+      }
     }
 
     // Lấy từ Auth Microservice qua Kafka
