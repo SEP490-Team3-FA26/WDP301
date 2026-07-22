@@ -1813,9 +1813,9 @@ class _CustomerScreenState extends State<CustomerScreen>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Xin chào, anh phước',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  Text(
+                    'Xin chào, ${_userProfile?['fullName'] ?? 'Khách hàng'}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   Row(
                     children: [
@@ -1835,9 +1835,9 @@ class _CustomerScreenState extends State<CustomerScreen>
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Text(
-                        '0 điểm thưởng',
-                        style: TextStyle(fontSize: 12, color: Colors.black87),
+                      Text(
+                        '${_userProfile?['points'] ?? _userProfile?['loyaltyPoints'] ?? 0} điểm thưởng',
+                        style: const TextStyle(fontSize: 12, color: Colors.black87),
                       ),
                     ],
                   ),
@@ -3983,11 +3983,11 @@ class _CustomerScreenState extends State<CustomerScreen>
     final name =
         _userProfile?['fullName'] ??
         _userProfile?['name'] ??
-        'Khách Hàng Thành Viên';
-    final email = _userProfile?['email'] ?? 'user@vinapharmacy.com';
-    final phone = _userProfile?['phone'] ?? '0987654321';
-    final points = _userProfile?['loyaltyPoints'] ?? 1250;
-    final tier = _userProfile?['memberTier'] ?? 'Thành Viên Vàng (Gold)';
+        'Khách Hàng';
+    final email = _userProfile?['email'] ?? 'Chưa cập nhật email';
+    final phone = _userProfile?['phone'] ?? 'Chưa cập nhật SĐT';
+    final points = _userProfile?['points'] ?? _userProfile?['loyaltyPoints'] ?? 0;
+    final tier = _userProfile?['memberTier'] ?? (points >= 1000 ? 'Thành Viên Vàng (Gold)' : 'Thành Viên Mới');
 
     return RefreshIndicator(
       onRefresh: _loadUserProfileAndOrders,
