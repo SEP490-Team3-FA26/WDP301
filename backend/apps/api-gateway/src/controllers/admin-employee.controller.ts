@@ -3,11 +3,13 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Param,
   Body,
   UseGuards,
   Inject,
   OnModuleInit,
+  Query,
 } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
@@ -16,10 +18,10 @@ import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 
-@ApiTags('🛡️ Admin Employee Management')
+@ApiTags('🛡️ Admin & Branch Employee Management')
 @Controller('api/admin/employees')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin')
+@Roles('admin', 'branch')
 @ApiBearerAuth()
 export class AdminEmployeeController implements OnModuleInit {
   constructor(@Inject('USER_SERVICE') private readonly kafkaClient: ClientKafka) {}
@@ -31,13 +33,14 @@ export class AdminEmployeeController implements OnModuleInit {
       'user.admin.employee.get',
       'user.admin.employee.update',
       'user.admin.employee.ban_unban',
+      'user.admin.employee.delete',
     ]);
   }
 
   @Get()
   @ApiOperation({ summary: 'Lấy danh sách nhân viên' })
-  async listEmployees() {
-    return await sendKafkaMessage(this.kafkaClient, 'user.admin.employee.list', {});
+  async listEmployees(@Query() query: any) {
+    return await sendKafkaMessage(this.kafkaClient, 'user.admin.employee.list', query || {});
   }
 
   @Get(':id')
@@ -62,5 +65,11 @@ export class AdminEmployeeController implements OnModuleInit {
   @ApiOperation({ summary: 'Ban / Unban nhân viên' })
   async toggleBanEmployee(@Param('id') id: string) {
     return await sendKafkaMessage(this.kafkaClient, 'user.admin.employee.ban_unban', { id });
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Xóa tài khoản nhân viên' })
+  async deleteEmployee(@Param('id') id: string) {
+    return await sendKafkaMessage(this.kafkaClient, 'user.admin.employee.delete', { id });
   }
 }
