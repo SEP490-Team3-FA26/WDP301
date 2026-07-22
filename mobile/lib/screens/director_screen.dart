@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../services/api_service.dart';
 import '../widgets/notification_badge.dart';
 
@@ -10,6 +11,10 @@ class DirectorScreen extends StatefulWidget {
 }
 
 class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProviderStateMixin {
+  static const Color _primaryGreen = Color(0xFF2E7D32);
+  static const Color _softGreen = Color(0xFFE8F5E9);
+  static const Color _ink = Color(0xFF1E293B);
+
   late TabController _tabController;
   bool _isLoading = false;
 
@@ -314,10 +319,26 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.black54, fontSize: 13)),
-          Text(value, style: TextStyle(fontWeight: isBold ? FontWeight.w900 : FontWeight.bold, fontSize: 13, color: isBold ? Colors.green : const Color(0xFF0F172A))),
+          SizedBox(
+            width: 120,
+            child: Text(label, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.w900 : FontWeight.bold,
+                fontSize: 13,
+                color: isBold ? _primaryGreen : _ink,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -361,7 +382,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.purple)),
+      builder: (context) => const Center(child: CircularProgressIndicator(color: _primaryGreen)),
     );
 
     List<dynamic> predictions = [];
@@ -379,84 +400,84 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.86,
+        minChildSize: 0.45,
+        maxChildSize: 0.94,
+        builder: (context, scrollController) => Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.auto_awesome, color: Colors.purple),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Dự Báo Nhu Cầu AI Gemini (Real Backend)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-                      Text('Phân tích chuỗi cung ứng & xu hướng thời tiết mạn', style: TextStyle(color: Colors.grey, fontSize: 11)),
-                    ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: _softGreen, borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.auto_awesome, color: _primaryGreen),
                   ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            predictions.isNotEmpty
-                ? Column(
-                    children: predictions.map((item) {
-                      final name = item['name'] ?? item['medicineName'] ?? 'Thuốc cảnh báo';
-                      final advice = item['recommendation'] ?? item['advice'] ?? 'Dự báo tiêu thụ tăng do giao mùa, đề xuất chuẩn bị thêm tồn kho.';
-                      final trend = item['trend'] ?? '+25% nhu cầu';
-                      return _buildPredictionItem(name, trend, advice);
-                    }).toList(),
-                  )
-                : Column(
-                    children: [
-                      _buildPredictionItem('Amoxicillin 500mg', '+28% nhu cầu', 'Khuyên dùng: Nhập thêm cho các cơ sở chi nhánh'),
-                      _buildPredictionItem('Panadol Extra', '+15% nhu cầu', 'Dự báo tiêu thụ mạnh vào dịp giao mùa sắp tới'),
-                    ],
-                  ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Đã gửi đề xuất tự động tạo PO nhập hàng cho Thủ kho!'),
-                      backgroundColor: Colors.purple,
-                      behavior: SnackBarBehavior.floating,
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Dự Báo Nhu Cầu AI Gemini (Real Backend)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                        Text('Phân tích chuỗi cung ứng & xu hướng thời tiết mạn', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                      ],
                     ),
-                  );
-                },
-                icon: const Icon(Icons.send, size: 16),
-                label: const Text('Tạo Đơn Nhập Hàng Tự Động Theo AI'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple.shade800,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ],
+              ),
+              const Divider(height: 24),
+              ...(predictions.isNotEmpty
+                      ? predictions.map((item) {
+                          final name = item['name'] ?? item['medicineName'] ?? 'Thuốc cảnh báo';
+                          final advice = item['recommendation'] ?? item['advice'] ?? 'Dự báo tiêu thụ tăng do giao mùa, đề xuất chuẩn bị thêm tồn kho.';
+                          final trend = item['trend'] ?? '+25% nhu cầu';
+                          return _buildPredictionItem(name, trend, advice);
+                        })
+                      : [
+                          _buildPredictionItem('Amoxicillin 500mg', '+28% nhu cầu', 'Khuyên dùng: Nhập thêm cho các cơ sở chi nhánh'),
+                          _buildPredictionItem('Panadol Extra', '+15% nhu cầu', 'Dự báo tiêu thụ mạnh vào dịp giao mùa sắp tới'),
+                        ]),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Đã gửi đề xuất tự động tạo PO nhập hàng cho Thủ kho!'),
+                        backgroundColor: _primaryGreen,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.send, size: 16),
+                  label: const Text('Tạo Đơn Nhập Hàng Tự Động Theo AI'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primaryGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -467,26 +488,48 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: Colors.purple.shade50.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.purple.shade100)),
+        decoration: BoxDecoration(color: _softGreen, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.green.shade100)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(medicine, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: Colors.purple, borderRadius: BorderRadius.circular(8)),
-                  child: Text(trend, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+                Expanded(
+                  child: Text(
+                    medicine,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _ink),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  flex: 0,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 96),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: _primaryGreen, borderRadius: BorderRadius.circular(8)),
+                    child: Text(
+                      trend,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 4),
-            Text(advice, style: TextStyle(color: Colors.purple.shade900, fontSize: 11, fontWeight: FontWeight.w500)),
+            Text(
+              advice,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _primaryGreen, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
           ],
         ),
-      ),
+      ).animate().fadeIn(duration: 220.ms).slideX(begin: 0.03, end: 0),
     );
   }
 
@@ -505,7 +548,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+              colors: [_primaryGreen, Color(0xFF4CAF50)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -518,7 +561,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.amber,
+          indicatorColor: Colors.white,
           indicatorWeight: 3,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
@@ -546,21 +589,21 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF4C1D95), Color(0xFF6D28D9)],
+                        colors: [_primaryGreen, Color(0xFF81C784)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
-                        BoxShadow(color: const Color(0xFF6D28D9).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 6))
+                        BoxShadow(color: _primaryGreen.withValues(alpha: 0.24), blurRadius: 14, offset: const Offset(0, 8))
                       ],
                     ),
                     child: Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
-                          child: const Icon(Icons.auto_awesome, color: Colors.amber, size: 24),
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), shape: BoxShape.circle),
+                          child: const Icon(Icons.auto_awesome, color: Colors.white, size: 24),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -569,7 +612,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                             children: const [
                               Text(
                                 'AI Gemini Predictive Analytics',
-                                style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5),
+                                style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5),
                               ),
                               SizedBox(height: 2),
                               Text(
@@ -582,7 +625,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                         const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
                       ],
                     ),
-                  ),
+                  ).animate().fadeIn(duration: 260.ms).slideY(begin: 0.08, end: 0),
                 ),
                 const SizedBox(height: 16),
 
@@ -603,8 +646,8 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                         icon: const Icon(Icons.picture_as_pdf, size: 16),
                         label: const Text('Xuất PDF Báo Cáo', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF0F172A),
-                          side: BorderSide(color: Colors.grey.shade300),
+                          foregroundColor: _primaryGreen,
+                          side: BorderSide(color: Colors.green.shade200),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
@@ -617,7 +660,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                         icon: const Icon(Icons.auto_awesome, size: 16),
                         label: const Text('Phân Tích AI', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.purple.shade800,
+                          backgroundColor: _primaryGreen,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -633,13 +676,13 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF0F172A), Color(0xFF334155)],
+                      colors: [_primaryGreen, Color(0xFF66BB6A)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
-                      BoxShadow(color: const Color(0xFF0F172A).withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8))
+                      BoxShadow(color: _primaryGreen.withValues(alpha: 0.24), blurRadius: 15, offset: const Offset(0, 8))
                     ],
                   ),
                   child: Column(
@@ -670,7 +713,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                       )
                     ],
                   ),
-                ),
+                ).animate().fadeIn(delay: 80.ms, duration: 280.ms).slideY(begin: 0.08, end: 0),
               ],
             ),
           ),
@@ -684,7 +727,15 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Yêu Cầu Duyệt Nhập Hàng (PO)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                    const Expanded(
+                      child: Text(
+                        'Yêu Cầu Duyệt Nhập Hàng (PO)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _ink),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(12)),
@@ -693,7 +744,12 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                   ],
                 ),
                 const SizedBox(height: 12),
-                _poPendingApprovals.isEmpty
+                _isLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator(color: _primaryGreen)),
+                      )
+                    : _poPendingApprovals.isEmpty
                     ? Container(
                         padding: const EdgeInsets.all(24),
                         alignment: Alignment.center,
@@ -717,10 +773,25 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(po['id'] ?? 'PO-84920', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A))),
-                                      Text(po['amount'] ?? '0 ₫', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.blue)),
+                                      Expanded(
+                                        child: Text(
+                                          po['id'] ?? 'PO-84920',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _ink),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          po['amount'] ?? '0 ₫',
+                                          textAlign: TextAlign.right,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: _primaryGreen),
+                                        ),
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 6),
@@ -759,7 +830,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                                 ],
                               ),
                             ),
-                          );
+                          ).animate(delay: (index * 35).ms).fadeIn(duration: 220.ms).slideY(begin: 0.05, end: 0);
                         },
                       ),
               ],
@@ -772,7 +843,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Hiệu Suất Chi Nhánh Trực Thuộc', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                const Text('Hiệu Suất Chi Nhánh Trực Thuộc', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _ink)),
                 const SizedBox(height: 12),
                 ListView.builder(
                   shrinkWrap: true,
@@ -787,22 +858,39 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade200)),
                       child: ListTile(
                         onTap: () => _showBranchDetailModal(b),
-                        title: Text(b['name']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                        subtitle: Text('Giao dịch: ${b['transactions']} đơn'),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(b['revenue']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                            Text(b['growth']!, style: TextStyle(color: isPositive ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 11)),
-                          ],
+                        title: Text(
+                          b['name']!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        subtitle: Text(
+                          'Giao dịch: ${b['transactions']} đơn',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 110),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                b['revenue']!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _ink),
+                              ),
+                              Text(b['growth']!, style: TextStyle(color: isPositive ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 11)),
+                            ],
+                          ),
                         ),
                       ),
-                    );
+                    ).animate(delay: (index * 35).ms).fadeIn(duration: 220.ms).slideY(begin: 0.05, end: 0);
                   },
                 ),
                 const SizedBox(height: 20),
-                const Text('Quản Lý Kho & Luân Chuyển Hàng', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                const Text('Quản Lý Kho & Luân Chuyển Hàng', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _ink)),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -815,9 +903,9 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.blue.shade100),
+                            border: Border.all(color: Colors.green.shade100),
                             boxShadow: [
-                              BoxShadow(color: Colors.blue.shade50.withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4)),
+                              BoxShadow(color: _softGreen.withValues(alpha: 0.8), blurRadius: 10, offset: const Offset(0, 4)),
                             ],
                           ),
                           child: Column(
@@ -828,16 +916,16 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                                 children: [
                                   CircleAvatar(
                                     radius: 18,
-                                    backgroundColor: Colors.blue.shade50,
-                                    child: const Icon(Icons.swap_horiz, color: Colors.blue, size: 20),
+                                    backgroundColor: _softGreen,
+                                    child: const Icon(Icons.swap_horiz, color: _primaryGreen, size: 20),
                                   ),
                                   const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              Text('${_stockTransfers.length} lượt', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+                              Text('${_stockTransfers.length} lượt', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _ink)),
                               const SizedBox(height: 4),
-                              const Text('Chuyển Kho Chi Nhánh', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
+                              const Text('Chuyển Kho Chi Nhánh', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
                             ],
                           ),
                         ),
@@ -853,7 +941,7 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.amber.shade200),
+                            border: Border.all(color: Colors.orange.shade100),
                             boxShadow: [
                               BoxShadow(color: Colors.amber.shade50.withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4)),
                             ],
@@ -873,9 +961,9 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              Text('${_lowStockItems.length} sản phẩm', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+                              Text('${_lowStockItems.length} sản phẩm', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _ink)),
                               const SizedBox(height: 4),
-                              const Text('Cảnh Báo Tồn Kho', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
+                              const Text('Cảnh Báo Tồn Kho', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
                             ],
                           ),
                         ),
@@ -912,9 +1000,15 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
               ),
               const SizedBox(height: 16),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Chuyển Kho Chi Nhánh (${_stockTransfers.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                  Expanded(
+                    child: Text(
+                      'Chuyển Kho Chi Nhánh (${_stockTransfers.length})',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _ink),
+                    ),
+                  ),
                   IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                 ],
               ),
@@ -938,19 +1032,28 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
                             child: ListTile(
                               leading: const CircleAvatar(
-                                backgroundColor: Color(0xFFEFF6FF),
-                                child: Icon(Icons.swap_horiz, color: Colors.blue, size: 20),
+                                backgroundColor: _softGreen,
+                                child: Icon(Icons.swap_horiz, color: _primaryGreen, size: 20),
                               ),
-                              title: Text('Mã: $code', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                              subtitle: Text('Từ: $from\nĐến: $to', style: const TextStyle(fontSize: 11, height: 1.3)),
+                              title: Text('Mã: $code', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              subtitle: Text('Từ: $from\nĐến: $to', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, height: 1.3)),
                               isThreeLine: true,
-                              trailing: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
-                                child: Text(status.toString().toUpperCase(), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 10)),
+                              trailing: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 86),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
+                                  child: Text(
+                                    status.toString().toUpperCase(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: _primaryGreen, fontWeight: FontWeight.bold, fontSize: 10),
+                                  ),
+                                ),
                               ),
                             ),
-                          );
+                          ).animate(delay: (index * 25).ms).fadeIn(duration: 180.ms).slideY(begin: 0.04, end: 0);
                         },
                       ),
               ),
@@ -982,9 +1085,15 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
               ),
               const SizedBox(height: 16),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Cảnh Báo Tồn Kho Hệ Thống (${_lowStockItems.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                  Expanded(
+                    child: Text(
+                      'Cảnh Báo Tồn Kho Hệ Thống (${_lowStockItems.length})',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _ink),
+                    ),
+                  ),
                   IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                 ],
               ),
@@ -1003,10 +1112,19 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
                             child: ListTile(
                               leading: const Icon(Icons.warning_amber_rounded, color: Colors.amber),
-                              title: Text(item['name'] ?? item['medicineName'] ?? 'Thuốc', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                              subtitle: Text('Còn tồn: ${item['stock'] ?? item['quantity'] ?? 0} ${item['unit'] ?? 'hộp'}'),
+                              title: Text(
+                                item['name'] ?? item['medicineName'] ?? 'Thuốc',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              subtitle: Text(
+                                'Còn tồn: ${item['stock'] ?? item['quantity'] ?? 0} ${item['unit'] ?? 'hộp'}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          );
+                          ).animate(delay: (index * 25).ms).fadeIn(duration: 180.ms).slideY(begin: 0.04, end: 0);
                         },
                       ),
               ),
@@ -1034,15 +1152,6 @@ class _DirectorScreenState extends State<DirectorScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildLegend(String label, Color color) {
-    return Row(
-      children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
 }
 
 // Custom Painter to draw a clean and beautiful smooth curve area chart representing revenue

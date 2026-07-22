@@ -13,7 +13,12 @@ class _BranchScreenState extends State<BranchScreen> with SingleTickerProviderSt
   late TabController _tabController;
 
   final List<Map<String, dynamic>> _staffs = [];
+  final List<Map<String, dynamic>> _allLowStockAlerts = [];
   final List<Map<String, dynamic>> _lowStockAlerts = [];
+  int _totalLowStockCount = 0;
+  int _visibleLowStockLimit = 20;
+  String _lowStockSearch = '';
+  String _lowStockFilter = 'ALL';
 
   bool _isLoading = false;
   String _branchName = 'CƠ SỞ CHI NHÁNH BÁN LẺ';
@@ -55,15 +60,18 @@ class _BranchScreenState extends State<BranchScreen> with SingleTickerProviderSt
           });
         }
 
+        _allLowStockAlerts.clear();
         _lowStockAlerts.clear();
+        _totalLowStockCount = lowStock.length;
         for (var item in lowStock) {
-          _lowStockAlerts.add({
+          _allLowStockAlerts.add({
             'name': item['name'] ?? item['medicineName'] ?? 'Thuốc cảnh báo',
             'stock': item['stock'] ?? item['quantity'] ?? 0,
             'unit': item['unit'] ?? 'Hộp',
             'supplier': item['manufacturer'] ?? item['supplier'] ?? 'Nhà cung cấp Dược',
           });
         }
+        _applyLowStockFilters(updateState: false);
 
         if (branches.isNotEmpty) {
           final firstBranch = branches.first;
@@ -86,6 +94,30 @@ class _BranchScreenState extends State<BranchScreen> with SingleTickerProviderSt
     } catch (e) {
       debugPrint("Error loading branch data: $e");
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _applyLowStockFilters({bool updateState = true}) {
+    final query = _lowStockSearch.trim().toLowerCase();
+    final filtered = _allLowStockAlerts.where((item) {
+      final stock = item['stock'] is num ? (item['stock'] as num).toInt() : int.tryParse(item['stock'].toString()) ?? 0;
+      final matchesStatus = _lowStockFilter == 'ALL' ||
+          (_lowStockFilter == 'OUT' && stock == 0) ||
+          (_lowStockFilter == 'LOW' && stock > 0);
+      final text = '${item['name']} ${item['supplier']} ${item['unit']}'.toLowerCase();
+      return matchesStatus && (query.isEmpty || text.contains(query));
+    }).take(_visibleLowStockLimit).toList();
+
+    void assign() {
+      _lowStockAlerts
+        ..clear()
+        ..addAll(filtered);
+    }
+
+    if (updateState && mounted) {
+      setState(assign);
+    } else {
+      assign();
     }
   }
 
@@ -137,6 +169,10 @@ class _BranchScreenState extends State<BranchScreen> with SingleTickerProviderSt
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_isLoading) ...[
+                  const LinearProgressIndicator(color: Color(0xFF2E7D32)),
+                  const SizedBox(height: 12),
+                ],
                 // Branch Info Header (Premium Card design)
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -260,9 +296,94 @@ class _BranchScreenState extends State<BranchScreen> with SingleTickerProviderSt
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Cảnh Báo Thiếu Thuốc Tại Cơ Sở',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                if (_isLoading) ...[
+                  const LinearProgressIndicator(color: Color(0xFF2E7D32)),
+                  const SizedBox(height: 12),
+                ],
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Cảnh Báo Thiếu Thuốc Tại Cơ Sở',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(999)),
+                      child: Text(
+                        '$_totalLowStockCount mục',
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF2E7D32), fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  onChanged: (value) {
+                    _lowStockSearch = value;
+                    _visibleLowStockLimit = 20;
+                    _applyLowStockFilters();
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Tìm thuốc, nhà cung cấp...',
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search, color: Color(0xFF2E7D32)),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Tất cả'),
+                      selected: _lowStockFilter == 'ALL',
+                      onSelected: (_) {
+                        _lowStockFilter = 'ALL';
+                        _visibleLowStockLimit = 20;
+                        _applyLowStockFilters();
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Hết hàng'),
+                      selected: _lowStockFilter == 'OUT',
+                      selectedColor: Colors.red.shade50,
+                      onSelected: (_) {
+                        _lowStockFilter = 'OUT';
+                        _visibleLowStockLimit = 20;
+                        _applyLowStockFilters();
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Cận kho'),
+                      selected: _lowStockFilter == 'LOW',
+                      selectedColor: Colors.amber.shade50,
+                      onSelected: (_) {
+                        _lowStockFilter = 'LOW';
+                        _visibleLowStockLimit = 20;
+                        _applyLowStockFilters();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Đang hiển thị ${_lowStockAlerts.length} mục phù hợp. Dữ liệu lớn được render theo trang để mobile nhẹ hơn.',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
                 ),
                 const SizedBox(height: 12),
                 _lowStockAlerts.isEmpty
@@ -291,12 +412,16 @@ class _BranchScreenState extends State<BranchScreen> with SingleTickerProviderSt
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(
-                                        alert['name']!,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                                      Expanded(
+                                        child: Text(
+                                          alert['name']!,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                                        ),
                                       ),
+                                      const SizedBox(width: 8),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
@@ -319,10 +444,12 @@ class _BranchScreenState extends State<BranchScreen> with SingleTickerProviderSt
                                   Text('Nhà cung cấp: ${alert['supplier']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                                   const SizedBox(height: 12),
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
-                                      ElevatedButton.icon(
-                                        onPressed: () async {
+                                      const Spacer(),
+                                      Flexible(
+                                        flex: 0,
+                                        child: ElevatedButton.icon(
+                                          onPressed: () async {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             const SnackBar(
                                               content: Text('Đang gửi yêu cầu nhập hàng PR lên Ban Quản Lý...', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -348,14 +475,20 @@ class _BranchScreenState extends State<BranchScreen> with SingleTickerProviderSt
                                               ),
                                             );
                                           }
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF2E7D32),
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF2E7D32),
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                          icon: const Icon(Icons.send, size: 14),
+                                          label: const Text(
+                                            'Gửi yêu cầu cấp hàng',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                          ),
                                         ),
-                                        icon: const Icon(Icons.send, size: 14),
-                                        label: const Text('Gửi yêu cầu cấp hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                       )
                                     ],
                                   )
@@ -365,6 +498,25 @@ class _BranchScreenState extends State<BranchScreen> with SingleTickerProviderSt
                           );
                         },
                       ),
+                if (_lowStockAlerts.length < _allLowStockAlerts.where((item) {
+                  final stock = item['stock'] is num ? (item['stock'] as num).toInt() : int.tryParse(item['stock'].toString()) ?? 0;
+                  final matchesStatus = _lowStockFilter == 'ALL' ||
+                      (_lowStockFilter == 'OUT' && stock == 0) ||
+                      (_lowStockFilter == 'LOW' && stock > 0);
+                  final text = '${item['name']} ${item['supplier']} ${item['unit']}'.toLowerCase();
+                  final query = _lowStockSearch.trim().toLowerCase();
+                  return matchesStatus && (query.isEmpty || text.contains(query));
+                }).length) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      _visibleLowStockLimit += 20;
+                      _applyLowStockFilters();
+                    },
+                    icon: const Icon(Icons.expand_more),
+                    label: const Text('Tải thêm 20 mục'),
+                  ),
+                ],
               ],
             ),
           ),
