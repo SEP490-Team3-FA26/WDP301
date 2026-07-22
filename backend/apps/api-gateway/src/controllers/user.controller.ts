@@ -54,8 +54,9 @@ export class UserController implements OnModuleInit {
   }
 
   @Put('profile')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Chỉnh sửa thông tin hồ sơ' })
-  async editProfile(@Request() req, @Body() data: { fullName?: string }) {
+  async editProfile(@Request() req, @Body() data: { fullName?: string; phone?: string; address?: string }) {
     return await sendKafkaMessage(this.kafkaClient, 'user.edit_profile', {
       userId: req.user.sub,
       ...data,

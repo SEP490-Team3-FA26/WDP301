@@ -12,7 +12,7 @@ export class UserServiceController {
   ) { }
 
   @MessagePattern('user.edit_profile')
-  handleEditProfile(@Payload() data: { userId: string; fullName?: string }) {
+  handleEditProfile(@Payload() data: { userId: string; fullName?: string; phone?: string; address?: string }) {
     return this.userService.editProfile(data.userId, data);
   }
 

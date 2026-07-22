@@ -1162,12 +1162,26 @@ class _CustomerScreenState extends State<CustomerScreen>
           ListTile(
             leading: const Icon(Icons.person),
             title: const Text('Hồ sơ của tôi'),
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProfileScreen(
+                    userProfile: _userProfile,
+                    onProfileUpdated: _loadUserProfileAndOrders,
+                  ),
+                ),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.history),
             title: const Text('Lịch sử mua hàng'),
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              Navigator.pop(context);
+              _tabController.animateTo(4);
+            },
           ),
           const Divider(),
           ListTile(
@@ -1665,53 +1679,64 @@ class _CustomerScreenState extends State<CustomerScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: Colors.transparent,
-                child: const Icon(
-                  Icons.account_circle,
-                  color: Colors.grey,
-                  size: 40,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Xin chào, anh phước',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          Expanded(
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Colors.transparent,
+                  child: const Icon(
+                    Icons.account_circle,
+                    color: Colors.grey,
+                    size: 40,
                   ),
-                  Row(
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.amber,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Text(
-                          'F',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      Text(
+                        'Xin chào, ${_userProfile?['fullName'] ?? 'Khách hàng'}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
-                      const SizedBox(width: 4),
-                      const Text(
-                        '0 điểm thưởng',
-                        style: TextStyle(fontSize: 12, color: Colors.black87),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(
+                              color: Colors.amber,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Text(
+                              'F',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '${_userProfile?['points'] ?? _userProfile?['loyaltyPoints'] ?? 0} điểm thưởng',
+                              style: const TextStyle(fontSize: 12, color: Colors.black87),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: () {
               _tabController.animateTo(4);
@@ -3418,11 +3443,11 @@ class _CustomerScreenState extends State<CustomerScreen>
     final name =
         _userProfile?['fullName'] ??
         _userProfile?['name'] ??
-        'Khách Hàng Thành Viên';
-    final email = _userProfile?['email'] ?? 'user@vinapharmacy.com';
-    final phone = _userProfile?['phone'] ?? '0987654321';
-    final points = _userProfile?['loyaltyPoints'] ?? 1250;
-    final tier = _userProfile?['memberTier'] ?? 'Thành Viên Vàng (Gold)';
+        'Khách Hàng';
+    final email = _userProfile?['email'] ?? 'Chưa cập nhật email';
+    final phone = _userProfile?['phone'] ?? 'Chưa cập nhật SĐT';
+    final points = _userProfile?['points'] ?? _userProfile?['loyaltyPoints'] ?? 0;
+    final tier = _userProfile?['memberTier'] ?? (points >= 1000 ? 'Thành Viên Vàng (Gold)' : 'Thành Viên Mới');
 
     return RefreshIndicator(
       onRefresh: _loadUserProfileAndOrders,

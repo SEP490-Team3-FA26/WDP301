@@ -532,29 +532,33 @@ export class OrdersServiceService implements OnModuleInit {
   }
 
   async getMyOrders(userId?: string, fullName?: string, phone?: string) {
-    // 1. Đơn mới: có userId khớp với người đang đăng nhập
-    // 2. Đơn cũ theo tên/sđt: patientName/patientPhone khớp với thông tin
-    // 3. Đơn cũ chưa gán userId: những đơn legacy chưa có trường userId
-    const orConditions: any[] = [
-      { userId: { $exists: false } },
-      { userId: null },
-      { userId: '' },
-    ];
+    const cleanUserId = userId && userId.trim() !== '' ? userId.trim() : null;
+    const cleanPhone = phone && phone.trim() !== '' ? phone.trim() : null;
+    const cleanName = fullName && fullName.trim() !== '' ? fullName.trim() : null;
 
-    if (userId) {
-      orConditions.push({ userId });
+    if (!cleanUserId && !cleanPhone && !cleanName) {
+      return [];
     }
-    if (phone && phone.trim() !== '') {
-      orConditions.push({ patientPhone: phone.trim() });
-      orConditions.push({ patientPhone: { $regex: phone.trim(), $options: 'i' } });
+
+    const orConditions: any[] = [];
+
+    if (cleanUserId) {
+      orConditions.push({ userId: cleanUserId });
     }
-    if (fullName && fullName.trim() !== '') {
-      orConditions.push({ patientName: { $regex: fullName.trim(), $options: 'i' } });
+    if (cleanPhone) {
+      orConditions.push({ patientPhone: cleanPhone });
+    }
+    if (cleanName) {
+      orConditions.push({ patientName: { $regex: cleanName, $options: 'i' } });
+    }
+
+    if (orConditions.length === 0) {
+      return [];
     }
 
     const query = { $or: orConditions };
 
-    this.logger.log(`[getMyOrders] Querying orders for userId=${userId}, fullName=${fullName}, phone=${phone}`);
+    this.logger.log(`[getMyOrders] Querying orders for userId=${cleanUserId}, fullName=${cleanName}, phone=${cleanPhone}`);
     const results = await this.orderModel.find(query).sort({ createdAt: -1 }).exec();
     this.logger.log(`[getMyOrders] Found ${results.length} orders`);
     return results;

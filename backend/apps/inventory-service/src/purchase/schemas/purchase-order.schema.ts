@@ -22,6 +22,9 @@ export const PurchaseOrderItemSchema = SchemaFactory.createForClass(PurchaseOrde
 
 @Schema({ timestamps: true, collection: 'purchaseorders' })
 export class PurchaseOrder extends Document {
+  @Prop({ type: String })
+  poCode?: string;
+
   @Prop({ type: String, required: true })
   supplierId: string;
 

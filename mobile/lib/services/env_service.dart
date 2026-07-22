@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class EnvService {
@@ -8,21 +9,27 @@ class EnvService {
     if (_initialized) return;
     try {
       final content = await rootBundle.loadString('.env');
-      for (final line in content.split('\n')) {
-        final trimmed = line.trim();
-        if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
-        final parts = trimmed.split('=');
+      for (final rawLine in content.split('\n')) {
+        final line = rawLine.trim();
+        if (line.isEmpty || line.startsWith('#')) continue;
+        final parts = line.split('=');
         if (parts.length >= 2) {
           final key = parts[0].trim();
-          final val = parts.sublist(1).join('=').trim();
+          var val = parts.sublist(1).join('=').trim();
+          if ((val.startsWith('"') && val.endsWith('"')) ||
+              (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.substring(1, val.length - 1);
+          }
           _env[key] = val;
         }
       }
-    } catch (_) {
-      // .env file missing or not included in assets
+    } catch (e) {
+      if (kDebugMode) {
+        print('EnvService: .env file missing or not loaded: $e');
+      }
     }
     _initialized = true;
   }
 
-  static String? get(String key) => _env[key];
+  static String? get(String key, [String? defaultValue]) => _env[key] ?? defaultValue;
 }
