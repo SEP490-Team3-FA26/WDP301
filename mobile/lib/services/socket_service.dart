@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'api_service.dart';
 
 class SocketService {
@@ -9,7 +9,7 @@ class SocketService {
   factory SocketService() => _instance;
   SocketService._internal();
 
-  IO.Socket? _socket;
+  socket_io.Socket? _socket;
   bool _isConnected = false;
 
   bool get isConnected => _isConnected;
@@ -34,9 +34,9 @@ class SocketService {
     debugPrint('🔌 Initializing Socket.IO connection to ${ApiService.baseUrl} ...');
 
     try {
-      _socket = IO.io(
+      _socket = socket_io.io(
         ApiService.baseUrl,
-        IO.OptionBuilder()
+        socket_io.OptionBuilder()
             .setTransports(['websocket']) // Use websocket transport only
             .enableAutoConnect()
             .enableReconnection()

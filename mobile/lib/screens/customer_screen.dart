@@ -4,9 +4,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:record/record.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
+import 'profile_screen.dart';
+import 'checkout_screen.dart';
 
 class CustomerScreen extends StatefulWidget {
   const CustomerScreen({super.key});
@@ -63,17 +64,15 @@ class _CustomerScreenState extends State<CustomerScreen>
   final _addressController = TextEditingController();
   String _paymentMethod = "CASH";
 
-  // Voucher State
-  final _voucherCodeController = TextEditingController();
-  Map<String, dynamic>? _appliedVoucher;
-  bool _isValidatingVoucher = false;
-  String? _voucherErrorMsg;
-
   // Profile & Order History State
   Map<String, dynamic>? _userProfile;
   List<Map<String, dynamic>> _myOrders = [];
   bool _isLoadingOrders = false;
   final _searchPhoneController = TextEditingController();
+
+  // Vouchers state
+  List<Map<String, dynamic>> _vouchers = [];
+  bool _isLoadingVouchers = false;
 
   @override
   void initState() {
@@ -101,9 +100,22 @@ class _CustomerScreenState extends State<CustomerScreen>
     _loadUserProfileAndOrders();
   }
 
+  Future<void> _loadVouchers() async {
+    if (!mounted) return;
+    setState(() => _isLoadingVouchers = true);
+    final list = await ApiService.getVouchers();
+    if (mounted) {
+      setState(() {
+        _vouchers = list;
+        _isLoadingVouchers = false;
+      });
+    }
+  }
+
   Future<void> _loadUserProfileAndOrders() async {
     if (!mounted) return;
     setState(() => _isLoadingOrders = true);
+    _loadVouchers();
     final profile = await ApiService.getProfile();
     if (profile != null && mounted) {
       _userProfile = profile;
@@ -129,6 +141,48 @@ class _CustomerScreenState extends State<CustomerScreen>
     }
   }
 
+  Future<void> _openCheckoutScreen() async {
+    if (_cart.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Giỏ hàng của bạn đang trống!'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final double rawSubtotal = _cart.fold(
+      0.0,
+      (sum, item) =>
+          sum +
+          (((item['price'] ?? 0) as num).toDouble() *
+              ((item['qty'] ?? item['quantity'] ?? 1) as num).toInt()),
+    );
+
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CheckoutScreen(
+          cartItems: List<Map<String, dynamic>>.from(_cart),
+          userProfile: _userProfile,
+          subtotal: rawSubtotal,
+        ),
+      ),
+    );
+
+    if (result != null && result['success'] == true) {
+      setState(() {
+        _cart.clear();
+      });
+      if (result['result'] != null && mounted) {
+        _showOrderSuccessDialog(result['result']);
+      }
+      _tabController.animateTo(4);
+      _loadUserProfileAndOrders();
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -141,60 +195,9 @@ class _CustomerScreenState extends State<CustomerScreen>
     _phoneController.dispose();
     _addressController.dispose();
     _searchPhoneController.dispose();
-    _voucherCodeController.dispose();
     _aiChatController.dispose();
     _waveAnimationController.dispose();
     super.dispose();
-  }
-
-  Future<void> _applyVoucherCode() async {
-    if (_appliedVoucher != null) {
-      setState(() {
-        _appliedVoucher = null;
-        _voucherCodeController.clear();
-        _voucherErrorMsg = null;
-      });
-      return;
-    }
-
-    final code = _voucherCodeController.text.trim();
-    if (code.isEmpty) {
-      setState(() => _voucherErrorMsg = 'Vui lòng nhập mã giảm giá');
-      return;
-    }
-
-    setState(() {
-      _isValidatingVoucher = true;
-      _voucherErrorMsg = null;
-    });
-
-    final int subtotalAmt = _cart.fold(
-      0,
-      (sum, item) => sum + (item['price'] as int) * (item['qty'] as int),
-    );
-    final res = await ApiService.validateVoucher(code, subtotalAmt);
-    if (!mounted) return;
-
-    if (res['error'] == true) {
-      setState(() {
-        _isValidatingVoucher = false;
-        _voucherErrorMsg = res['message'] ?? 'Mã không hợp lệ';
-        _appliedVoucher = null;
-      });
-    } else {
-      setState(() {
-        _isValidatingVoucher = false;
-        _appliedVoucher = res;
-        _voucherErrorMsg = null;
-      });
-      final discount = res['discount'] ?? 0;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('🎉 Áp dụng thành công mã $code! Giảm $discount ₫'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
   }
 
   // Load medicines from DB with pagination (Lazy Loading)
@@ -1011,351 +1014,6 @@ class _CustomerScreenState extends State<CustomerScreen>
     }
   }
 
-  Future<void> _launchPaymentUrl(String urlString) async {
-    try {
-      final url = Uri.parse(urlString);
-      await launchUrl(url, mode: LaunchMode.inAppBrowserView);
-    } catch (e) {
-      debugPrint("Could not launch payment URL with inAppBrowserView: $e");
-      try {
-        final url = Uri.parse(urlString);
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } catch (e2) {
-        _showToast('Không thể tự động mở trang thanh toán.', Colors.orange);
-      }
-    }
-  }
-
-  Future<void> _verifyPaymentAndComplete(
-    dynamic orderCode,
-    BuildContext dialogCtx,
-  ) async {
-    final statusRes = await ApiService.checkOrderPayment(orderCode);
-    if (!mounted) return;
-
-    if (statusRes != null && statusRes['status'] == 'PAID') {
-      Navigator.pop(dialogCtx); // close payment dialog
-      _showToast(
-        'Thanh toán thành công! Đơn hàng đã được xác nhận.',
-        Colors.green,
-      );
-      setState(() {
-        _cart.clear();
-        _fullnameController.clear();
-        _phoneController.clear();
-        _addressController.clear();
-      });
-      _tabController.animateTo(0);
-    } else if (statusRes != null && statusRes['status'] == 'CANCELLED') {
-      _showToast('Đơn hàng đã bị hủy.', Colors.red);
-    } else {
-      _showToast(
-        'Chưa nhận được xác nhận thanh toán từ ngân hàng. Vui lòng hoàn tất chuyển khoản.',
-        Colors.orange,
-      );
-    }
-  }
-
-  Future<void> _processCheckout() async {
-    if (_fullnameController.text.isEmpty ||
-        _phoneController.text.isEmpty ||
-        _addressController.text.isEmpty) {
-      _showToast('Vui lòng điền đầy đủ thông tin giao hàng!', Colors.orange);
-      return;
-    }
-
-    int subtotalAmt = _cart.fold(
-      0,
-      (sum, item) => sum + (item['price'] as int) * (item['qty'] as int),
-    );
-    int memberDiscountAmt = (subtotalAmt * 0.05).round();
-    int voucherDiscountAmt = _appliedVoucher != null
-        ? (_appliedVoucher!['discount'] as num).toInt()
-        : 0;
-    int afterDiscountAmt =
-        (subtotalAmt - memberDiscountAmt - voucherDiscountAmt).clamp(
-          0,
-          999999999,
-        );
-    int vatAmt = (afterDiscountAmt * 0.08).round();
-    int finalTotalAmt = (afterDiscountAmt + vatAmt);
-
-    final String mappedPaymentMethod = _paymentMethod == 'QR'
-        ? 'QR_PAY'
-        : _paymentMethod;
-
-    final orderData = {
-      'patientName': _fullnameController.text,
-      'patientPhone': _phoneController.text,
-      'shippingAddress': _addressController.text,
-      'paymentMethod': mappedPaymentMethod,
-      if (_appliedVoucher != null && _appliedVoucher!['code'] != null)
-        'voucherCode': _appliedVoucher!['code'],
-      'returnUrl': '${ApiService.baseUrl}/api/orders/payos-callback',
-      'cancelUrl':
-          '${ApiService.baseUrl}/api/orders/payos-callback?cancel=true',
-      'items': _cart
-          .map(
-            (item) => {
-              'medicineId':
-                  (item['id'] != null && item['id'].toString().isNotEmpty)
-                  ? item['id'].toString()
-                  : 'MED-001',
-              'name': item['name'],
-              'price': item['price'],
-              'quantity': item['qty'],
-            },
-          )
-          .toList(),
-      'totalAmount': finalTotalAmt,
-      'type': 'ONLINE',
-    };
-
-    // Show loading overlay
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Card(
-          color: Colors.white,
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: Color(0xFF0D47A1)),
-                SizedBox(height: 12),
-                Text(
-                  'Đang xử lý đơn hàng...',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    // ── ONLINE PAYMENT (QR / CARD) → gọi PayOS API ──
-    if (_paymentMethod == 'CARD' || _paymentMethod == 'QR') {
-      final payosResult = await ApiService.createPayOSLink(orderData);
-      if (!mounted) return;
-      Navigator.pop(context); // dismiss loading
-
-      if (payosResult != null) {
-        final payUrl =
-            payosResult['checkoutUrl'] ??
-            payosResult['paymentUrl'] ??
-            payosResult['url'] ??
-            '';
-        final orderId =
-            payosResult['orderCode'] ??
-            payosResult['orderId'] ??
-            payosResult['id'] ??
-            'ORD-${DateTime.now().millisecondsSinceEpoch}';
-
-        // Auto-launch URL
-        if (payUrl.isNotEmpty) {
-          _launchPaymentUrl(payUrl);
-        }
-
-        Timer? pollTimer;
-
-        showDialog(
-          context: context,
-          builder: (ctx) {
-            // Start background polling for payment status completion
-            pollTimer?.cancel();
-            pollTimer = Timer.periodic(const Duration(seconds: 2), (
-              timer,
-            ) async {
-              final statusRes = await ApiService.checkOrderPayment(orderId);
-              if (!mounted) {
-                timer.cancel();
-                return;
-              }
-              if (statusRes != null &&
-                  (statusRes['status'] == 'PAID' ||
-                      statusRes['paymentStatus'] == 'PAID')) {
-                timer.cancel();
-                if (Navigator.canPop(ctx)) {
-                  Navigator.of(ctx, rootNavigator: true).pop();
-                }
-                _showToast(
-                  'Thanh toán thành công! Đơn hàng đã được xác nhận.',
-                  Colors.green,
-                );
-                setState(() {
-                  _cart.clear();
-                  _fullnameController.clear();
-                  _phoneController.clear();
-                  _addressController.clear();
-                });
-                _tabController.animateTo(0);
-              }
-            });
-
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              title: Row(
-                children: [
-                  Icon(
-                    Icons.qr_code_scanner,
-                    color: Colors.blue.shade700,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Thanh Toán Trực Tuyến',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.blue.shade100),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.payment,
-                          size: 48,
-                          color: Colors.blue.shade700,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Đơn hàng #$orderId',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$_totalAmount ₫',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.blue.shade800,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (payUrl.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () => _launchPaymentUrl(payUrl),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade700,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(45),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text(
-                        'Mở Trang Thanh Toán PayOS',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Hoặc sao chép đường dẫn bên dưới nếu trình duyệt không tự mở:',
-                      style: TextStyle(fontSize: 9, color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: SelectableText(
-                        payUrl,
-                        style: const TextStyle(fontSize: 9, color: Colors.blue),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              actions: [
-                OutlinedButton.icon(
-                  onPressed: () {
-                    _verifyPaymentAndComplete(orderId, ctx);
-                  },
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text(
-                    'Kiểm tra thanh toán',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    pollTimer?.cancel();
-                    Navigator.pop(ctx);
-                    setState(() {
-                      _cart.clear();
-                      _fullnameController.clear();
-                      _phoneController.clear();
-                      _addressController.clear();
-                    });
-                    _tabController.animateTo(0);
-                  },
-                  child: const Text(
-                    'Bỏ qua & Về cửa hàng',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ).then((_) => pollTimer?.cancel());
-      } else {
-        // PayOS failed, fall back to CASH order
-        _showToast(
-          'Cổng thanh toán không phản hồi. Đang tạo đơn COD...',
-          Colors.orange,
-        );
-        final result = await ApiService.createOrder({
-          ...orderData,
-          'paymentMethod': 'CASH',
-        });
-        if (!mounted) return;
-        if (result != null) _showOrderSuccessDialog(result);
-      }
-      return;
-    }
-
-    // ── CASH (COD) ──
-    final result = await ApiService.createOrder(orderData);
-    if (!mounted) return;
-    Navigator.pop(context); // dismiss loading
-    if (result != null) {
-      _showOrderSuccessDialog(result);
-    } else {
-      _showToast('Không thể kết nối đến máy chủ để tạo đơn hàng.', Colors.red);
-    }
-  }
-
   void _showOrderSuccessDialog(Map<String, dynamic> result) {
     final orderId =
         result['orderId'] ??
@@ -1370,9 +1028,11 @@ class _CustomerScreenState extends State<CustomerScreen>
           children: [
             Icon(Icons.check_circle, color: Colors.green),
             SizedBox(width: 8),
-            Text(
-              'Đặt hàng thành công!',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Expanded(
+              child: Text(
+                'Đặt hàng thành công!',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -1396,6 +1056,14 @@ class _CustomerScreenState extends State<CustomerScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    'Mã đơn: $orderId',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo,
+                    ),
+                  ),
                   Text(
                     'Khách nhận: ${_fullnameController.text}',
                     style: const TextStyle(
@@ -1557,7 +1225,7 @@ class _CustomerScreenState extends State<CustomerScreen>
           _buildNewShopTab(),
           _buildCartTabWithHeader(),
           _buildAIConsultTabWithHeader(),
-          _buildCheckoutTabWithHeader(),
+          _buildRewardsTabWithHeader(),
           _buildProfileTabWithHeader(),
         ],
       ),
@@ -1565,7 +1233,7 @@ class _CustomerScreenState extends State<CustomerScreen>
         currentIndex: _tabController.index,
         onTap: (index) {
           _tabController.animateTo(index);
-          if (index == 4) {
+          if (index == 3 || index == 4) {
             _loadUserProfileAndOrders();
           }
         },
@@ -1591,8 +1259,8 @@ class _CustomerScreenState extends State<CustomerScreen>
             label: 'Tư vấn AI',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long),
-            label: 'Thanh toán',
+            icon: Icon(Icons.card_giftcard),
+            label: 'Điểm thưởng',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Đơn hàng'),
         ],
@@ -1667,15 +1335,214 @@ class _CustomerScreenState extends State<CustomerScreen>
     );
   }
 
-  Widget _buildCheckoutTabWithHeader() {
+  Widget _buildRewardsTabWithHeader() {
     return Column(
       children: [
-        _buildSimpleHeader(
-          'Tiến Hành Đặt Hàng',
-          onBack: () => _tabController.animateTo(_cart.isEmpty ? 0 : 1),
-        ),
-        Expanded(child: _buildCheckoutTab()),
+        _buildSimpleHeader('Điểm Thưởng & Ưu Đãi VIP'),
+        Expanded(child: _buildRewardsTab()),
       ],
+    );
+  }
+
+  Widget _buildRewardsTab() {
+    final points = _userProfile?['points'] ?? _userProfile?['loyaltyPoints'] ?? 0;
+    final name = _userProfile?['fullName'] ?? 'Khách Hàng';
+    final memberTier = points >= 1000 ? 'Thành Viên Vàng (Gold)' : points >= 500 ? 'Thành Viên Bạc (Silver)' : 'Thành Viên Đồng (Bronze)';
+
+    return RefreshIndicator(
+      onRefresh: _loadUserProfileAndOrders,
+      color: const Color(0xFF0D47A1),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Points Header Card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF8F00), Color(0xFFFFB300)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.amber.withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              memberTier,
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Icon(Icons.stars, color: Colors.white, size: 44),
+                    ],
+                  ),
+                  const Divider(color: Colors.white38, height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Điểm thưởng khả dụng:',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      Text(
+                        '$points điểm',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            const Text(
+              'Đổi Voucher Giảm Giá',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+
+            if (_isLoadingVouchers)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: CircularProgressIndicator(color: Color(0xFF0D47A1)),
+                ),
+              )
+            else if (_vouchers.isEmpty)
+              Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.confirmation_number_outlined, color: Colors.grey),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Hiện chưa có mã giảm giá nào khả dụng trên hệ thống.',
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ..._vouchers.map((v) {
+                final code = (v['code'] ?? '').toString();
+                final discountType = (v['discountType'] ?? '').toString();
+                final val = v['discountValue'] is num ? (v['discountValue'] as num).toInt() : 0;
+                final minOrder = v['minOrderValue'] is num ? (v['minOrderValue'] as num).toInt() : 0;
+
+                final discountText = discountType == 'PERCENTAGE' ? '-$val%' : '-${val.toString()} đ';
+                final minOrderText = minOrder > 0 ? 'Áp dụng cho đơn từ ${minOrder.toString()} đ' : 'Áp dụng cho mọi đơn hàng';
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFFFF8E1),
+                      child: Icon(Icons.confirmation_number, color: Colors.amber),
+                    ),
+                    title: Text('Mã $code ($discountText)', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(minOrderText),
+                    trailing: ElevatedButton(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Đã lưu mã $code! Hãy nhập mã này khi thanh toán.')),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF8F00),
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Nhận mã'),
+                    ),
+                  ),
+                );
+              }),
+
+            const SizedBox(height: 20),
+            const Text(
+              'Đặc Quyền Thành Viên VIP',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, color: Colors.amber),
+                        SizedBox(width: 12),
+                        Expanded(child: Text('Tích 1% điểm thưởng trên mỗi hóa đơn mua lẻ và mua online.')),
+                      ],
+                    ),
+                    Divider(height: 20),
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, color: Colors.amber),
+                        SizedBox(width: 12),
+                        Expanded(child: Text('Tư vấn dược sĩ AI ưu tiên miễn phí 24/7.')),
+                      ],
+                    ),
+                    Divider(height: 20),
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, color: Colors.amber),
+                        SizedBox(width: 12),
+                        Expanded(child: Text('Quà tặng sinh nhật và mã giảm giá theo từng hạng thẻ.')),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2987,7 +2854,7 @@ class _CustomerScreenState extends State<CustomerScreen>
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(
-                  onPressed: () => _tabController.animateTo(3),
+                  onPressed: _openCheckoutScreen,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D47A1),
                     foregroundColor: Colors.white,
@@ -3541,438 +3408,6 @@ class _CustomerScreenState extends State<CustomerScreen>
                 ),
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCheckoutTab() {
-    if (_cart.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey),
-            SizedBox(height: 12),
-            Text(
-              'Đơn hàng trống. Vui lòng thêm thuốc vào giỏ trước!',
-              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Thông tin người nhận hàng',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: Color(0xFF2C3E50),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Inputs
-            TextField(
-              controller: _fullnameController,
-              decoration: InputDecoration(
-                labelText: 'Họ và tên *',
-                prefixIcon: const Icon(Icons.person),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: 'Số điện thoại liên hệ *',
-                prefixIcon: const Icon(Icons.phone),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _addressController,
-              maxLines: 2,
-              decoration: InputDecoration(
-                labelText: 'Địa chỉ giao hàng nhận thuốc *',
-                prefixIcon: const Icon(Icons.location_on),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Voucher Input Card
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _appliedVoucher != null
-                      ? Colors.green.shade400
-                      : Colors.grey.shade300,
-                  width: _appliedVoucher != null ? 1.5 : 1.0,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.confirmation_number_outlined,
-                        color: Color(0xFF0D47A1),
-                        size: 20,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Mã Giảm Giá / Voucher',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _voucherCodeController,
-                          textCapitalization: TextCapitalization.characters,
-                          decoration: InputDecoration(
-                            hintText: 'Mã (VD: SUMMER20, FIXED30)',
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: _isValidatingVoucher
-                            ? null
-                            : _applyVoucherCode,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D47A1),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: _isValidatingVoucher
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                _appliedVoucher != null ? 'BỎ MÃ' : 'ÁP DỤNG',
-                              ),
-                      ),
-                    ],
-                  ),
-                  if (_voucherErrorMsg != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      _voucherErrorMsg!,
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                  if (_appliedVoucher != null) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Đã áp dụng mã ${_appliedVoucher!['code']} (-${_appliedVoucher!['discount']} ₫)',
-                              style: const TextStyle(
-                                color: Colors.green,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            const Text(
-              'Hình thức thanh toán',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: Color(0xFF2C3E50),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Payment method choices
-            Row(
-              children: [
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Text(
-                      'Tiền mặt',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    selected: _paymentMethod == "CASH",
-                    onSelected: (val) =>
-                        setState(() => _paymentMethod = "CASH"),
-                    selectedColor: const Color(
-                      0xFF0D47A1,
-                    ).withValues(alpha: 0.15),
-                    checkmarkColor: const Color(0xFF0D47A1),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Text(
-                      'Thẻ tín dụng',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    selected: _paymentMethod == "CARD",
-                    onSelected: (val) =>
-                        setState(() => _paymentMethod = "CARD"),
-                    selectedColor: const Color(
-                      0xFF0D47A1,
-                    ).withValues(alpha: 0.15),
-                    checkmarkColor: const Color(0xFF0D47A1),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Text(
-                      'VNPay / QR',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    selected: _paymentMethod == "QR",
-                    onSelected: (val) => setState(() => _paymentMethod = "QR"),
-                    selectedColor: const Color(
-                      0xFF0D47A1,
-                    ).withValues(alpha: 0.15),
-                    checkmarkColor: const Color(0xFF0D47A1),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Pricing summary
-            Builder(
-              builder: (ctx) {
-                final int voucherDiscountAmt = _appliedVoucher != null
-                    ? (_appliedVoucher!['discount'] as num).toInt()
-                    : 0;
-                final int afterDiscount =
-                    (_subtotal - _discount - voucherDiscountAmt).clamp(
-                      0,
-                      999999999,
-                    );
-                final int vatAmt = (afterDiscount * 0.08).round();
-                final int finalTotal = (afterDiscount + vatAmt);
-
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Tạm tính:',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          Text(
-                            '$_subtotal ₫',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Ưu đãi thành viên (5%):',
-                            style: TextStyle(fontSize: 12, color: Colors.red),
-                          ),
-                          Text(
-                            '-$_discount ₫',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_appliedVoucher != null) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Voucher (${_appliedVoucher!['code']}):',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '-$voucherDiscountAmt ₫',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'VAT (8%):',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          Text(
-                            '+$vatAmt ₫',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Divider(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'TỔNG THANH TOÁN:',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Text(
-                            '$finalTotal ₫',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.red,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-
-            ElevatedButton(
-              onPressed: _processCheckout,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0D47A1),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: const Text(
-                'XÁC NHẬN THANH TOÁN',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                ),
-              ),
-            ),
           ],
         ),
       ),
