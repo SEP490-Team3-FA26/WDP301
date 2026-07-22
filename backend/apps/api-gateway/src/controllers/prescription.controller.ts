@@ -90,7 +90,7 @@ export class PrescriptionController implements OnModuleInit {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for STT + RAG + LLM
 
       const response = await fetch('http://ai-service:8000/api/prescription', {
         method: 'POST',
@@ -158,4 +158,3 @@ export class PrescriptionController implements OnModuleInit {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.get', { code });
   }
 }
-

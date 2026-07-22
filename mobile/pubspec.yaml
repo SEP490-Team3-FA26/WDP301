@@ -42,6 +42,7 @@ dependencies:
   record: ^6.2.1
   url_launcher: ^6.3.2
   path_provider: ^2.1.6
+  flutter_animate: ^4.5.2
 
 
 dev_dependencies:

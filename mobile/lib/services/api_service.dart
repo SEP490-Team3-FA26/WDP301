@@ -6,20 +6,14 @@ import 'package:http_parser/http_parser.dart';
 import 'env_service.dart';
 
 class ApiService {
-  // Read environment variables passed via file .env first, fallback to hardcoded local IP
-  static String get baseUrl {
-    final fileEnvUrl = EnvService.get('API_URL') ?? EnvService.get('API_BASE_URL');
-    if (fileEnvUrl != null && fileEnvUrl.isNotEmpty) return fileEnvUrl;
-    return kIsWeb ? 'http://localhost:4000' : 'http://127.0.0.1:4000';
-  }
-
-  static String get fallbackUrl => baseUrl;
-
-  static String get aiBaseUrl {
-    final fileEnvAiUrl = EnvService.get('AI_URL') ?? EnvService.get('AI_BASE_URL');
-    if (fileEnvAiUrl != null && fileEnvAiUrl.isNotEmpty) return fileEnvAiUrl;
-    return kIsWeb ? 'http://localhost:8000' : 'http://127.0.0.1:8000';
-  }
+  // Configurable base URL: dynamically falls back to localhost on Web
+  static const String baseUrl = kIsWeb
+      ? 'http://localhost:4000'
+      : '192.168.1.104';                                                        // ae mô gặp vấn đề về khúc ni thì mở terminal ping cái lệnh này để lấy địa chỉ mạng nhé ipconfig getifaddr en0
+  static const String fallbackUrl = 'http://localhost:4000';
+  static const String aiBaseUrl = kIsWeb
+      ? 'http://localhost:8000'
+      : 'http://10.0.2.2:8000';
 
   // JWT token stored globally after login
   static String currentToken = '';
@@ -616,7 +610,7 @@ class ApiService {
       final response = await http
           .get(Uri.parse('$baseUrl/api/medicines/$id'), headers: _authHeaders)
           .timeout(const Duration(seconds: 30));
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (e) {
@@ -657,28 +651,36 @@ class ApiService {
 
   // Get User Profile using JWT token
   static Future<Map<String, dynamic>?> getProfile([String? token]) async {
-    final activeToken = (token != null && token.isNotEmpty) ? token : currentToken;
+    final activeToken = (token != null && token.isNotEmpty)
+        ? token
+        : currentToken;
     try {
-final response = await http.get(
-        Uri.parse('$baseUrl/api/auth/profile'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (activeToken.isNotEmpty) 'Authorization': 'Bearer $activeToken',
-        },
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/auth/profile'),
+            headers: {
+              'Content-Type': 'application/json',
+              if (activeToken.isNotEmpty)
+                'Authorization': 'Bearer $activeToken',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (_) {
       try {
-final response = await http.get(
-          Uri.parse('$fallbackUrl/api/auth/profile'),
-          headers: {
-            'Content-Type': 'application/json',
-            if (activeToken.isNotEmpty) 'Authorization': 'Bearer $activeToken',
-          },
-        ).timeout(const Duration(seconds: 30));
+        final response = await http
+            .get(
+              Uri.parse('$fallbackUrl/api/auth/profile'),
+              headers: {
+                'Content-Type': 'application/json',
+                if (activeToken.isNotEmpty)
+                  'Authorization': 'Bearer $activeToken',
+              },
+            )
+            .timeout(const Duration(seconds: 30));
 
         if (response.statusCode == 200) {
           return jsonDecode(response.body) as Map<String, dynamic>;
@@ -687,6 +689,10 @@ final response = await http.get(
         debugPrint("Failed to fetch user profile: $e");
       }
     }
+    if (activeToken.isNotEmpty) {
+      return null;
+    }
+
     return {
       'id': 'USER-CUSTOMER-001',
       'fullName': 'Khách Hàng Thành Viên',
@@ -698,141 +704,6 @@ final response = await http.get(
       'address': '123 Nguyễn Văn Linh, Q. Hải Châu, Đà Nẵng',
     };
   }
-
-  // Register new user account
-  static Future<Map<String, dynamic>> register({
-    required String fullName,
-    required String email,
-    required String password,
-    String? phone,
-    String role = 'user',
-  }) async {
-    final body = jsonEncode({
-      'fullName': fullName,
-      'email': email,
-      'password': password,
-      'role': role,
-      if (phone != null && phone.isNotEmpty) 'phone': phone,
-    });
-
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      ).timeout(const Duration(seconds: 15));
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return {'success': true, 'data': data};
-      } else {
-        final message = data is Map ? (data['message'] ?? 'Đăng ký thất bại') : 'Đăng ký thất bại';
-        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
-    }
-  }
-
-  // Verify email using OTP token
-  static Future<Map<String, dynamic>> verifyEmail({
-    required String email,
-    required String token,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/verify-email'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'token': token}),
-      ).timeout(const Duration(seconds: 15));
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return {'success': true, 'data': data};
-      } else {
-        final message = data is Map ? (data['message'] ?? 'Xác thực OTP thất bại') : 'Xác thực OTP thất bại';
-        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
-    }
-  }
-
-  // Resend OTP verification email
-  static Future<Map<String, dynamic>> resendVerification({
-    required String email,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/resend-verification'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
-      ).timeout(const Duration(seconds: 15));
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return {'success': true, 'data': data};
-      } else {
-        final message = data is Map ? (data['message'] ?? 'Gửi lại OTP thất bại') : 'Gửi lại OTP thất bại';
-        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
-    }
-  }
-
-  // Request forgot password OTP code
-  static Future<Map<String, dynamic>> forgotPassword({
-    required String email,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/forgot-password'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
-      ).timeout(const Duration(seconds: 15));
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return {'success': true, 'data': data};
-      } else {
-        final message = data is Map ? (data['message'] ?? 'Yêu cầu quên mật khẩu thất bại') : 'Yêu cầu quên mật khẩu thất bại';
-        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
-    }
-  }
-
-  // Reset password using OTP token & new password
-  static Future<Map<String, dynamic>> resetPassword({
-    required String email,
-    required String token,
-    required String newPassword,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/reset-password'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'token': token,
-          'newPassword': newPassword,
-        }),
-      ).timeout(const Duration(seconds: 15));
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return {'success': true, 'data': data};
-      } else {
-        final message = data is Map ? (data['message'] ?? 'Đặt lại mật khẩu thất bại') : 'Đặt lại mật khẩu thất bại';
-        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
-    }
-  }
-
 
   // Fetch Purchase Orders for Director / HQ Approval
   static Future<List<dynamic>> getPurchaseOrders() async {
@@ -972,14 +843,18 @@ final response = await http.get(
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
-debugPrint('createOrder status: ${response.statusCode} body: ${response.body}');
+      debugPrint(
+        'createOrder status: ${response.statusCode} body: ${response.body}',
+      );
     } catch (_) {
       try {
-        final response = await http.post(
-          Uri.parse('$fallbackUrl/api/orders'),
-          headers: _authHeaders,
-          body: jsonEncode(orderData),
-        ).timeout(const Duration(seconds: 25));
+        final response = await http
+            .post(
+              Uri.parse('$fallbackUrl/api/orders'),
+              headers: _authHeaders,
+              body: jsonEncode(orderData),
+            )
+            .timeout(const Duration(seconds: 25));
         if (response.statusCode == 200 || response.statusCode == 201) {
           return jsonDecode(response.body) as Map<String, dynamic>;
         }
@@ -1005,14 +880,18 @@ debugPrint('createOrder status: ${response.statusCode} body: ${response.body}');
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
-debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body}');
+      debugPrint(
+        'createPayOSLink status: ${response.statusCode} body: ${response.body}',
+      );
     } catch (_) {
       try {
-        final response = await http.post(
-          Uri.parse('$fallbackUrl/api/orders/payos-link'),
-          headers: _authHeaders,
-          body: jsonEncode(orderData),
-        ).timeout(const Duration(seconds: 25));
+        final response = await http
+            .post(
+              Uri.parse('$fallbackUrl/api/orders/payos-link'),
+              headers: _authHeaders,
+              body: jsonEncode(orderData),
+            )
+            .timeout(const Duration(seconds: 25));
         if (response.statusCode == 200 || response.statusCode == 201) {
           return jsonDecode(response.body) as Map<String, dynamic>;
         }
@@ -1024,21 +903,27 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
   }
 
   // Check PayOS payment status for QR/Online payment
-  static Future<Map<String, dynamic>?> checkOrderPayment(dynamic orderCode) async {
+  static Future<Map<String, dynamic>?> checkOrderPayment(
+    dynamic orderCode,
+  ) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/orders/check/$orderCode'),
-        headers: _authHeaders,
-      ).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/orders/check/$orderCode'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (_) {
       try {
-        final response = await http.get(
-          Uri.parse('$fallbackUrl/api/orders/check/$orderCode'),
-          headers: _authHeaders,
-        ).timeout(const Duration(seconds: 10));
+        final response = await http
+            .get(
+              Uri.parse('$fallbackUrl/api/orders/check/$orderCode'),
+              headers: _authHeaders,
+            )
+            .timeout(const Duration(seconds: 10));
         if (response.statusCode == 200) {
           return jsonDecode(response.body) as Map<String, dynamic>;
         }
@@ -1049,9 +934,11 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
     return null;
   }
 
-
   // Validate Voucher Code
-  static Future<Map<String, dynamic>> validateVoucher(String code, num subtotal) async {
+  static Future<Map<String, dynamic>> validateVoucher(
+    String code,
+    num subtotal,
+  ) async {
     try {
       final response = await http
           .post(
@@ -1076,7 +963,10 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
     } catch (e) {
       debugPrint("validateVoucher API error: $e");
     }
-    return {'error': true, 'message': 'Không thể kết nối máy chủ kiểm tra mã giảm giá'};
+    return {
+      'error': true,
+      'message': 'Không thể kết nối máy chủ kiểm tra mã giảm giá',
+    };
   }
 
   // Get list of active vouchers
@@ -1105,7 +995,10 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
         query = '?phone=${Uri.encodeComponent(phone.trim())}';
       }
       final response = await http
-          .get(Uri.parse('$baseUrl/api/orders/my-orders$query'), headers: _authHeaders)
+          .get(
+            Uri.parse('$baseUrl/api/orders/my-orders$query'),
+            headers: _authHeaders,
+          )
           .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -1212,6 +1105,41 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
   }
 
   // UC-34: Get voice-activated AI consultation recommendation (Web-safe: text-based)
+  static Future<Map<String, dynamic>?> getVoicePrescriptionBytes(
+    Uint8List wavBytes,
+  ) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/prescriptions/recommend'),
+      );
+      if (currentToken.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $currentToken';
+      }
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          wavBytes,
+          filename: 'symptoms.wav',
+          contentType: MediaType('audio', 'wav'),
+        ),
+      );
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 60),
+      );
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      debugPrint(
+        "Voice prescription API returned ${response.statusCode}: ${response.body}",
+      );
+    } catch (e) {
+      debugPrint("Voice prescription API failed: $e");
+    }
+    return null;
+  }
+
   static Future<Map<String, dynamic>?> getVoicePrescription(
     String audioPath,
   ) async {
@@ -1266,25 +1194,15 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
             headers: _authHeaders,
             body: jsonEncode({'symptoms': symptoms}),
           )
-          .timeout(const Duration(seconds: 30));
-      if (response.statusCode == 200) {
+          .timeout(const Duration(seconds: 60));
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
-    } catch (_) {
-      try {
-        final response = await http
-            .post(
-              Uri.parse('$fallbackUrl/api/prescriptions/symptom-consult'),
-              headers: _authHeaders,
-              body: jsonEncode({'symptoms': symptoms}),
-            )
-            .timeout(const Duration(seconds: 30));
-        if (response.statusCode == 200) {
-          return jsonDecode(response.body) as Map<String, dynamic>;
-        }
-      } catch (e) {
-        debugPrint("Text prescription API failed: $e");
-      }
+      debugPrint(
+        "Text prescription API returned ${response.statusCode}: ${response.body}",
+      );
+    } catch (e) {
+      debugPrint("Text prescription API failed: $e");
     }
     return null;
   }
@@ -1496,7 +1414,10 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
     return [];
   }
 
-  static Future<Map<String, dynamic>?> scanPrescriptionAI(List<List<int>> imageBytesList, {String branchId = 'CENTRAL_WH'}) async {
+  static Future<Map<String, dynamic>?> scanPrescriptionAI(
+    List<List<int>> imageBytesList, {
+    String branchId = 'CENTRAL_WH',
+  }) async {
     try {
       final uri = Uri.parse('$baseUrl/api/prescriptions/scan-ai');
       final request = http.MultipartRequest('POST', uri);
@@ -1675,7 +1596,10 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
   static Future<List<dynamic>> getLowStockReport() async {
     try {
       final response = await http
-          .get(Uri.parse('$baseUrl/api/medicines/low-stock-report'), headers: _authHeaders)
+          .get(
+            Uri.parse('$baseUrl/api/medicines/low-stock-report'),
+            headers: _authHeaders,
+          )
           .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -1689,7 +1613,9 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
   }
 
   // Create employee account
-  static Future<Map<String, dynamic>?> createEmployee(Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>?> createEmployee(
+    Map<String, dynamic> data,
+  ) async {
     try {
       final response = await http
           .post(
@@ -1711,7 +1637,10 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
   static Future<List<dynamic>> getSafeStockChain() async {
     try {
       final response = await http
-          .get(Uri.parse('$baseUrl/api/medicines/safe-stock-chain'), headers: _authHeaders)
+          .get(
+            Uri.parse('$baseUrl/api/medicines/safe-stock-chain'),
+            headers: _authHeaders,
+          )
           .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -1728,7 +1657,10 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
   static Future<List<dynamic>> getAuditLogs() async {
     try {
       final response = await http
-          .get(Uri.parse('$baseUrl/api/users/audit-logs'), headers: _authHeaders)
+          .get(
+            Uri.parse('$baseUrl/api/users/audit-logs'),
+            headers: _authHeaders,
+          )
           .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -1742,16 +1674,15 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
   }
 
   // Fetch Director Dashboard summary
-  static Future<Map<String, dynamic>?> getDashboardSummary([String? branchId]) async {
+  static Future<Map<String, dynamic>?> getDashboardSummary([
+    String? branchId,
+  ]) async {
     try {
       final url = (branchId != null && branchId.isNotEmpty)
           ? '$baseUrl/api/reports/dashboard/summary?branchId=$branchId'
           : '$baseUrl/api/reports/dashboard/summary';
       final response = await http
-          .get(
-            Uri.parse(url),
-            headers: _authHeaders,
-          )
+          .get(Uri.parse(url), headers: _authHeaders)
           .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -1779,6 +1710,3 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
     return [];
   }
 }
-
-
-
