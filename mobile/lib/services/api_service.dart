@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import 'env_service.dart';
+
 class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
   static const String baseUrl = kIsWeb

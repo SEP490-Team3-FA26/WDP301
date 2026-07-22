@@ -12,6 +12,8 @@ import 'warehouse_screen.dart';
 import 'branch_screen.dart';
 import 'customer_screen.dart';
 import 'pharmacist_screen.dart';
+import 'register_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -108,6 +110,7 @@ class _LoginScreenState extends State<LoginScreen>
           ApiService.currentToken = token;
           
           final profile = await ApiService.getProfile(token);
+          if (!mounted) return;
           Navigator.of(context).pop(); // dismiss loading
           
           if (profile != null) {
@@ -305,6 +308,34 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
 
+  Future<void> _navigateToRegister() async {
+    final registeredEmail = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const RegisterScreen()),
+    );
+
+    if (registeredEmail != null && registeredEmail.isNotEmpty) {
+      setState(() {
+        _emailController.text = registeredEmail;
+        _passwordController.clear();
+      });
+    }
+  }
+
+  Future<void> _navigateToForgotPassword() async {
+    final resetEmail = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+    );
+
+    if (resetEmail != null && resetEmail.isNotEmpty) {
+      setState(() {
+        _emailController.text = resetEmail;
+        _passwordController.clear();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -397,7 +428,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   Icons.email_outlined,
                                   color: Color(0xFF1A73E8),
                                 ),
-                                hintText: 'Email nhân viên',
+                                hintText: 'Email nhân viên / Khách hàng',
                                 hintStyle: const TextStyle(
                                   color: Colors.black38,
                                 ),
@@ -445,7 +476,22 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: _navigateToForgotPassword,
+                                child: const Text(
+                                  'Quên mật khẩu?',
+                                  style: TextStyle(
+                                    color: Color(0xFF1A73E8),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
 
                             // Login Button
                             ElevatedButton(
@@ -500,16 +546,16 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                                 elevation: 0,
                               ),
-                              child: Row(
+                              child: const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.g_mobiledata,
                                     size: 32,
                                     color: Colors.red,
                                   ),
-                                  const SizedBox(width: 12),
-                                  const Text(
+                                  SizedBox(width: 12),
+                                  Text(
                                     'Đăng nhập bằng Google',
                                     style: TextStyle(
                                       fontSize: 15,
@@ -519,6 +565,27 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ],
                               ),
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'Chưa có tài khoản? ',
+                                  style: TextStyle(color: Colors.black54),
+                                ),
+                                GestureDetector(
+                                  onTap: _navigateToRegister,
+                                  child: const Text(
+                                    'Đăng ký ngay',
+                                    style: TextStyle(
+                                      color: Color(0xFF1A73E8),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
