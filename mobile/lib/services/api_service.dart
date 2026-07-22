@@ -1384,5 +1384,259 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
     }
     return null;
   }
+
+  // Get sample prescription images from backend AI service
+  static Future<List<Map<String, dynamic>>> getSamplePrescriptions() async {
+    final headers = {
+      ..._authHeaders,
+      'x-internal-token': 'wdp301-super-secret-key-change-in-production',
+    };
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/ai/sample-prescriptions'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded != null && decoded['success'] == true) {
+          final samples = decoded['samples'] as List? ?? [];
+          return List<Map<String, dynamic>>.from(samples);
+        }
+      }
+    } catch (_) {
+      try {
+        final localAiUrl = baseUrl.contains('10.0.2.2')
+            ? 'http://10.0.2.2:8000'
+            : 'http://localhost:8000';
+        final response = await http
+            .get(
+              Uri.parse('$localAiUrl/api/ai/sample-prescriptions'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 10));
+
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded != null && decoded['success'] == true) {
+            final samples = decoded['samples'] as List? ?? [];
+            return List<Map<String, dynamic>>.from(samples);
+          }
+        }
+      } catch (e) {
+        debugPrint("Failed to fetch sample prescriptions: $e");
+      }
+    }
+    return [];
+  }
+
+  // Scan a sample prescription image directly from sample dataset
+  static Future<Map<String, dynamic>?> scanSamplePrescription(
+    String filename,
+  ) async {
+    final body = jsonEncode({'filename': filename});
+    final headers = {
+      ..._authHeaders,
+      'x-internal-token': 'wdp301-super-secret-key-change-in-production',
+    };
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/ai/scan-sample-prescription'),
+            headers: headers,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception("API Gateway returned ${response.statusCode}");
+      }
+    } catch (_) {
+      try {
+        final localAiUrl = baseUrl.contains('10.0.2.2')
+            ? 'http://10.0.2.2:8000'
+            : 'http://localhost:8000';
+        final response = await http
+            .post(
+              Uri.parse('$localAiUrl/api/ai/scan-sample-prescription'),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 30));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint("Failed to scan sample prescription: $e");
+      }
+    }
+    return null;
+  }
+
+  // Fetch admin employee list
+  static Future<List<dynamic>> getEmployees() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/admin/employees'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) return decoded;
+        if (decoded is Map && decoded['data'] is List) return decoded['data'];
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch employees: $e");
+    }
+    return [];
+  }
+
+  // Toggle ban/unban employee account
+  static Future<bool> toggleBanEmployee(String employeeId) async {
+    try {
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/api/admin/employees/$employeeId/ban'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 5));
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint("Failed to toggle ban employee: $e");
+      return false;
+    }
+  }
+
+  // Fetch branches list
+  static Future<List<dynamic>> getBranches() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/branches'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) return decoded;
+        if (decoded is Map && decoded['data'] is List) return decoded['data'];
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch branches: $e");
+    }
+    return [];
+  }
+
+  // Fetch low stock report
+  static Future<List<dynamic>> getLowStockReport() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/medicines/low-stock-report'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) return decoded;
+        if (decoded is Map && decoded['data'] is List) return decoded['data'];
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch low stock report: $e");
+    }
+    return [];
+  }
+
+  // Create employee account
+  static Future<Map<String, dynamic>?> createEmployee(Map<String, dynamic> data) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/admin/employees'),
+            headers: _authHeaders,
+            body: jsonEncode(data),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint("Failed to create employee: $e");
+    }
+    return null;
+  }
+
+  // Fetch AI Safe Stock Chain Analysis
+  static Future<List<dynamic>> getSafeStockChain() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/medicines/safe-stock-chain'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) return decoded;
+        if (decoded is Map && decoded['data'] is List) return decoded['data'];
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch safe stock chain: $e");
+    }
+    return [];
+  }
+
+  // Fetch Audit Logs
+  static Future<List<dynamic>> getAuditLogs() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/users/audit-logs'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) return decoded;
+        if (decoded is Map && decoded['data'] is List) return decoded['data'];
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch audit logs: $e");
+    }
+    return [];
+  }
+
+  // Fetch Director Dashboard summary
+  static Future<Map<String, dynamic>?> getDashboardSummary([String? branchId]) async {
+    try {
+      final url = (branchId != null && branchId.isNotEmpty)
+          ? '$baseUrl/api/reports/dashboard/summary?branchId=$branchId'
+          : '$baseUrl/api/reports/dashboard/summary';
+      final response = await http
+          .get(
+            Uri.parse(url),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch dashboard summary: $e");
+    }
+    return null;
+  }
+
+  // Fetch Stock Transfers list (Lượt chuyển kho)
+  static Future<List<dynamic>> getStockTransfers() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/stock-transfers'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) return decoded;
+        if (decoded is Map && decoded['data'] is List) return decoded['data'];
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch stock transfers: $e");
+    }
+    return [];
+  }
 }
+
+
 

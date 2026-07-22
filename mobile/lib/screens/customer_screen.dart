@@ -64,7 +64,7 @@ class _CustomerScreenState extends State<CustomerScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -1254,12 +1254,16 @@ class _CustomerScreenState extends State<CustomerScreen>
           _buildCartTabWithHeader(),
           _buildAIConsultTabWithHeader(),
           _buildCheckoutTabWithHeader(),
+          _buildProfileTabWithHeader(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tabController.index,
         onTap: (index) {
           _tabController.animateTo(index);
+          if (index == 4) {
+            _loadUserProfileAndOrders();
+          }
         },
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFF0D47A1),
@@ -1285,6 +1289,10 @@ class _CustomerScreenState extends State<CustomerScreen>
           BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long),
             label: 'Thanh toán',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history),
+            label: 'Đơn hàng',
           ),
         ],
       ),
@@ -1347,6 +1355,15 @@ class _CustomerScreenState extends State<CustomerScreen>
       children: [
         _buildSimpleHeader('Tiến Hành Đặt Hàng'),
         Expanded(child: _buildCheckoutTab()),
+      ],
+    );
+  }
+
+  Widget _buildProfileTabWithHeader() {
+    return Column(
+      children: [
+        _buildSimpleHeader('Lịch Sử Đơn Hàng & Tài Khoản'),
+        Expanded(child: _buildProfileTab()),
       ],
     );
   }
@@ -1502,7 +1519,10 @@ class _CustomerScreenState extends State<CustomerScreen>
             ],
           ),
           OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              _tabController.animateTo(4);
+              _loadUserProfileAndOrders();
+            },
             icon: const Icon(Icons.receipt_long, size: 16),
             label: const Text('Đơn của tôi'),
             style: OutlinedButton.styleFrom(
