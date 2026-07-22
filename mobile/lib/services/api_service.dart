@@ -3,15 +3,23 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import 'env_service.dart';
+
 class ApiService {
-  // Configurable base URL: dynamically falls back to localhost on Web
-  static const String baseUrl = kIsWeb
-      ? 'http://localhost:4000'
-      : 'http://192.168.0.172';
-  static const String fallbackUrl = 'http://localhost:4000';
-  static const String aiBaseUrl = kIsWeb
-      ? 'http://localhost:8000'
-      : 'http://10.0.2.2:8000';
+  // Read environment variables passed via file .env first, fallback to hardcoded local IP
+  static String get baseUrl {
+    final fileEnvUrl = EnvService.get('API_URL') ?? EnvService.get('API_BASE_URL');
+    if (fileEnvUrl != null && fileEnvUrl.isNotEmpty) return fileEnvUrl;
+    return kIsWeb ? 'http://localhost:4000' : 'http://127.0.0.1:4000';
+  }
+
+  static String get fallbackUrl => baseUrl;
+
+  static String get aiBaseUrl {
+    final fileEnvAiUrl = EnvService.get('AI_URL') ?? EnvService.get('AI_BASE_URL');
+    if (fileEnvAiUrl != null && fileEnvAiUrl.isNotEmpty) return fileEnvAiUrl;
+    return kIsWeb ? 'http://localhost:8000' : 'http://127.0.0.1:8000';
+  }
 
   // JWT token stored globally after login
   static String currentToken = '';
@@ -689,6 +697,140 @@ final response = await http.get(
       'memberTier': 'Vàng (Gold Member)',
       'address': '123 Nguyễn Văn Linh, Q. Hải Châu, Đà Nẵng',
     };
+  }
+
+  // Register new user account
+  static Future<Map<String, dynamic>> register({
+    required String fullName,
+    required String email,
+    required String password,
+    String? phone,
+    String role = 'user',
+  }) async {
+    final body = jsonEncode({
+      'fullName': fullName,
+      'email': email,
+      'password': password,
+      'role': role,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      } else {
+        final message = data is Map ? (data['message'] ?? 'Đăng ký thất bại') : 'Đăng ký thất bại';
+        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
+    }
+  }
+
+  // Verify email using OTP token
+  static Future<Map<String, dynamic>> verifyEmail({
+    required String email,
+    required String token,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/verify-email'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'token': token}),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      } else {
+        final message = data is Map ? (data['message'] ?? 'Xác thực OTP thất bại') : 'Xác thực OTP thất bại';
+        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
+    }
+  }
+
+  // Resend OTP verification email
+  static Future<Map<String, dynamic>> resendVerification({
+    required String email,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/resend-verification'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      } else {
+        final message = data is Map ? (data['message'] ?? 'Gửi lại OTP thất bại') : 'Gửi lại OTP thất bại';
+        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
+    }
+  }
+
+  // Request forgot password OTP code
+  static Future<Map<String, dynamic>> forgotPassword({
+    required String email,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      } else {
+        final message = data is Map ? (data['message'] ?? 'Yêu cầu quên mật khẩu thất bại') : 'Yêu cầu quên mật khẩu thất bại';
+        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
+    }
+  }
+
+  // Reset password using OTP token & new password
+  static Future<Map<String, dynamic>> resetPassword({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'token': token,
+          'newPassword': newPassword,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      } else {
+        final message = data is Map ? (data['message'] ?? 'Đặt lại mật khẩu thất bại') : 'Đặt lại mật khẩu thất bại';
+        return {'success': false, 'message': message is List ? message.join(', ') : message.toString()};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối máy chủ: $e'};
+    }
   }
 
 
