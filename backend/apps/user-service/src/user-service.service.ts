@@ -750,7 +750,10 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
     if (query?.role) {
       filter.role = query.role;
     }
-    if (query?.branchId) {
+    
+    if (query?.unassigned === 'true' || query?.unassigned === true) {
+      filter.branchId = { $in: [null, ""] };
+    } else if (query?.branchId) {
       filter.branchId = query.branchId;
     }
 
@@ -798,6 +801,15 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
     const result = employee.toObject();
     delete result.passwordHash;
     return result;
+  }
+
+  async deleteEmployee(id: string) {
+    this.logger.log(`Deleting employee: ${id}`);
+    const employee = await this.userModel.findByIdAndDelete(id).exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+    return { success: true, message: 'Xóa nhân viên thành công' };
   }
 }
 

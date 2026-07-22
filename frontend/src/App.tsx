@@ -65,6 +65,7 @@ import { BranchRequisition } from "./pages/branch/BranchRequisition";
 import { BranchStockReceive } from "./pages/branch/BranchStockReceive";
 import { BranchInventory } from "./pages/branch/BranchInventory";
 import { BranchTransfer } from "./pages/branch/BranchTransfer";
+import { BranchEmployees } from "./pages/branch/BranchEmployees";
 
 // Pharmacist / Branch Pages
 import { Sales } from "./pages/pharmacist/Sales";
@@ -173,6 +174,7 @@ export default function App() {
           <Route path="/branch" element={<BranchLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="sales" element={<Sales />} />
+            <Route path="employees" element={<BranchEmployees />} />
             <Route path="pricing" element={<PriceManagement />} />
             <Route path="requisitions" element={<BranchRequisition />} />
             <Route path="receive-transfers" element={<BranchStockReceive />} />

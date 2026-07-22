@@ -14,7 +14,7 @@ export interface Employee {
 
 export const employeeService = {
   // Lấy danh sách nhân viên
-  getEmployees: async (params?: { role?: string; branchId?: string }) => {
+  getEmployees: async (params?: { role?: string; branchId?: string; unassigned?: boolean }) => {
     const response = await api.get('/api/admin/employees', { params });
     return response.data;
   },
@@ -40,6 +40,12 @@ export const employeeService = {
   // Khóa / Mở khóa nhân viên
   toggleBanEmployee: async (id: string) => {
     const response = await api.put(`/api/admin/employees/${id}/ban`);
+    return response.data;
+  },
+
+  // Xóa nhân viên
+  deleteEmployee: async (id: string) => {
+    const response = await api.delete(`/api/admin/employees/${id}`);
     return response.data;
   }
 };
