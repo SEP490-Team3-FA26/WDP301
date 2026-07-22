@@ -44,9 +44,10 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
  */
 export async function sendKafkaMessage(client: ClientKafka, topic: string, data: any) {
   try {
+    const payload = (data && typeof data === 'object') ? JSON.parse(JSON.stringify(data)) : data;
     console.log(`[API-Gateway][sendKafkaMessage] Sending to topic "${topic}"`);
     const result: any = await lastValueFrom(
-      client.send(topic, data).pipe(timeout(15000))
+      client.send(topic, payload).pipe(timeout(15000))
     );
     console.log(`[API-Gateway][sendKafkaMessage] Received response from topic "${topic}"`);
     if (result?.error) {

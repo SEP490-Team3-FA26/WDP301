@@ -72,7 +72,7 @@ export function HQApproval() {
       });
 
       setMsg({ type: "success", text: `Đã tạo lệnh điều phối ${rec.suggestedQty} sản phẩm từ ${rec.branchName} sang ${detailPr.branchName} thành công!` });
-      
+
       setRecommendationResult(null);
       setActiveRecMedicine(null);
       setDetailPr(null);
@@ -258,11 +258,10 @@ export function HQApproval() {
           { key: "CANCELLED" as const, label: "Đã hủy" },
         ]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all ${
-              tab === t.key 
-                ? t.key === "URGENT" ? "border-rose-600 text-rose-700 bg-rose-50" : "border-violet-600 text-violet-700" 
-                : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}>
+            className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all ${tab === t.key
+              ? t.key === "URGENT" ? "border-rose-600 text-rose-700 bg-rose-50" : "border-violet-600 text-violet-700"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}>
             {t.label}
           </button>
         ))}
@@ -272,17 +271,17 @@ export function HQApproval() {
       {tab === "URGENT" && selectedPrs.length > 0 && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
           className="mb-4 bg-rose-50 border border-rose-200 rounded-xl shadow-sm overflow-hidden p-4 flex items-center justify-between">
-            <span className="text-sm font-bold text-rose-800">Đã chọn {selectedPrs.length} Yêu cầu khẩn cấp</span>
-            <div className="flex gap-2">
-              <button onClick={() => handleProcessUrgent("CREATE_EMERGENCY_TRANSFER")} disabled={actionLoading}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
-                {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />} Xuất Kho Khẩn
-              </button>
-              <button onClick={() => handleProcessUrgent("CREATE_URGENT_PO")} disabled={actionLoading}
-                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
-                {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Building2 size={14} />} Đặt Giao Tận Nơi
-              </button>
-            </div>
+          <span className="text-sm font-bold text-rose-800">Đã chọn {selectedPrs.length} Yêu cầu khẩn cấp</span>
+          <div className="flex gap-2">
+            <button onClick={() => handleProcessUrgent("CREATE_EMERGENCY_TRANSFER")} disabled={actionLoading}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
+              {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />} Xuất Kho Khẩn
+            </button>
+            <button onClick={() => handleProcessUrgent("CREATE_URGENT_PO")} disabled={actionLoading}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
+              {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Building2 size={14} />} Đặt Giao Tận Nơi
+            </button>
+          </div>
         </motion.div>
       )}
 
@@ -290,21 +289,21 @@ export function HQApproval() {
       {tab === "PENDING_APPROVAL" && selectedPos.length > 0 && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
           className="mb-4 bg-white border border-violet-200 rounded-xl shadow-sm overflow-hidden p-4 flex items-center justify-between">
-            <span className="text-sm font-bold text-violet-800">Đã chọn {selectedPos.length} Đơn đặt hàng (PO)</span>
-            <div className="flex gap-2">
-              <button onClick={() => handleAction("APPROVE", "PAID")} disabled={actionLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
-                {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <DollarSign size={14} />} Thanh toán ngay (PAID)
-              </button>
-              <button onClick={() => handleAction("APPROVE", "CREDIT")} disabled={actionLoading}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
-                {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />} Duyệt mua nợ (CREDIT)
-              </button>
-              <button onClick={() => setShowRejectModal(true)} disabled={actionLoading}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
-                <XCircle size={14} /> Hủy Đơn
-              </button>
-            </div>
+          <span className="text-sm font-bold text-violet-800">Đã chọn {selectedPos.length} Đơn đặt hàng (PO)</span>
+          <div className="flex gap-2">
+            <button onClick={() => handleAction("APPROVE", "PAID")} disabled={actionLoading}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
+              {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <DollarSign size={14} />} Thanh toán ngay (PAID)
+            </button>
+            <button onClick={() => handleAction("APPROVE", "CREDIT")} disabled={actionLoading}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
+              {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />} Duyệt mua nợ (CREDIT)
+            </button>
+            <button onClick={() => setShowRejectModal(true)} disabled={actionLoading}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50">
+              <XCircle size={14} /> Hủy Đơn
+            </button>
+          </div>
         </motion.div>
       )}
 
@@ -325,10 +324,10 @@ export function HQApproval() {
             <div className="flex flex-col items-center py-16 gap-3 text-slate-400">
               <ShieldCheck size={36} />
               <p className="text-sm font-semibold">
-                {tab === "PENDING_APPROVAL" 
-                  ? "Không có PO nào đang chờ phê duyệt." 
-                  : tab === "URGENT" 
-                    ? "Không có yêu cầu hỏa tốc nào." 
+                {tab === "PENDING_APPROVAL"
+                  ? "Không có PO nào đang chờ phê duyệt."
+                  : tab === "URGENT"
+                    ? "Không có yêu cầu hỏa tốc nào."
                     : tab === "GRN_APPROVAL"
                       ? "Không có phiên kiểm hàng nào chờ duyệt."
                       : "Không có dữ liệu."}
@@ -508,7 +507,7 @@ export function HQApproval() {
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setDetailPr(null); setRecommendationResult(null); setActiveRecMedicine(null); }} />
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               className="relative bg-white rounded-2xl shadow-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-              
+
               <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-rose-50 shrink-0">
                 <div>
                   <h3 className="font-black text-rose-900 font-mono flex items-center gap-2">
@@ -563,7 +562,7 @@ export function HQApproval() {
                       <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden p-4">
                         {recommendationResult.recommendations?.length === 0 ? (
                           <div className="text-center py-6 text-slate-500 text-sm font-semibold">
-                            ❌ Không tìm thấy chi nhánh nào có tồn kho dư thừa (vượt mức an toàn) để điều phối.<br/>
+                            ❌ Không tìm thấy chi nhánh nào có tồn kho dư thừa (vượt mức an toàn) để điều phối.<br />
                             <span className="text-xs font-bold text-slate-400 mt-2 block">Khuyên dùng: Phê duyệt xuất từ Kho Tổng hoặc đặt mua ngoài.</span>
                           </div>
                         ) : (

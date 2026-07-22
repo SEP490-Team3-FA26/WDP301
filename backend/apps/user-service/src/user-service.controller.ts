@@ -55,8 +55,17 @@ export class UserServiceController {
 
 
   @MessagePattern('user.branch.create')
-  handleCreateBranch(@Payload() data: any) {
-    return this.branchService.create(data);
+  async handleCreateBranch(@Payload() data: any) {
+    const newBranch = await this.branchService.create(data);
+    if (data.managerId && newBranch.branchCode) {
+      try {
+        await this.userService.updateEmployee(data.managerId, { branchId: newBranch.branchCode });
+      } catch (err) {
+        // Log the error but don't fail branch creation
+        console.error('Error linking manager to branch:', err);
+      }
+    }
+    return newBranch;
   }
 
   @MessagePattern('user.branch.update')
@@ -109,6 +118,11 @@ export class UserServiceController {
   @MessagePattern('user.admin.employee.ban_unban')
   handleToggleBanEmployee(@Payload() data: { id: string }) {
     return this.userService.toggleBanEmployee(data.id);
+  }
+
+  @MessagePattern('user.admin.employee.delete')
+  handleDeleteEmployee(@Payload() data: { id: string }) {
+    return this.userService.deleteEmployee(data.id);
   }
 
   @EventPattern('user.branch.alert.low_stock')
