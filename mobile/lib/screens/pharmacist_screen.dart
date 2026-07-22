@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../widgets/notification_badge.dart';
+
 
 class PharmacistScreen extends StatefulWidget {
   const PharmacistScreen({super.key});
@@ -22,6 +25,9 @@ class _PharmacistScreenState extends State<PharmacistScreen>
   String? _selectedPrescriptionSample;
   List<Map<String, dynamic>> _prescriptionSamples = [];
   Map<String, dynamic>? _lastPrescriptionScan;
+  Uint8List? _pickedImageBytes;
+  String? _pickedImageName;
+
 
   // DB Pagination State
   final List<Map<String, dynamic>> _medicines = [];
@@ -652,6 +658,7 @@ class _PharmacistScreenState extends State<PharmacistScreen>
     return generated;
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1178,6 +1185,7 @@ class _PharmacistScreenState extends State<PharmacistScreen>
                                 : Colors.green.shade800,
                           ),
                         ),
+
                       ),
                     ],
                   ),
@@ -1199,135 +1207,319 @@ class _PharmacistScreenState extends State<PharmacistScreen>
     );
   }
 
+  Future<void> _pickPrescriptionFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 90,
+      );
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _pickedImageBytes = bytes;
+          _pickedImageName = image.name;
+        });
+        await _scanBytesWithAI(bytes, image.name);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi chọn ảnh từ máy: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _takePrescriptionPhoto() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 90,
+      );
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _pickedImageBytes = bytes;
+          _pickedImageName = image.name;
+        });
+        await _scanBytesWithAI(bytes, image.name);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi chụp ảnh: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _scanBytesWithAI(Uint8List bytes, String fileName) async {
+    setState(() {
+      _scanningPrescription = true;
+    });
+
+    final res = await ApiService.scanPrescriptionAI([bytes]);
+
+    if (!mounted) return;
+
+    if (res != null) {
+      final cartItems = _buildCartFromPrescriptionScan(res);
+      setState(() {
+        _scanningPrescription = false;
+        _lastPrescriptionScan = res;
+        _cart.clear();
+        _cart.addAll(cartItems);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            cartItems.isEmpty
+                ? 'AI đã phân tích ảnh $fileName nhưng chưa khớp được thuốc trong kho.'
+                : 'Quét Gemini AI ảnh $fileName thành công! Đã tự động chọn lô FEFO & đưa vào giỏ hàng POS.',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: cartItems.isEmpty ? Colors.orange : Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      if (cartItems.isNotEmpty) {
+        _tabController.animateTo(0);
+      }
+    } else {
+      setState(() {
+        _scanningPrescription = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Phân tích đơn thuốc thất bại. Vui lòng chọn lại ảnh rõ nét.',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Widget _buildScanPrescriptionTab() {
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Header description
           Container(
-            height: 250,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0288D1).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF0288D1).withValues(alpha: 0.2)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.auto_awesome, color: Color(0xFF0288D1), size: 22),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Quét đơn thuốc/hóa đơn bằng Gemini 2.5 Flash Vision AI: Nhập ảnh từ máy hoặc chụp trực tiếp.',
+                    style: TextStyle(fontSize: 12, height: 1.3, fontWeight: FontWeight.w600, color: Color(0xFF01579B)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Image selection buttons row
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _scanningPrescription ? null : _pickPrescriptionFromGallery,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0288D1),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 2,
+                  ),
+                  icon: const Icon(Icons.photo_library, size: 20),
+                  label: const Text(
+                    'Chọn ảnh từ máy',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _scanningPrescription ? null : _takePrescriptionPhoto,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0288D1),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    side: const BorderSide(color: Color(0xFF0288D1), width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.camera_alt, size: 20),
+                  label: const Text(
+                    'Chụp ảnh trực tiếp',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Camera & Image Preview Box
+          Container(
+            height: 240,
             width: double.infinity,
             decoration: BoxDecoration(
               color: Colors.black87,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFF0288D1), width: 3),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: _pickedImageBytes != null ? const Color(0xFF00E676) : const Color(0xFF0288D1),
+                width: 2.5,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF0288D1).withValues(alpha: 0.15),
-                  blurRadius: 20,
-                  spreadRadius: 2,
+                  blurRadius: 16,
+                  spreadRadius: 1,
                 ),
               ],
             ),
             child: Stack(
               alignment: Alignment.center,
               children: [
-                if (_scanningPrescription)
-                  const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF0288D1)),
+                if (_pickedImageBytes != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(21),
+                    child: Image.memory(
+                      _pickedImageBytes!,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.contain,
+                    ),
                   )
                 else
                   const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.camera_alt, size: 64, color: Colors.white54),
+                      Icon(Icons.add_photo_alternate, size: 56, color: Colors.white54),
                       SizedBox(height: 10),
                       Text(
-                        'GIẢ LẬP CAMERA QUÉT ĐƠN THUỐC',
+                        'CHƯA CHỌN ẢNH ĐƠN THUỐC',
                         style: TextStyle(
                           color: Colors.white54,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Bấm "Chọn ảnh từ máy" hoặc thử mẫu bên dưới',
+                        style: TextStyle(color: Colors.white38, fontSize: 11),
+                      ),
                     ],
                   ),
-                Positioned(
-                  top: 20,
-                  left: 20,
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: Color(0xFF0288D1), width: 4),
-                        left: BorderSide(color: Color(0xFF0288D1), width: 4),
+
+                if (_scanningPrescription)
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.75),
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: Color(0xFF00E676)),
+                          SizedBox(height: 12),
+                          Text(
+                            'AI Gemini 2.5 Flash đang đọc đơn thuốc & khớp Lô FEFO...',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-                Positioned(
-                  top: 20,
-                  right: 20,
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: Color(0xFF0288D1), width: 4),
-                        right: BorderSide(color: Color(0xFF0288D1), width: 4),
+
+                if (_pickedImageBytes != null && !_scanningPrescription) ...[
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: CircleAvatar(
+                      backgroundColor: Colors.black.withValues(alpha: 0.65),
+                      radius: 18,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, size: 18, color: Colors.white),
+                        onPressed: () {
+                          setState(() {
+                            _pickedImageBytes = null;
+                            _pickedImageName = null;
+                          });
+                        },
                       ),
                     ),
                   ),
-                ),
-                Positioned(
-                  bottom: 20,
-                  left: 20,
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Color(0xFF0288D1), width: 4),
-                        left: BorderSide(color: Color(0xFF0288D1), width: 4),
+                  if (_pickedImageName != null)
+                    Positioned(
+                      bottom: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _pickedImageName!,
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 20,
-                  right: 20,
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Color(0xFF0288D1), width: 4),
-                        right: BorderSide(color: Color(0xFF0288D1), width: 4),
-                      ),
-                    ),
-                  ),
-                ),
+                ],
+
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Đặt đơn thuốc giấy trước camera để AI phân tích nét chữ, tự động tìm kiếm thuốc và chèn thông tin y khoa vào giỏ hàng.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.4),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+
+          // Sample Prescription quick selection section
           if (_loadingPrescriptionSamples)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 16),
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+            const Center(child: CircularProgressIndicator(strokeWidth: 2))
           else if (_prescriptionSamples.isNotEmpty) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Đơn thuốc mẫu',
-                style: TextStyle(
-                  color: Colors.grey.shade800,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Hoặc chọn đơn thuốc mẫu có sẵn:',
+                  style: TextStyle(
+                    color: Colors.grey.shade800,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
-              ),
+                if (_selectedPrescriptionSample != null)
+                  Text(
+                    _selectedPrescriptionSample!,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                  ),
+              ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             SizedBox(
-              height: 44,
+              height: 40,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: _prescriptionSamples.length,
@@ -1335,7 +1527,7 @@ class _PharmacistScreenState extends State<PharmacistScreen>
                 itemBuilder: (context, index) {
                   final sample = _prescriptionSamples[index];
                   final filename = sample['filename']?.toString() ?? '';
-                  final selected = filename == _selectedPrescriptionSample;
+                  final selected = filename == _selectedPrescriptionSample && _pickedImageBytes == null;
 
                   return ChoiceChip(
                     selected: selected,
@@ -1343,89 +1535,131 @@ class _PharmacistScreenState extends State<PharmacistScreen>
                       'Mẫu ${index + 1}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: selected
-                            ? Colors.white
-                            : const Color(0xFF0288D1),
+                        fontSize: 12,
+                        color: selected ? Colors.white : const Color(0xFF0288D1),
                       ),
-                    ),
-                    avatar: Icon(
-                      Icons.description,
-                      size: 18,
-                      color: selected ? Colors.white : const Color(0xFF0288D1),
                     ),
                     selectedColor: const Color(0xFF0288D1),
                     backgroundColor: Colors.white,
                     side: BorderSide(
-                      color: selected
-                          ? const Color(0xFF0288D1)
-                          : Colors.grey.shade300,
+                      color: selected ? const Color(0xFF0288D1) : Colors.grey.shade300,
                     ),
                     onSelected: _scanningPrescription
                         ? null
                         : (_) {
                             setState(() {
                               _selectedPrescriptionSample = filename;
+                              _pickedImageBytes = null;
                             });
                           },
                   );
                 },
               ),
             ),
-            if (_selectedPrescriptionSample != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _selectedPrescriptionSample!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
-              ),
-            ],
-            const SizedBox(height: 18),
-          ] else ...[
-            OutlinedButton.icon(
-              onPressed: _loadPrescriptionSamples,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Tải đơn thuốc mẫu'),
-            ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
           ],
-          ElevatedButton.icon(
-            onPressed: _scanningPrescription ? null : _simulatePrescriptionScan,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0288D1),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+
+          // Execute Scan Button if using sample
+          if (_pickedImageBytes == null)
+            ElevatedButton.icon(
+              onPressed: _scanningPrescription ? null : _simulatePrescriptionScan,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00C853),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 2,
+              ),
+              icon: const Icon(Icons.document_scanner),
+              label: const Text(
+                'Bắt đầu quét mẫu bằng AI Gemini',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ),
-            icon: const Icon(Icons.document_scanner),
-            label: const Text(
-              'Bắt đầu quét đơn thuốc bằng AI',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
+
+          // Analysis result card
           if (_lastPrescriptionScan != null) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.shade100),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.green.shade200),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.check_circle, color: Colors.green.shade700),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'AI đã đọc ${((_lastPrescriptionScan!['ocr_result'] as Map?)?['medications'] as List?)?.length ?? 0} thuốc từ mẫu.',
-                      style: TextStyle(
-                        color: Colors.green.shade900,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
+                  Row(
+                    children: [
+                      Icon(Icons.check_circle_rounded, color: Colors.green.shade700, size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'KẾT QUẢ BÓC TÁCH & KHỚP TỒN KHO FEFO',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.green.shade900,
+                          ),
+                        ),
                       ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+                  Text(
+                    'Đã tìm thấy ${_cart.length} thuốc tương ứng trong kho:',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._cart.map((item) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item['name'] ?? '',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                          Text(
+                            'SL: ${item['qty']} ${item['unit']}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0288D1), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      _tabController.animateTo(0);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0288D1),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(44),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.shopping_cart_checkout, size: 18),
+                    label: const Text(
+                      'Chuyển sang Giỏ hàng POS để bán thuốc',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
                 ],
@@ -1436,6 +1670,7 @@ class _PharmacistScreenState extends State<PharmacistScreen>
       ),
     );
   }
+
 
   Future<void> _showToastInvoiceSuccess() async {
     final orderData = {

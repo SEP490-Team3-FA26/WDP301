@@ -130,7 +130,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         final response = await http.get(Uri.parse('${ApiService.baseUrl}/api/medicines?limit=1')).timeout(
           const Duration(seconds: 2),
         );
-        final isConnected = response.statusCode == 200;
+        final isConnected = response.statusCode == 200 || response.statusCode == 401;
         if (isConnected != _hasRealServerConnection) {
           setState(() {
             _hasRealServerConnection = isConnected;
