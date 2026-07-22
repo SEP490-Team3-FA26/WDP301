@@ -816,7 +816,7 @@ class ApiService {
     try {
       final response = await http
           .get(
-            Uri.parse('$baseUrl/api/auth/profile'),
+            Uri.parse('$baseUrl/api/auth/profile?refresh=true'),
             headers: {
               'Content-Type': 'application/json',
               if (activeToken.isNotEmpty)
@@ -832,7 +832,7 @@ class ApiService {
       try {
         final response = await http
             .get(
-              Uri.parse('$fallbackUrl/api/auth/profile'),
+              Uri.parse('$fallbackUrl/api/auth/profile?refresh=true'),
               headers: {
                 'Content-Type': 'application/json',
                 if (activeToken.isNotEmpty)
@@ -1091,6 +1091,68 @@ class ApiService {
       }
     }
     return null;
+  }
+
+  // Update Profile
+  static Future<Map<String, dynamic>> updateProfile({
+    String? fullName,
+    String? phone,
+    String? address,
+  }) async {
+    try {
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/api/users/profile'),
+            headers: _authHeaders,
+            body: jsonEncode({
+              if (fullName != null) 'fullName': fullName,
+              if (phone != null) 'phone': phone,
+              if (address != null) 'address': address,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      }
+      return {
+        'success': false,
+        'message': data is Map ? (data['message'] ?? 'Cập nhật thất bại.') : 'Cập nhật thất bại.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối: $e'};
+    }
+  }
+
+  // Change Password
+  static Future<Map<String, dynamic>> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/change-password'),
+            headers: _authHeaders,
+            body: jsonEncode({
+              'oldPassword': oldPassword,
+              'newPassword': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      }
+      return {
+        'success': false,
+        'message': data is Map ? (data['message'] ?? 'Đổi mật khẩu thất bại.') : 'Đổi mật khẩu thất bại.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Lỗi kết nối: $e'};
+    }
   }
 
   // Validate Voucher Code

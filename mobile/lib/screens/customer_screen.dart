@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
+import 'profile_screen.dart';
 
 class CustomerScreen extends StatefulWidget {
   const CustomerScreen({super.key});
@@ -1494,12 +1495,26 @@ class _CustomerScreenState extends State<CustomerScreen>
           ListTile(
             leading: const Icon(Icons.person),
             title: const Text('Hồ sơ của tôi'),
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProfileScreen(
+                    userProfile: _userProfile,
+                    onProfileUpdated: _loadUserProfileAndOrders,
+                  ),
+                ),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.history),
             title: const Text('Lịch sử mua hàng'),
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              Navigator.pop(context);
+              _tabController.animateTo(4);
+            },
           ),
           const Divider(),
           ListTile(
@@ -1798,53 +1813,64 @@ class _CustomerScreenState extends State<CustomerScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: Colors.transparent,
-                child: const Icon(
-                  Icons.account_circle,
-                  color: Colors.grey,
-                  size: 40,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Xin chào, ${_userProfile?['fullName'] ?? 'Khách hàng'}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          Expanded(
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Colors.transparent,
+                  child: const Icon(
+                    Icons.account_circle,
+                    color: Colors.grey,
+                    size: 40,
                   ),
-                  Row(
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.amber,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Text(
-                          'F',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
                       Text(
-                        '${_userProfile?['points'] ?? _userProfile?['loyaltyPoints'] ?? 0} điểm thưởng',
-                        style: const TextStyle(fontSize: 12, color: Colors.black87),
+                        'Xin chào, ${_userProfile?['fullName'] ?? 'Khách hàng'}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(
+                              color: Colors.amber,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Text(
+                              'F',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '${_userProfile?['points'] ?? _userProfile?['loyaltyPoints'] ?? 0} điểm thưởng',
+                              style: const TextStyle(fontSize: 12, color: Colors.black87),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: () {
               _tabController.animateTo(4);
