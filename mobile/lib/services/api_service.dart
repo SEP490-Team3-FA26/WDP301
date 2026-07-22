@@ -691,6 +691,7 @@ final response = await http.get(
     };
   }
 
+
   // Fetch Purchase Orders for Director / HQ Approval
   static Future<List<dynamic>> getPurchaseOrders() async {
     try {
@@ -1352,4 +1353,36 @@ debugPrint('createPayOSLink status: ${response.statusCode} body: ${response.body
     }
     return [];
   }
+
+  static Future<Map<String, dynamic>?> scanPrescriptionAI(List<List<int>> imageBytesList, {String branchId = 'CENTRAL_WH'}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/prescriptions/scan-ai');
+      final request = http.MultipartRequest('POST', uri);
+      if (currentToken.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $currentToken';
+      }
+      request.fields['branch_id'] = branchId;
+
+      for (int i = 0; i < imageBytesList.length; i++) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'images',
+            imageBytesList[i],
+            filename: 'prescription_page_${i + 1}.jpg',
+            contentType: MediaType('image', 'jpeg'),
+          ),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('Error scanning prescription AI: $e');
+    }
+    return null;
+  }
 }
+

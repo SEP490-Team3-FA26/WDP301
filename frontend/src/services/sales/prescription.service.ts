@@ -18,5 +18,15 @@ export const prescriptionService = {
       },
     });
     return response.data;
+  },
+
+  async scanPrescriptionAI(formData: FormData) {
+    const response = await api.post('/api/prescriptions/scan-ai', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
   }
 };
+
