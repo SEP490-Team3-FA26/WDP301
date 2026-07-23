@@ -1,0 +1,60 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net">
+  <diagram id="cd_uc_44" name="UC-44: Approve Staff Account">
+    <mxGraphModel dx="1800" dy="1100" grid="1" gridSize="10" page="1" pageScale="1" pageWidth="1600" pageHeight="1000">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram - UC-44: Approve Staff Account&lt;/b&gt;" parent="1" vertex="1"
+          style="html=1;whiteSpace=wrap;align=center;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=14;fontStyle=1;">
+          <mxGeometry x="50" y="20" width="1500" height="50" as="geometry" />
+        </mxCell>
+
+    <mxCell id="c0_sw" value="&lt;i&gt;&lt;&lt;Controller&gt;&gt;&lt;/i&gt;&lt;br/&gt;&lt;b&gt;UserServiceController&lt;/b&gt;" parent="1" vertex="1"
+      style="swimlane;fontStyle=1;align=center;startSize=48;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;rounded=1;arcSize=4;shadow=1;fontSize=12;fontFamily=Helvetica;">
+      <mxGeometry x="60" y="100" width="320" height="138" as="geometry" />
+    </mxCell>
+    <mxCell id="c0_a" value="&lt;hr/&gt;- userServiceService: UserServiceService" parent="c0_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;">
+      <mxGeometry x="0" y="48" width="320" height="34" as="geometry" />
+    </mxCell>
+    <mxCell id="c0_m" value="&lt;hr/&gt;+ approveStaffAccount(userId: String): Promise&lt;any&gt;&lt;br/&gt;+ getPendingAccounts(): Promise&lt;User[]&gt;" parent="c0_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;fontStyle=2;">
+      <mxGeometry x="0" y="82" width="320" height="56" as="geometry" />
+    </mxCell>
+    <mxCell id="c1_sw" value="&lt;i&gt;&lt;&lt;Service&gt;&gt;&lt;/i&gt;&lt;br/&gt;&lt;b&gt;UserServiceService&lt;/b&gt;" parent="1" vertex="1"
+      style="swimlane;fontStyle=1;align=center;startSize=48;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;rounded=1;arcSize=4;shadow=1;fontSize=12;fontFamily=Helvetica;">
+      <mxGeometry x="420" y="100" width="320" height="182" as="geometry" />
+    </mxCell>
+    <mxCell id="c1_a" value="&lt;hr/&gt;- userModel: Model&lt;User&gt;&lt;br/&gt;- kafkaClient: ClientProxy" parent="c1_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;">
+      <mxGeometry x="0" y="48" width="320" height="56" as="geometry" />
+    </mxCell>
+    <mxCell id="c1_m" value="&lt;hr/&gt;+ approveAccount(userId: String, adminId: String): Promise&lt;User&gt;&lt;br/&gt;+ getPendingStaffAccounts(): Promise&lt;User[]&gt;&lt;br/&gt;+ notifyUser(userId: String, message: String): Promise&lt;void&gt;" parent="c1_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;fontStyle=2;">
+      <mxGeometry x="0" y="104" width="320" height="78" as="geometry" />
+    </mxCell>
+    <mxCell id="c2_sw" value="&lt;i&gt;&lt;&lt;Schema&gt;&gt;&lt;/i&gt;&lt;br/&gt;&lt;b&gt;User&lt;/b&gt;" parent="1" vertex="1"
+      style="swimlane;fontStyle=1;align=center;startSize=48;html=1;fillColor=#d5e8d4;strokeColor=#82b366;rounded=1;arcSize=4;shadow=1;fontSize=12;fontFamily=Helvetica;">
+      <mxGeometry x="780" y="100" width="320" height="270" as="geometry" />
+    </mxCell>
+    <mxCell id="c2_a" value="&lt;hr/&gt;+ _id: ObjectId&lt;br/&gt;+ fullName: String&lt;br/&gt;+ email: String&lt;br/&gt;+ role: UserRole&lt;br/&gt;+ isActive: Boolean&lt;br/&gt;+ isEmailVerified: Boolean&lt;br/&gt;+ approvedBy: ObjectId&lt;br/&gt;+ approvedAt: Date" parent="c2_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;">
+      <mxGeometry x="0" y="48" width="320" height="188" as="geometry" />
+    </mxCell>
+    <mxCell id="c2_m" value="&lt;hr/&gt;+ findByIdAndUpdate(id, update): Promise&lt;User&gt;" parent="c2_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;fontStyle=2;">
+      <mxGeometry x="0" y="236" width="320" height="34" as="geometry" />
+    </mxCell>
+    <mxCell id="e0" value="1. sends request" parent="1" source="c0_sw" target="c1_sw" edge="1"
+      style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontColor=#333333;fontSize=9;labelBackgroundColor=#ffffff;">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e1" value="2. delegates to" parent="1" source="c1_sw" target="c2_sw" edge="1"
+      style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#9673a6;fontColor=#333333;fontSize=9;labelBackgroundColor=#ffffff;">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
