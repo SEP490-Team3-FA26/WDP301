@@ -8,6 +8,7 @@ import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 import 'checkout_screen.dart';
+import 'payment_webview_screen.dart';
 
 class CustomerScreen extends StatefulWidget {
   const CustomerScreen({super.key});
@@ -3803,6 +3804,41 @@ class _CustomerScreenState extends State<CustomerScreen>
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.grey.shade700,
+                                  ),
+                                ),
+                              ],
+                              if (status != 'PAID' && status != 'CANCELLED' && (method == 'QR_PAY' || method == 'PAYOS')) ...[
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () async {
+                                      final checkRes = await ApiService.checkOrderPayment(code);
+                                      if (!mounted) return;
+                                      if (checkRes?['status'] == 'PAID' || checkRes?['order']?['paymentStatus'] == 'PAID') {
+                                        _showToast('Thanh toán thành công! Đơn hàng đã được xác nhận.', Colors.green);
+                                        _loadUserProfileAndOrders();
+                                      } else if (order['checkoutUrl'] != null && order['checkoutUrl'].toString().isNotEmpty) {
+                                        final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => PaymentWebViewScreen(checkoutUrl: order['checkoutUrl'].toString(), orderCode: code)));
+                                        if (result?['paid'] == true && mounted) {
+                                          _loadUserProfileAndOrders();
+                                        }
+                                      } else {
+                                        _showToast('Đơn hàng chưa thanh toán. Vui lòng kiểm tra lại!', Colors.orange);
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1976D2),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.qr_code_scanner, size: 18),
+                                    label: const Text(
+                                      'Kiểm tra / Thanh toán PayOS',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
                                   ),
                                 ),
                               ],
