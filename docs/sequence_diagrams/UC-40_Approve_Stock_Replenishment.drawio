@@ -1,0 +1,91 @@
+<mxfile>
+  <diagram id="seqlayout" name="Sequence Diagram - UC-40: Approve Stock Replenishment Request">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="inv_mgr" value="Inventory Manager" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;participant=umlActor;verticalAlign=bottom;spacingBottom=-14;labelBackgroundColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="100" height="780" as="geometry"/>
+        </mxCell>
+        <mxCell id="ui" value="Requisition Approval UI" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="320" y="40" width="100" height="780" as="geometry"/>
+        </mxCell>
+        <mxCell id="gateway" value="API Gateway" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="600" y="40" width="100" height="780" as="geometry"/>
+        </mxCell>
+        <mxCell id="kafka" value="Kafka Event Bus (Topics)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="880" y="40" width="100" height="780" as="geometry"/>
+        </mxCell>
+        <mxCell id="req_svc" value="Purchase Requisition Service" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="40" width="100" height="780" as="geometry"/>
+        </mxCell>
+        <mxCell id="inv_svc" value="Inventory Service" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="40" width="100" height="780" as="geometry"/>
+        </mxCell>
+        <mxCell id="db" value="MongoDB Database" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="1720" y="40" width="100" height="780" as="geometry"/>
+        </mxCell>
+        <mxCell id="act0" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="db">
+          <mxGeometry x="45" y="340" width="10" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="act1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="db">
+          <mxGeometry x="45" y="440" width="10" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="act2" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="req_svc">
+          <mxGeometry x="45" y="240" width="10" height="300" as="geometry"/>
+        </mxCell>
+        <mxCell id="act3" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="kafka">
+          <mxGeometry x="45" y="190" width="10" height="400" as="geometry"/>
+        </mxCell>
+        <mxCell id="act4" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="gateway">
+          <mxGeometry x="45" y="140" width="10" height="500" as="geometry"/>
+        </mxCell>
+        <mxCell id="act5" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="ui">
+          <mxGeometry x="45" y="90" width="10" height="600" as="geometry"/>
+        </mxCell>
+        <mxCell id="act6" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="inv_svc">
+          <mxGeometry x="45" y="290" width="10" height="450" as="geometry"/>
+        </mxCell>
+        <mxCell id="m0" value="1. Review Branch Requisition &amp; Click 'Approve Replenishment'" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.1154;entryX=0;entryY=0.0;" edge="1" parent="1" source="inv_mgr" target="act5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m1" value="2. POST /api/purchase-requisitions/:id/approve" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.0833;entryX=0;entryY=0.0;" edge="1" parent="1" source="act5" target="act4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m2" value="3. sendKafkaMessage('inventory.pr.update_status', {id, status: 'APPROVED'})" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.1;entryX=0;entryY=0.0;" edge="1" parent="1" source="act4" target="act3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m3" value="4. Consume topic: 'inventory.pr.update_status'" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.125;entryX=0;entryY=0.0;" edge="1" parent="1" source="act3" target="act2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m4" value="5. Reserve items at Central Warehouse" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.1667;entryX=0;entryY=0.0;" edge="1" parent="1" source="act2" target="act6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m5" value="6. Deduct Central Warehouse stock &amp; Reserve dispatch" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.1111;entryX=0;entryY=0.0;" edge="1" parent="1" source="act6" target="act0">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m6" value="7. Central Stock Reserved OK" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.2222;" edge="1" parent="1" source="act0" target="act6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m7" value="8. Update Requisition status=APPROVED" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.6667;entryX=0;entryY=0.0;" edge="1" parent="1" source="act2" target="act1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m8" value="9. Status Updated OK" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.8333;" edge="1" parent="1" source="act1" target="act2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m9" value="10. Emit response: Requisition Approved JSON" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.875;" edge="1" parent="1" source="act2" target="act3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m10" value="11. Consume response: Replenishment Approved" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.9;" edge="1" parent="1" source="act3" target="act4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m11" value="12. Render 'Replenishment Approved &amp; Dispatched'" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.9167;" edge="1" parent="1" source="act4" target="act5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m12" value="13. Requisition approved for branch dispatch" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=0.5;entryY=0.8846;" edge="1" parent="1" source="act5" target="inv_mgr">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,76 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net">
+  <diagram id="cd_uc_33" name="UC-33: Create Purchase Order">
+    <mxGraphModel dx="1800" dy="1100" grid="1" gridSize="10" page="1" pageScale="1" pageWidth="1600" pageHeight="1000">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram - UC-33: Create Purchase Order&lt;/b&gt;" parent="1" vertex="1"
+          style="html=1;whiteSpace=wrap;align=center;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=14;fontStyle=1;">
+          <mxGeometry x="50" y="20" width="1500" height="50" as="geometry" />
+        </mxCell>
+
+    <mxCell id="c0_sw" value="&lt;i&gt;&lt;&lt;Controller&gt;&gt;&lt;/i&gt;&lt;br/&gt;&lt;b&gt;InventoryController&lt;/b&gt;" parent="1" vertex="1"
+      style="swimlane;fontStyle=1;align=center;startSize=48;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;rounded=1;arcSize=4;shadow=1;fontSize=12;fontFamily=Helvetica;">
+      <mxGeometry x="60" y="100" width="320" height="138" as="geometry" />
+    </mxCell>
+    <mxCell id="c0_a" value="&lt;hr/&gt;- purchaseOrderService: PurchaseOrderService" parent="c0_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;">
+      <mxGeometry x="0" y="48" width="320" height="34" as="geometry" />
+    </mxCell>
+    <mxCell id="c0_m" value="&lt;hr/&gt;+ createPurchaseOrder(dto: CreatePurchaseOrderDto): Promise&lt;any&gt;&lt;br/&gt;+ getPurchaseOrders(query: any): Promise&lt;any&gt;" parent="c0_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;fontStyle=2;">
+      <mxGeometry x="0" y="82" width="320" height="56" as="geometry" />
+    </mxCell>
+    <mxCell id="c1_sw" value="&lt;i&gt;&lt;&lt;DTO&gt;&gt;&lt;/i&gt;&lt;br/&gt;&lt;b&gt;CreatePurchaseOrderDto&lt;/b&gt;" parent="1" vertex="1"
+      style="swimlane;fontStyle=1;align=center;startSize=48;html=1;fillColor=#f8cecc;strokeColor=#b85450;rounded=1;arcSize=4;shadow=1;fontSize=12;fontFamily=Helvetica;">
+      <mxGeometry x="420" y="100" width="320" height="204" as="geometry" />
+    </mxCell>
+    <mxCell id="c1_a" value="&lt;hr/&gt;+ supplierId: String&lt;br/&gt;+ branchId: String&lt;br/&gt;+ items: POItem[]&lt;br/&gt;+ expectedDeliveryDate: Date&lt;br/&gt;+ notes: String" parent="c1_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;">
+      <mxGeometry x="0" y="48" width="320" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="c1_m" value="&lt;hr/&gt;+ validate(): Boolean" parent="c1_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;fontStyle=2;">
+      <mxGeometry x="0" y="170" width="320" height="34" as="geometry" />
+    </mxCell>
+    <mxCell id="c2_sw" value="&lt;i&gt;&lt;&lt;Service&gt;&gt;&lt;/i&gt;&lt;br/&gt;&lt;b&gt;PurchaseOrderService&lt;/b&gt;" parent="1" vertex="1"
+      style="swimlane;fontStyle=1;align=center;startSize=48;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;rounded=1;arcSize=4;shadow=1;fontSize=12;fontFamily=Helvetica;">
+      <mxGeometry x="780" y="100" width="320" height="182" as="geometry" />
+    </mxCell>
+    <mxCell id="c2_a" value="&lt;hr/&gt;- poModel: Model&lt;PurchaseOrder&gt;&lt;br/&gt;- kafkaClient: ClientProxy" parent="c2_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;">
+      <mxGeometry x="0" y="48" width="320" height="56" as="geometry" />
+    </mxCell>
+    <mxCell id="c2_m" value="&lt;hr/&gt;+ createPurchaseOrder(dto: CreatePurchaseOrderDto): Promise&lt;PurchaseOrder&gt;&lt;br/&gt;+ generatePOCode(): String&lt;br/&gt;+ notifyAdmin(po: PurchaseOrder): Promise&lt;void&gt;" parent="c2_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;fontStyle=2;">
+      <mxGeometry x="0" y="104" width="320" height="78" as="geometry" />
+    </mxCell>
+    <mxCell id="c3_sw" value="&lt;i&gt;&lt;&lt;Schema&gt;&gt;&lt;/i&gt;&lt;br/&gt;&lt;b&gt;PurchaseOrder&lt;/b&gt;" parent="1" vertex="1"
+      style="swimlane;fontStyle=1;align=center;startSize=48;html=1;fillColor=#d5e8d4;strokeColor=#82b366;rounded=1;arcSize=4;shadow=1;fontSize=12;fontFamily=Helvetica;">
+      <mxGeometry x="60" y="460" width="320" height="270" as="geometry" />
+    </mxCell>
+    <mxCell id="c3_a" value="&lt;hr/&gt;+ _id: ObjectId&lt;br/&gt;+ poCode: String&lt;br/&gt;+ supplierId: ObjectId&lt;br/&gt;+ branchId: ObjectId&lt;br/&gt;+ items: POItem[]&lt;br/&gt;+ totalAmount: Number&lt;br/&gt;+ status: POStatus&lt;br/&gt;+ expectedDeliveryDate: Date" parent="c3_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;">
+      <mxGeometry x="0" y="48" width="320" height="188" as="geometry" />
+    </mxCell>
+    <mxCell id="c3_m" value="&lt;hr/&gt;+ save(): Promise&lt;PurchaseOrder&gt;" parent="c3_sw" vertex="1"
+      style="text;html=1;whiteSpace=wrap;align=left;spacingLeft=8;spacingTop=4;fontSize=11;fontFamily=Helvetica;fillColor=none;strokeColor=none;fontStyle=2;">
+      <mxGeometry x="0" y="236" width="320" height="34" as="geometry" />
+    </mxCell>
+    <mxCell id="e0" value="1. sends request" parent="1" source="c0_sw" target="c1_sw" edge="1"
+      style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontColor=#333333;fontSize=9;labelBackgroundColor=#ffffff;">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e1" value="2. delegates to" parent="1" source="c1_sw" target="c2_sw" edge="1"
+      style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#9673a6;fontColor=#333333;fontSize=9;labelBackgroundColor=#ffffff;">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e2" value="3. accesses" parent="1" source="c2_sw" target="c3_sw" edge="1"
+      style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6c8ebf;fontColor=#333333;fontSize=9;labelBackgroundColor=#ffffff;">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
