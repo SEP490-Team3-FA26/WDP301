@@ -1,0 +1,159 @@
+<mxfile host="Electron">
+  <diagram name="Warehouse-Screenflow" id="0">
+    <mxGraphModel dx="1191" dy="806" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="hub" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e65100;strokeColor=#bf360c;fontColor=#ffffff;fontStyle=1;fontSize=14;arcSize=20;" value="Warehouse Dashboard&#xa;( /warehouse )" vertex="1">
+          <mxGeometry height="65" width="180" x="350" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="login" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f57c00;strokeColor=#bf360c;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="User Login&#xa;( /auth/login )" vertex="1">
+          <mxGeometry height="60" width="150" x="30" y="452.5" as="geometry" />
+        </mxCell>
+        <mxCell id="e_login_hub" edge="1" parent="1" source="login" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#bf360c;strokeWidth=2;fontColor=#bf360c;" target="hub" value="Role: warehouse">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_inv" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ff9800;strokeColor=#e65100;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Inventory Control&#xa;( /warehouse/inventory )" vertex="1">
+          <mxGeometry height="60" width="190" x="600" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_cards" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontColor=#000000;fontStyle=1;arcSize=20;" value="Stock Card Log (Thẻ kho)" vertex="1">
+          <mxGeometry height="60" width="190" x="840" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_batch" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontColor=#000000;fontStyle=1;arcSize=20;" value="Batch &amp; Expiry Control" vertex="1">
+          <mxGeometry height="60" width="190" x="840" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="e_inv_cards" edge="1" parent="1" source="b1_inv" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b1_cards" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="815" y="130" />
+              <mxPoint x="815" y="90" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_inv_batch" edge="1" parent="1" source="b1_inv" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b1_batch" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="815" y="130" />
+              <mxPoint x="815" y="170" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b2_import" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ff9800;strokeColor=#e65100;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Requisitions &amp; Stock Import&#xa;( /warehouse/inventory/requisitions )" vertex="1">
+          <mxGeometry height="60" width="220" x="600" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="b2_grn" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontColor=#000000;fontStyle=1;arcSize=20;" value="Goods Receipt Note (GRN)" vertex="1">
+          <mxGeometry height="60" width="200" x="870" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="e_import_grn" edge="1" parent="1" source="b2_import" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b2_grn" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b3_checks" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ff9800;strokeColor=#e65100;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Inventory Checks&#xa;( /warehouse/inventory/checks )" vertex="1">
+          <mxGeometry height="60" width="200" x="600" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="b3_count" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontColor=#000000;fontStyle=1;arcSize=20;" value="Stock Count &amp; Adjustment" vertex="1">
+          <mxGeometry height="60" width="190" x="850" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="e_checks_count" edge="1" parent="1" source="b3_checks" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b3_count" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b4_export" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ff9800;strokeColor=#e65100;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Stock Export &amp; Disposal&#xa;( /warehouse/inventory/export )" vertex="1">
+          <mxGeometry height="60" width="200" x="600" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="b4_transfer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontColor=#000000;fontStyle=1;arcSize=20;" value="Branch Transfer Dispatch" vertex="1">
+          <mxGeometry height="60" width="190" x="850" y="480" as="geometry" />
+        </mxCell>
+        <mxCell id="b4_dispose" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontColor=#000000;fontStyle=1;arcSize=20;" value="Expired Drug Disposal Record" vertex="1">
+          <mxGeometry height="60" width="200" x="850" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="e_export_transfer" edge="1" parent="1" source="b4_export" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b4_transfer" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="825" y="550" />
+              <mxPoint x="825" y="510" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_export_dispose" edge="1" parent="1" source="b4_export" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b4_dispose" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="825" y="550" />
+              <mxPoint x="825" y="590" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b5_master" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ff9800;strokeColor=#e65100;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Master Data Catalog&#xa;( /warehouse/master-data/products )" vertex="1">
+          <mxGeometry height="60" width="220" x="600" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="b5_products" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontColor=#000000;fontStyle=1;arcSize=20;" value="Global Product Catalog" vertex="1">
+          <mxGeometry height="60" width="180" x="870" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="b5_suppliers" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontColor=#000000;fontStyle=1;arcSize=20;" value="Supplier &amp; GDP Certificate List" vertex="1">
+          <mxGeometry height="60" width="210" x="1080" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="e_master_products" edge="1" parent="1" source="b5_master" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b5_products" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_products_suppliers" edge="1" parent="1" source="b5_products" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b5_suppliers" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b6_ai" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ff9800;strokeColor=#e65100;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="AI Forecast &amp; Analytics&#xa;( /warehouse/ai-forecast )" vertex="1">
+          <mxGeometry height="60" width="200" x="600" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="b6_risk" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontColor=#000000;fontStyle=1;arcSize=20;" value="Stock Out Risk Forecast" vertex="1">
+          <mxGeometry height="60" width="190" x="850" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ai_risk" edge="1" parent="1" source="b6_ai" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b6_risk" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_h_b1" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;strokeWidth=2;" target="b1_inv" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="130" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b2" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;strokeWidth=2;" target="b2_import" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="270" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b3" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;strokeWidth=2;" target="b3_checks" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="410" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b4" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;strokeWidth=2;" target="b4_export" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="550" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b5" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;strokeWidth=2;" target="b5_master" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="690" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b6" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;strokeWidth=2;" target="b6_ai" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="830" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
