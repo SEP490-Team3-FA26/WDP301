@@ -61,18 +61,6 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ──────────────────────────────────────────────
-  # CD — chỉ chạy khi push/merge vào MAIN
-  #   deploy lên Railway sử dụng RAILWAY_TOKEN
+  # CD — (ĐÃ BỎ) Deploy lên Railway
+  # Lý do: Railway đã tự động bắt event push trên nhánh main nên không cần cấu hình bằng tay nữa.
   # ──────────────────────────────────────────────
-  deploy:
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to Railway
-        uses: b3n4k/railway-action@v3.5
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-
