@@ -28,6 +28,9 @@ import { getSafeStockChain, getAnomalyDetection, SafeStockItem, AnomalyItem } fr
 import { branchService } from '../../services/admin/branch.service';
 import '../../styles/supply-chain-dashboard.css';
 
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
 // ── CONFIG FOR STATUS BADGES ──
 const STATUS_CONFIG = {
   CRITICAL: { label: 'Hết hàng', color: '#ef4444', bg: 'rgba(239,68,68,0.08)', class: 'red' },
@@ -36,35 +39,35 @@ const STATUS_CONFIG = {
   OVERSTOCK: { label: 'Dư thừa', color: '#1d4ed8', bg: 'rgba(29,78,216,0.08)', class: 'blue' },
 };
 
-// ── FIXED COORDINATES FOR HCMC MAP BRANCHES ──
+// ── REAL LAT/LNG COORDINATES FOR BRANCHES ──
 interface MapBranch {
   id: string;
   name: string;
-  x: number;
-  y: number;
+  lat: number;
+  lng: number;
   district: string;
 }
 
 const BRANCHES_GEOGRAPHY: MapBranch[] = [
-  { id: 'BR-001', name: 'Chi nhánh Quận 1 - HQ', x: 260, y: 190, district: 'Quận 1' },
-  { id: 'BR-002', name: 'Chi nhánh Quận 7 - Midtown', x: 300, y: 290, district: 'Quận 7' },
-  { id: 'BR-003', name: 'Bình Thạnh Central', x: 280, y: 120, district: 'Bình Thạnh' },
-  { id: 'BR-004', name: 'Chi nhánh Quận 2 - Villa', x: 370, y: 160, district: 'Quận 2' },
-  { id: 'BR-005', name: 'Chi nhánh Quận 10', x: 190, y: 200, district: 'Quận 10' },
-  { id: 'BR-006', name: 'Chi nhánh Thủ Đức', x: 380, y: 70, district: 'Thủ Đức' },
-  { id: 'BR-007', name: 'Chi nhánh Gò Vấp', x: 170, y: 90, district: 'Gò Vấp' },
-  { id: 'BR-008', name: 'Chi nhánh Tân Bình', x: 140, y: 140, district: 'Tân Bình' },
+  { id: 'BR-001', name: 'Chi nhánh Quận 1 - HQ', lat: 10.7769, lng: 106.7009, district: 'Quận 1' },
+  { id: 'BR-002', name: 'Chi nhánh Quận 7 - Midtown', lat: 10.7320, lng: 106.7150, district: 'Quận 7' },
+  { id: 'BR-003', name: 'Bình Thạnh Central', lat: 10.8050, lng: 106.7150, district: 'Bình Thạnh' },
+  { id: 'BR-004', name: 'Chi nhánh Quận 2 - Villa', lat: 10.7850, lng: 106.7450, district: 'Quận 2' },
+  { id: 'BR-005', name: 'Chi nhánh Quận 10', lat: 10.7725, lng: 106.6680, district: 'Quận 10' },
+  { id: 'BR-006', name: 'Chi nhánh Thủ Đức', lat: 10.8498, lng: 106.7720, district: 'Thủ Đức' },
+  { id: 'BR-007', name: 'Chi nhánh Gò Vấp', lat: 10.8383, lng: 106.6660, district: 'Gò Vấp' },
+  { id: 'BR-008', name: 'Chi nhánh Tân Bình', lat: 10.8014, lng: 106.6545, district: 'Tân Bình' },
 ];
 
 const DEFAULT_COORDS = [
-  { x: 260, y: 190 },
-  { x: 300, y: 290 },
-  { x: 280, y: 120 },
-  { x: 370, y: 160 },
-  { x: 190, y: 200 },
-  { x: 380, y: 70 },
-  { x: 170, y: 90 },
-  { x: 140, y: 140 },
+  { lat: 10.7769, lng: 106.7009 },
+  { lat: 10.7320, lng: 106.7150 },
+  { lat: 10.8050, lng: 106.7150 },
+  { lat: 10.7850, lng: 106.7450 },
+  { lat: 10.7725, lng: 106.6680 },
+  { lat: 10.8498, lng: 106.7720 },
+  { lat: 10.8383, lng: 106.6660 },
+  { lat: 10.8014, lng: 106.6545 },
 ];
 
 // ── RICH PHARMACEUTICAL MOCK DATA FALLBACKS ──
@@ -336,12 +339,21 @@ function DetailDrawer({ item, onClose }: { item: SafeStockItem; onClose: () => v
                   <tbody>
                     {item.branchBreakdown.map((b, idx) => {
                       const branchGeo = BRANCHES_GEOGRAPHY.find(bg => bg.id === b.branchId);
+                      const isExpired = b.expDate && new Date(b.expDate) < new Date();
                       return (
                         <tr key={idx}>
                           <td style={{ fontWeight: 600 }}>{branchGeo ? branchGeo.name : b.branchId}</td>
                           <td><code>{b.batchNo}</code></td>
-                          <td><strong style={{ color: b.stock === 0 ? '#ef4444' : '#1e293b' }}>{b.stock}</strong></td>
-                          <td>{new Date(b.expDate).toLocaleDateString('vi-VN')}</td>
+                          <td>
+                            <strong style={{ color: b.stock === 0 || isExpired ? '#ef4444' : '#1e293b' }}>
+                              {b.stock}
+                            </strong>
+                            {b.stock === 0 && <span style={{ fontSize: 10, color: '#ef4444', marginLeft: 4, fontWeight: 700 }}>(Hết hàng)</span>}
+                          </td>
+                          <td style={{ color: isExpired ? '#ef4444' : 'inherit', fontWeight: isExpired ? 800 : 400 }}>
+                            {new Date(b.expDate).toLocaleDateString('vi-VN')}
+                            {isExpired && <span style={{ fontSize: 10, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 5px', marginLeft: 6, color: '#ef4444', fontWeight: 800 }}>Đã hết hạn</span>}
+                          </td>
                         </tr>
                       );
                     })}
@@ -689,6 +701,120 @@ function SettingsModal({
     </div>
   );
 }
+// ── LEAFLET INTERACTIVE REAL MAP COMPONENT ──
+function LeafletBranchMap({
+  branches,
+  branchHealthMetrics,
+  onSelectBranch
+}: {
+  branches: MapBranch[];
+  branchHealthMetrics: Record<string, { totalItems: number; criticalCount: number; warningCount: number }>;
+  onSelectBranch: (branch: MapBranch) => void;
+}) {
+  const mapContainerRef = React.useRef<HTMLDivElement>(null);
+  const mapInstanceRef = React.useRef<L.Map | null>(null);
+
+  React.useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    if (!mapInstanceRef.current) {
+      // Khởi tạo bản đồ trung tâm tại TP.HCM (10.7769, 106.7009)
+      const map = L.map(mapContainerRef.current, {
+        center: [10.7769, 106.7009],
+        zoom: 11,
+        zoomControl: true,
+      });
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map);
+
+      mapInstanceRef.current = map;
+    }
+
+    const map = mapInstanceRef.current;
+
+    // Clear existing markers
+    map.eachLayer((layer) => {
+      if (layer instanceof L.Marker) {
+        map.removeLayer(layer);
+      }
+    });
+
+    // Add Markers for each branch
+    branches.forEach((b) => {
+      const metric = branchHealthMetrics[b.id] || { criticalCount: 0, warningCount: 0, totalItems: 0 };
+      let colorHex = '#22c55e';
+      let statusText = 'Khỏe mạnh';
+
+      if (metric.criticalCount > 0) {
+        colorHex = '#ef4444';
+        statusText = `${metric.criticalCount} Hết hàng`;
+      } else if (metric.warningCount > 0) {
+        colorHex = '#f97316';
+        statusText = `${metric.warningCount} Cảnh báo`;
+      }
+
+      const customIcon = L.divIcon({
+        className: 'scd-leaflet-custom-marker',
+        html: `
+          <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
+            <div style="position: absolute; top: -4px; left: calc(50% - 14px); width: 28px; height: 28px; border-radius: 50%; background: ${colorHex}; opacity: 0.35; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+            <div style="width: 20px; height: 20px; border-radius: 50%; background: ${colorHex}; border: 3px solid #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 2;"></div>
+            <div style="margin-top: 2px; background: #0f172a; color: #ffffff; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 800; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 3;">
+              ${b.district || b.name}
+            </div>
+          </div>
+        `,
+        iconSize: [80, 40],
+        iconAnchor: [40, 10],
+      });
+
+      const marker = L.marker([b.lat, b.lng], { icon: customIcon }).addTo(map);
+
+      const popupHtml = `
+        <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px; min-width: 170px;">
+          <h4 style="margin: 0 0 4px; font-size: 13.5px; font-weight: 800; color: #0f172a;">${b.name}</h4>
+          <p style="margin: 0 0 6px; font-size: 11px; color: #64748b;">Khu vực: <strong>${b.district}</strong></p>
+          <div style="font-size: 11.5px; font-weight: 800; color: ${colorHex}; margin-bottom: 8px;">
+            • Sức khỏe: ${statusText} (${metric.totalItems} SKUs)
+          </div>
+          <button id="btn-map-branch-${b.id}" style="width: 100%; padding: 7px; background: #0057cd; color: #ffffff; border: none; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; transition: background 0.2s;">
+            Xem chi tiết khẩn cấp →
+          </button>
+        </div>
+      `;
+
+      marker.bindPopup(popupHtml);
+
+      marker.on('popupopen', () => {
+        const btn = document.getElementById(`btn-map-branch-${b.id}`);
+        if (btn) {
+          btn.onclick = () => {
+            onSelectBranch(b);
+            map.closePopup();
+          };
+        }
+      });
+    });
+
+  }, [branches, branchHealthMetrics, onSelectBranch]);
+
+  return (
+    <div
+      ref={mapContainerRef}
+      style={{
+        width: '100%',
+        height: '420px',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        border: '1px solid #e2e8f0',
+        zIndex: 1,
+      }}
+    />
+  );
+}
 
 export function SupplyChainDashboard() {
   const [currentView, setCurrentView] = useState<'monitor' | 'anomalies'>('monitor');
@@ -737,14 +863,14 @@ export function SupplyChainDashboard() {
           id: b.branchCode || b._id,
           name: b.name,
           district: addrParts.length > 1 ? addrParts[addrParts.length - 2].trim() : 'N/A',
-          x: DEFAULT_COORDS[index % DEFAULT_COORDS.length].x,
-          y: DEFAULT_COORDS[index % DEFAULT_COORDS.length].y,
+          lat: DEFAULT_COORDS[index % DEFAULT_COORDS.length].lat,
+          lng: DEFAULT_COORDS[index % DEFAULT_COORDS.length].lng,
         };
       });
       setMapBranches(dynamicBranches.length > 0 ? dynamicBranches : BRANCHES_GEOGRAPHY);
 
-      // UC-30 Real-time Safe Stock Chain
-      const stockRes = await getSafeStockChain({ serviceLevel, periodDays, page, limit: 30 });
+      // UC-30 Real-time Safe Stock Chain (Lấy tối đa 1000 sản phẩm toàn hệ thống)
+      const stockRes = await getSafeStockChain({ serviceLevel, periodDays, page, limit: 1000 });
       setStockData(stockRes.data || []);
       setStockTotal(stockRes.total || 0);
       setStockPage(page);
@@ -842,7 +968,7 @@ export function SupplyChainDashboard() {
     const totalValueVnd = totalStockSum * 25000;
 
     return {
-      skuCount: totalSKUs,
+      skuCount: stockTotal > 0 ? stockTotal : totalSKUs,
       networkValue: totalValueVnd.toLocaleString('vi-VN') + ' đ',
       outOfStock: outOfStockCount,
       nearExpiry: nearExpiryCount
@@ -1032,90 +1158,15 @@ export function SupplyChainDashboard() {
                 </div>
               </div>
 
-              <div className="scd-map-container">
-                <svg viewBox="0 0 500 380" className="scd-map-svg">
-                  <rect width="100%" height="100%" fill="#f8fafc" />
-                  <g opacity="0.05">
-                    <line x1="0" y1="50" x2="500" y2="50" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="0" y1="100" x2="500" y2="100" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="0" y1="150" x2="500" y2="150" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="0" y1="200" x2="500" y2="200" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="0" y1="250" x2="500" y2="250" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="0" y1="300" x2="500" y2="300" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="50" y1="0" x2="50" y2="380" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="100" y1="0" x2="100" y2="380" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="150" y1="0" x2="150" y2="380" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="200" y1="0" x2="200" y2="380" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="250" y1="0" x2="250" y2="380" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="300" y1="0" x2="300" y2="380" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="350" y1="0" x2="350" y2="380" stroke="#0f172a" strokeWidth="1" />
-                    <line x1="400" y1="0" x2="400" y2="380" stroke="#0f172a" strokeWidth="1" />
-                  </g>
-                  <path d="M 50 180 Q 90 100 150 90 L 230 110 L 260 70 L 350 40 L 450 100 L 480 200 L 410 320 L 320 360 L 200 320 L 100 280 Z" fill="#eff2f6" stroke="#d8e2ed" strokeWidth="2" />
-                  <path d="M 120 190 Q 200 170 280 220 L 320 280 L 350 340" fill="none" stroke="#e2e8f0" strokeWidth="3" opacity="0.8" />
-                  <path d="M 380 0 C 350 80, 270 90, 290 140 C 310 180, 390 190, 310 260 C 270 300, 320 380, 330 380" className="scd-map-path-river" />
-                  <g opacity="0.3" stroke="#cbd5e1" strokeDasharray="3 3">
-                    <line x1="260" y1="190" x2="300" y2="290" />
-                    <line x1="260" y1="190" x2="280" y2="120" />
-                    <line x1="260" y1="190" x2="370" y2="160" />
-                    <line x1="260" y1="190" x2="190" y2="200" />
-                  </g>
-                  {mapBranches.map(bg => {
-                    const metric = branchHealthMetrics[bg.id] || { criticalCount: 0, warningCount: 0 };
-                    let markerColor = '#22c55e';
-                    if (metric.criticalCount > 0) markerColor = '#ef4444';
-                    else if (metric.warningCount > 0) markerColor = '#f97316';
-
-                    return (
-                      <g 
-                        key={bg.id} 
-                        className="scd-map-marker-group"
-                        onMouseEnter={(e) => {
-                          setHoveredBranch(bg);
-                          handleMapMouseMove(e, bg);
-                        }}
-                        onMouseMove={(e) => handleMapMouseMove(e, bg)}
-                        onMouseLeave={() => setHoveredBranch(null)}
-                        onClick={() => {
-                          setSelectedBranchId(bg.id);
-                          setSelectedBranchDetails(bg);
-                        }}
-                      >
-                        <circle cx={bg.x} cy={bg.y} r={12} fill={markerColor} className="scd-map-pin-pulse" />
-                        <circle cx={bg.x} cy={bg.y} r={5} fill={markerColor} className="scd-map-pin" stroke="#ffffff" strokeWidth={1.5} />
-                        <rect x={bg.x - 22} y={bg.y - 20} width={44} height={12} rx={3} fill="#0f172a" opacity="0.8" />
-                        <text x={bg.x} y={bg.y - 11} fill="#ffffff" fontSize={7} fontWeight="bold" textAnchor="middle">{bg.district}</text>
-                      </g>
-                    );
-                  })}
-                </svg>
-                {hoveredBranch && (
-                  <div className="scd-map-tooltip" style={{ left: tooltipPos.x, top: tooltipPos.y }}>
-                    <h4>{hoveredBranch.name}</h4>
-                    <p>Tổng mặt hàng phân bổ: {branchHealthMetrics[hoveredBranch.id]?.totalItems || 0} SKUs</p>
-                    <div 
-                      className="scd-map-tooltip-status" 
-                      style={{ 
-                        color: branchHealthMetrics[hoveredBranch.id]?.criticalCount > 0 
-                          ? '#ef4444' 
-                          : branchHealthMetrics[hoveredBranch.id]?.warningCount > 0 
-                            ? '#f97316' 
-                            : '#22c55e' 
-                      }}
-                    >
-                      • Trạng thái: {
-                        branchHealthMetrics[hoveredBranch.id]?.criticalCount > 0 
-                          ? `${branchHealthMetrics[hoveredBranch.id]?.criticalCount} Mất hàng` 
-                          : branchHealthMetrics[hoveredBranch.id]?.warningCount > 0 
-                            ? `${branchHealthMetrics[hoveredBranch.id]?.warningCount} Mức thấp` 
-                            : 'Hoạt động tốt'
-                      }
-                    </div>
-                    <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: 4, fontWeight: 700 }}>
-                      (Bấm vào điểm để xem chi tiết khẩn cấp)
-                    </div>
-                  </div>
-                )}
+              <div className="scd-map-container" style={{ padding: 0, height: '420px', overflow: 'hidden', borderRadius: '16px' }}>
+                <LeafletBranchMap 
+                  branches={mapBranches} 
+                  branchHealthMetrics={branchHealthMetrics} 
+                  onSelectBranch={(bg) => {
+                    setSelectedBranchId(bg.id);
+                    setSelectedBranchDetails(bg);
+                  }}
+                />
               </div>
             </div>
  

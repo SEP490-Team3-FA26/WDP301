@@ -10,6 +10,8 @@ import { BranchService } from './branch.service';
 import { Cart, CartSchema } from './schemas/cart.schema';
 import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
 
+import { MedicineBatch, MedicineBatchSchema } from '../../inventory-service/src/medicine/schemas/medicine-batch.schema';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -25,6 +27,7 @@ import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
       { name: Branch.name, schema: BranchSchema },
       { name: Cart.name, schema: CartSchema },
       { name: AuditLog.name, schema: AuditLogSchema },
+      { name: MedicineBatch.name, schema: MedicineBatchSchema },
     ]),
     ClientsModule.registerAsync([
       {

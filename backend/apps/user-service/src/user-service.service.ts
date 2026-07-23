@@ -725,7 +725,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
   // --- ADMIN EMPLOYEE MANAGEMENT ---
 
   async createEmployee(data: any) {
-    this.logger.log(`Admin creating new employee: ${data.email}`);
+    this.logger.log(`Creating new employee: ${data.email}, createdByRole: ${data.createdByRole}`);
     const existing = await this.userModel.findOne({ email: data.email }).exec();
     if (existing) {
       return { error: true, message: 'Email đã tồn tại', statusCode: 409 };
@@ -733,18 +733,43 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
 
     const passwordHash = await bcrypt.hash(data.password, 12);
 
+    // Nếu được tạo bởi branch manager → cần admin phê duyệt
+    const isBranchCreated = data.createdByRole === 'branch';
+
     const newUser = new this.userModel({
       email: data.email,
       passwordHash,
       fullName: data.fullName,
       role: data.role,
       branchId: data.branchId || null,
-      isActive: true,
-      isEmailVerified: true, // Auto verify for employee
+      isActive: !isBranchCreated,       // branch tạo → inactive, admin tạo → active
+      isEmailVerified: true,            // Auto verify for employee
+      isApproved: isBranchCreated ? 'pending' : 'approved',
     });
 
     await newUser.save();
     const result = newUser.toObject();
+    delete result.passwordHash;
+    return result;
+  }
+
+  async approveEmployee(id: string, action: 'approve' | 'reject') {
+    this.logger.log(`Admin ${action}ing employee: ${id}`);
+    const employee = await this.userModel.findById(id).exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+
+    if (action === 'approve') {
+      employee.isApproved = 'approved';
+      employee.isActive = true;
+    } else {
+      employee.isApproved = 'rejected';
+      employee.isActive = false;
+    }
+
+    await employee.save();
+    const result = employee.toObject();
     delete result.passwordHash;
     return result;
   }

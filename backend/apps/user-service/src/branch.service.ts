@@ -2,6 +2,8 @@ import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Branch, BranchDocument } from './schemas/branch.schema';
+import { User, UserDocument } from '../../auth-service/src/auth/user.schema';
+import { MedicineBatch } from '../../inventory-service/src/medicine/schemas/medicine-batch.schema';
 
 @Injectable()
 export class BranchService implements OnModuleInit {
@@ -10,6 +12,10 @@ export class BranchService implements OnModuleInit {
   constructor(
     @InjectModel(Branch.name)
     private readonly branchModel: Model<BranchDocument>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
+    @InjectModel(MedicineBatch.name)
+    private readonly batchModel: Model<MedicineBatch>,
   ) {}
 
   async onModuleInit() {
@@ -26,17 +32,8 @@ export class BranchService implements OnModuleInit {
             status: 'active',
             manager: 'Nguyễn Văn A',
             contact: '0901234567',
-            stats: {
-              employees: 12,
-              totalStock: 15420,
-              lowStock: 15,
-              expiring: 8,
-            },
-            alerts: [
-              { id: 1, type: 'low_stock', item: 'Paracetamol 500mg', current: 20, min: 50, time: '2 giờ trước (Từ quầy)' },
-              { id: 2, type: 'expiring', item: 'Amoxicillin 250mg', expiryDate: '10/11/2023', time: 'Hệ thống (Cronjob định kỳ)' },
-              { id: 3, type: 'low_stock', item: 'Vitamin C 1000mg', current: 5, min: 20, time: '5 giờ trước (Từ quầy)' },
-            ],
+            stats: { employees: 0, totalStock: 0, lowStock: 0, expiring: 0 },
+            alerts: [],
           },
           {
             branchCode: 'BR-002',
@@ -46,16 +43,8 @@ export class BranchService implements OnModuleInit {
             status: 'active',
             manager: 'Trần Thị B',
             contact: '0912345678',
-            stats: {
-              employees: 8,
-              totalStock: 8250,
-              lowStock: 3,
-              expiring: 2,
-            },
-            alerts: [
-              { id: 4, type: 'expiring', item: 'Panadol Extra', expiryDate: '15/12/2023', time: 'Hệ thống (Cronjob định kỳ)' },
-              { id: 5, type: 'low_stock', item: 'Khẩu trang y tế', current: 15, min: 100, time: '1 ngày trước (Từ quầy)' },
-            ],
+            stats: { employees: 0, totalStock: 0, lowStock: 0, expiring: 0 },
+            alerts: [],
           },
           {
             branchCode: 'BR-003',
@@ -65,15 +54,8 @@ export class BranchService implements OnModuleInit {
             status: 'maintenance',
             manager: 'Lê Văn C',
             contact: '0923456789',
-            stats: {
-              employees: 5,
-              totalStock: 5120,
-              lowStock: 0,
-              expiring: 12,
-            },
-            alerts: [
-              { id: 6, type: 'expiring', item: 'Kháng sinh Zinnat', expiryDate: '01/11/2023', time: 'Hệ thống (Cronjob định kỳ)' },
-            ],
+            stats: { employees: 0, totalStock: 0, lowStock: 0, expiring: 0 },
+            alerts: [],
           },
           {
             branchCode: 'BR-004',
@@ -83,16 +65,8 @@ export class BranchService implements OnModuleInit {
             status: 'active',
             manager: 'Phạm Thị D',
             contact: '0934567890',
-            stats: {
-              employees: 15,
-              totalStock: 22100,
-              lowStock: 25,
-              expiring: 1,
-            },
-            alerts: [
-              { id: 7, type: 'low_stock', item: 'Nước muối sinh lý', current: 50, min: 200, time: '1 giờ trước (Từ quầy)' },
-              { id: 8, type: 'low_stock', item: 'Bông y tế', current: 10, min: 50, time: '3 giờ trước (Từ quầy)' },
-            ],
+            stats: { employees: 0, totalStock: 0, lowStock: 0, expiring: 0 },
+            alerts: [],
           },
         ];
 
@@ -104,8 +78,53 @@ export class BranchService implements OnModuleInit {
     }
   }
 
-  async findAll(): Promise<Branch[]> {
-    return this.branchModel.find().sort({ branchCode: 1 }).exec();
+  async findAll(): Promise<any[]> {
+    const branches = await this.branchModel.find().sort({ branchCode: 1 }).lean().exec();
+
+    // Tính toán dữ liệu nhân sự & tồn kho thực tế từ DB cho từng chi nhánh
+    const enrichedBranches = await Promise.all(
+      branches.map(async (branch) => {
+        const code = branch.branchCode;
+
+        // 1. Đếm số nhân sự thuộc chi nhánh
+        const employeeCount = await this.userModel.countDocuments({
+          branchId: code,
+          isApproved: { $ne: 'rejected' },
+        }).exec();
+
+        // 2. Tính tổng số tồn kho thực tế từ MedicineBatch
+        const stockAggregate = await this.batchModel.aggregate([
+          { $match: { branchId: code, status: 'ACTIVE', stock: { $gt: 0 } } },
+          { $group: { _id: null, total: { $sum: '$stock' } } },
+        ]).exec();
+
+        const realTotalStock = stockAggregate.length > 0 ? stockAggregate[0].total : 0;
+
+        // 3. Đếm số lô thuốc hết hạn hoặc sắp hết hạn (< 30 ngày)
+        const now = new Date();
+        const thirtyDaysLater = new Date();
+        thirtyDaysLater.setDate(now.getDate() + 30);
+
+        const expiringCount = await this.batchModel.countDocuments({
+          branchId: code,
+          status: 'ACTIVE',
+          stock: { $gt: 0 },
+          expDate: { $lte: thirtyDaysLater },
+        }).exec();
+
+        return {
+          ...branch,
+          stats: {
+            employees: employeeCount,
+            totalStock: realTotalStock,
+            lowStock: branch.stats?.lowStock || 0,
+            expiring: expiringCount,
+          },
+        };
+      })
+    );
+
+    return enrichedBranches;
   }
 
   async create(data: any): Promise<Branch> {

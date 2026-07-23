@@ -125,6 +125,11 @@ export class UserServiceController {
     return this.userService.deleteEmployee(data.id);
   }
 
+  @MessagePattern('user.admin.employee.approve')
+  handleApproveEmployee(@Payload() data: { id: string; action: 'approve' | 'reject' }) {
+    return this.userService.approveEmployee(data.id, data.action);
+  }
+
   @EventPattern('user.branch.alert.low_stock')
   handleLowStockAlertEvent(@Payload() data: any) {
     return this.branchService.handleLowStockAlert(data);
