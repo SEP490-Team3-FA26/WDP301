@@ -20,7 +20,7 @@ import {
   Database,
   ArrowUp
 } from 'lucide-react';
-import { auditService, AuditLogItem, AuditLogQuery } from '../../services/audit.service';
+import { auditService, AuditLogItem, AuditLogQuery } from '../../services/audit/audit.service';
 import { AuditRealtimeProvider, useAuditRealtime } from '../../context/AuditRealtimeProvider';
 
 // Memoized Table Row Component to maximize performance and prevent redundant rerenders of off-viewport logs

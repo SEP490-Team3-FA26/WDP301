@@ -46,7 +46,7 @@ export class StockTransfer extends Document {
   @Prop({
     type: String,
     default: 'SHIPPING',
-    enum: ['SHIPPING', 'DELIVERED', 'CANCELLED'],
+    enum: ['SHIPPING', 'DELIVERED', 'COMPLETED', 'OUT_OF_STOCK', 'REJECTED'],
   })
   status: string;
 
@@ -61,6 +61,12 @@ export class StockTransfer extends Document {
 
   @Prop({ type: Date })
   receivedAt: Date;
+
+  @Prop({ type: String })
+  notes: string; // Ghi chú thêm khi xuất kho
+
+  @Prop({ type: [String], default: [] })
+  outOfStockMedicineIds: string[]; // ID các thuốc bị báo hết kho
 }
 
 export const StockTransferSchema = SchemaFactory.createForClass(StockTransfer);

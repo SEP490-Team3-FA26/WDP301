@@ -39,6 +39,36 @@ export class PurchaseController {
     }
   }
 
+  @MessagePattern('inventory.pr.update_status')
+  async updatePurchaseRequisitionStatus(@Payload() data: { id: string, status: string }) {
+    try {
+      return await this.purchaseService.updatePurchaseRequisitionStatus(data.id, data.status);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật trạng thái PR');
+    }
+  }
+
+  @MessagePattern('inventory.pr.update')
+  async updatePurchaseRequisition(@Payload() data: any) {
+    try {
+      return await this.purchaseService.updatePurchaseRequisition(data.id, data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật nội dung PR');
+    }
+  }
+
+  @MessagePattern('inventory.pr.delete')
+  async deletePurchaseRequisition(@Payload() data: { id: string }) {
+    try {
+      return await this.purchaseService.deletePurchaseRequisition(data.id);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi xóa PR');
+    }
+  }
+
   // ===========================================================================================
   // BƯỚC 2: APPROVAL & CONSOLIDATION
   // ===========================================================================================
@@ -106,6 +136,16 @@ export class PurchaseController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi từ chối nhận hàng PO');
+    }
+  }
+
+  @MessagePattern('inventory.po.receive')
+  async receivePurchaseOrder(@Payload() data: any) {
+    try {
+      return await this.purchaseService.receivePurchaseOrder(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi nhận hàng PO');
     }
   }
 
@@ -194,6 +234,16 @@ export class PurchaseController {
     }
   }
 
+  @MessagePattern('inventory.transactions.trace')
+  async traceLot(@Payload() data: { batchNo: string }) {
+    try {
+      return await this.purchaseService.traceLot(data.batchNo);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi truy xuất nguồn gốc lô thuốc');
+    }
+  }
+
   @MessagePattern('inventory.reports.import_export')
   async getImportExportReport(@Payload() query: { startDate?: string; endDate?: string }) {
     try {
@@ -217,6 +267,16 @@ export class PurchaseController {
     }
   }
 
+  @MessagePattern('inventory.transfer.recommend')
+  async recommendStockTransfer(@Payload() data: { medicineId: string; toBranchId: string; quantity: number }) {
+    try {
+      return await this.purchaseService.recommendStockTransfer(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tính toán gợi ý điều phối');
+    }
+  }
+
   @MessagePattern('inventory.transfer.create_direct')
   async createDirectStockTransfer(
     @Payload() data: {
@@ -225,6 +285,7 @@ export class PurchaseController {
       toBranchName: string;
       shippedBy: string;
       items: { medicineId: string; medicineName: string; quantity: number; unit?: string }[];
+      traceId?: string;
     }
   ) {
     try {
@@ -236,7 +297,9 @@ export class PurchaseController {
   }
 
   @MessagePattern('inventory.transfer.receive')
-  async confirmStockTransferReceipt(@Payload() data: { transferId: string; receivedBy: string }) {
+  async confirmStockTransferReceipt(
+    @Payload() data: { transferId: string; receivedBy: string; traceId?: string },
+  ) {
     try {
       return await this.purchaseService.confirmStockTransferReceipt(data);
     } catch (error) {
@@ -261,6 +324,50 @@ export class PurchaseController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy chi tiết chuyển kho');
+    }
+  }
+
+  // ===========================================================================================
+  // INSPECTION & GRN ENDPOINTS
+  // ===========================================================================================
+
+
+
+  @MessagePattern('inventory.inspection.create')
+  async createInspectionRecord(@Payload() data: { grnId: string; inspectedBy: string }) {
+    try {
+      return await this.purchaseService.createInspectionRecord(data.grnId, data.inspectedBy);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi mở phiên kiểm đếm');
+    }
+  }
+
+  @MessagePattern('inventory.inspection.verify_item')
+  async verifyInspectionItem(@Payload() data: { recordId: string; itemId: string; actualQty: number }) {
+    try {
+      return await this.purchaseService.verifyInspectionItem(data.recordId, data.itemId, data.actualQty);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi xác nhận số lượng kiểm đếm');
+    }
+  }
+
+  @MessagePattern('inventory.inspection.submit')
+  async submitInspectionReport(@Payload() data: { recordId: string }) {
+    try {
+      return await this.purchaseService.submitInspectionReport(data.recordId);
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi nộp báo cáo kiểm đếm');
+    }
+  }
+
+
+
+  @MessagePattern('inventory.inspection.list')
+  async listInspectionRecords() {
+    try {
+      return await this.purchaseService.listInspectionRecords();
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi lấy danh sách kiểm đếm');
     }
   }
 }

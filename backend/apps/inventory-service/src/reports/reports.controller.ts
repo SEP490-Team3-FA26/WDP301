@@ -15,4 +15,14 @@ export class ReportsController {
   async getReportHistory(@Payload() query: any) {
     return await this.reportsService.getReportHistory(query);
   }
+
+  @MessagePattern('inventory.reports.forecast_dataset')
+  async getForecastDataset(@Payload() data: { periodDays?: number; branchId?: string }) {
+    return await this.reportsService.getForecastDataset(data?.periodDays, data?.branchId);
+  }
+
+  @MessagePattern('inventory.reports.seasonal_trends')
+  async getSeasonalDataset(@Payload() data: { branchId?: string; monthsCount?: number }) {
+    return await this.reportsService.getSeasonalDataset(data?.branchId, data?.monthsCount);
+  }
 }

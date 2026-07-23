@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { MessagePattern, EventPattern, Payload } from '@nestjs/microservices';
 import { UserService } from './user-service.service';
 import { BranchService } from './branch.service';
 import { ExportJobStatusDto } from './dto/export-job-status.dto';
@@ -9,10 +9,10 @@ export class UserServiceController {
   constructor(
     private readonly userService: UserService,
     private readonly branchService: BranchService,
-  ) {}
+  ) { }
 
   @MessagePattern('user.edit_profile')
-  handleEditProfile(@Payload() data: { userId: string; fullName?: string }) {
+  handleEditProfile(@Payload() data: { userId: string; fullName?: string; phone?: string; address?: string }) {
     return this.userService.editProfile(data.userId, data);
   }
 
@@ -55,8 +55,17 @@ export class UserServiceController {
 
 
   @MessagePattern('user.branch.create')
-  handleCreateBranch(@Payload() data: any) {
-    return this.branchService.create(data);
+  async handleCreateBranch(@Payload() data: any) {
+    const newBranch = await this.branchService.create(data);
+    if (data.managerId && newBranch.branchCode) {
+      try {
+        await this.userService.updateEmployee(data.managerId, { branchId: newBranch.branchCode });
+      } catch (err) {
+        // Log the error but don't fail branch creation
+        console.error('Error linking manager to branch:', err);
+      }
+    }
+    return newBranch;
   }
 
   @MessagePattern('user.branch.update')
@@ -84,6 +93,43 @@ export class UserServiceController {
     return this.userService.updatePoints(data);
   }
 
+  // --- ADMIN EMPLOYEE MANAGEMENT ---
+
+  @MessagePattern('user.admin.employee.create')
+  handleCreateEmployee(@Payload() data: any) {
+    return this.userService.createEmployee(data);
+  }
+
+  @MessagePattern('user.admin.employee.list')
+  handleListEmployees(@Payload() data: any) {
+    return this.userService.listEmployees(data);
+  }
+
+  @MessagePattern('user.admin.employee.get')
+  handleGetEmployee(@Payload() data: { id: string }) {
+    return this.userService.getEmployeeById(data.id);
+  }
+
+  @MessagePattern('user.admin.employee.update')
+  handleUpdateEmployee(@Payload() data: any) {
+    return this.userService.updateEmployee(data.id, data);
+  }
+
+  @MessagePattern('user.admin.employee.ban_unban')
+  handleToggleBanEmployee(@Payload() data: { id: string }) {
+    return this.userService.toggleBanEmployee(data.id);
+  }
+
+  @MessagePattern('user.admin.employee.delete')
+  handleDeleteEmployee(@Payload() data: { id: string }) {
+    return this.userService.deleteEmployee(data.id);
+  }
+
+  @EventPattern('user.branch.alert.low_stock')
+  handleLowStockAlertEvent(@Payload() data: any) {
+    return this.branchService.handleLowStockAlert(data);
+  }
+
   @MessagePattern('audit.created')
   handleCreateAuditLog(@Payload() data: any) {
     return this.userService.createAuditLog(data);
@@ -100,7 +146,7 @@ export class UserServiceController {
   }
 
   @MessagePattern('user.audit.export_status')
-  async handleExportAuditLogsStatus(@Payload() data: { jobId: string }): Promise<ExportJobStatusDto> {
+  async handleExportAuditLogsStatus(@Payload() data: { jobId: string }): Promise < ExportJobStatusDto > {
     return this.userService.getExportJobStatus(data.jobId);
   }
 }

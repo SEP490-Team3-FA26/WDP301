@@ -4,7 +4,7 @@ import { MedicineService } from './medicine.service';
 
 @Controller()
 export class MedicineController {
-  constructor(private readonly medicineService: MedicineService) {}
+  constructor(private readonly medicineService: MedicineService) { }
 
   @MessagePattern('inventory.medicine.list')
   async listMedicines(@Payload() query: any) {
@@ -13,6 +13,19 @@ export class MedicineController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách thuốc');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.branch_list')
+  async listBranchMedicines(@Payload() query: any) {
+    try {
+      if (!query.branchId) {
+        throw new RpcException('Branch ID is required for branch inventory API');
+      }
+      return await this.medicineService.getBranchMedicines(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách thuốc chi nhánh');
     }
   }
 
@@ -46,6 +59,16 @@ export class MedicineController {
     }
   }
 
+  @MessagePattern('inventory.medicine.update_price')
+  async updateMedicinePrice(@Payload() data: { id: string; price: number }) {
+    try {
+      return await this.medicineService.updateMedicinePrice(data.id, data.price);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật giá thuốc');
+    }
+  }
+
   @MessagePattern('inventory.medicine.get_filters')
   async getMedicineFilters() {
     try {
@@ -57,9 +80,9 @@ export class MedicineController {
   }
 
   @MessagePattern('inventory.medicine.stats')
-  async getInventoryStats() {
+  async getInventoryStats(@Payload() data?: { branchId?: string }) {
     try {
-      return await this.medicineService.getInventoryStats();
+      return await this.medicineService.getInventoryStats(data?.branchId);
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy thống kê tồn kho');
@@ -73,6 +96,16 @@ export class MedicineController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy báo cáo hết hạn');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.handle_expiration_action')
+  async handleExpirationAction(@Payload() data: any) {
+    try {
+      return await this.medicineService.handleExpirationAction(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi xử lý hành động hết hạn');
     }
   }
 
@@ -143,6 +176,36 @@ export class MedicineController {
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách chọn thuốc');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.get_alternatives')
+  async getAlternatives(@Payload() data: { medicineId: string; branchId: string }) {
+    try {
+      return await this.medicineService.findAlternatives(data.medicineId, data.branchId);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tìm thuốc thay thế');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.safe_stock_chain')
+  async getSafeStockChain(@Payload() query: any) {
+    try {
+      return await this.medicineService.getSafeStockChain(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy báo cáo tồn kho an toàn');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.detect_anomalies')
+  async getAnomalyDetection(@Payload() query: any) {
+    try {
+      return await this.medicineService.getAnomalyDetection(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi phát hiện bất thường tồn kho');
     }
   }
 }

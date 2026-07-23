@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, MapPin, Users, Package, AlertTriangle, Clock, X, ChevronRight, Activity, RotateCcw, Building2, Bell, CheckCircle2 } from "lucide-react";
-import { branchService } from "../../services/branch.service";
-
+import { branchService } from "../../services/admin/branch.service";
+import { employeeService, Employee } from "../../services/admin/employee.service";
 interface Branch {
    _id?: string;
    id: string; // branchCode
@@ -427,9 +427,17 @@ function CreateBranchModal({ onClose, onCreate }: { onClose: () => void; onCreat
    const [name, setName] = useState("");
    const [address, setAddress] = useState("");
    const [manager, setManager] = useState("");
+   const [managerId, setManagerId] = useState("");
    const [contact, setContact] = useState("");
    const [status, setStatus] = useState<"active" | "maintenance">("active");
    const [image, setImage] = useState("");
+   const [unassignedManagers, setUnassignedManagers] = useState<Employee[]>([]);
+
+   useEffect(() => {
+      employeeService.getEmployees({ role: 'branch', unassigned: true })
+         .then(data => setUnassignedManagers(data))
+         .catch(console.error);
+   }, []);
 
    const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -441,6 +449,7 @@ function CreateBranchModal({ onClose, onCreate }: { onClose: () => void; onCreat
          name,
          address,
          manager,
+         managerId,
          contact,
          status,
          image: image.trim() || undefined,
@@ -483,14 +492,31 @@ function CreateBranchModal({ onClose, onCreate }: { onClose: () => void; onCreat
                <div className="grid grid-cols-2 gap-4">
                   <div>
                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quản lý *</label>
-                     <input
-                        type="text"
+                     <select
                         required
-                        value={manager}
-                        onChange={(e) => setManager(e.target.value)}
-                        placeholder="Người quản lý..."
-                        className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all"
-                     />
+                        value={managerId}
+                        onChange={(e) => {
+                           const selectedId = e.target.value;
+                           const selectedEmp = unassignedManagers.find(emp => emp._id === selectedId);
+                           if (selectedEmp) {
+                              setManagerId(selectedId);
+                              setManager(selectedEmp.fullName);
+                              setContact(selectedEmp.email); // Auto fill contact
+                           } else {
+                              setManagerId("");
+                              setManager("");
+                              setContact("");
+                           }
+                        }}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0057cd] bg-white transition-all"
+                     >
+                        <option value="">-- Chọn Quản lý --</option>
+                        {unassignedManagers.map(emp => (
+                           <option key={emp._id} value={emp._id}>
+                              {emp.fullName} ({emp.email})
+                           </option>
+                        ))}
+                     </select>
                   </div>
                   <div>
                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Số điện thoại *</label>

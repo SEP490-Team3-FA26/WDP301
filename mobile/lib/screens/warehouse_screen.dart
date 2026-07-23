@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/notification_badge.dart';
 
 
 class WarehouseScreen extends StatefulWidget {
@@ -27,6 +30,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
   Map<String, dynamic>? _selectedItem;
   final TextEditingController _actualQtyController = TextEditingController();
   String? _selectedImagePath;
+  Uint8List? _selectedImageBytes;
   
   int _currentInspectionIndex = 0;
   bool _isAiAnalyzing = false;
@@ -45,38 +49,24 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
   String _searchQuery = '';
   Timer? _debounceTimer;
 
-  final List<Map<String, dynamic>> _expiredBatches = [
-    {
-      'medicineName': 'Panadol Extra',
-      'batchNo': 'Lô B0 (Hết hạn)',
-      'expDate': '01/05/2026',
-      'stock': 20,
-      'unit': 'Hộp',
-      'status': 'EXPIRED',
-    },
-    {
-      'medicineName': 'Amoxicillin 500mg',
-      'batchNo': 'Lô A0 (Hết hạn)',
-      'expDate': '20/04/2026',
-      'stock': 15,
-      'unit': 'Hộp',
-      'status': 'EXPIRED',
-    },
-    {
-      'medicineName': 'Cefuroxim 500mg',
-      'batchNo': 'Lô C0 (Cận hạn)',
-      'expDate': '30/06/2026',
-      'stock': 50,
-      'unit': 'Hộp',
-      'status': 'SOON_TO_EXPIRE',
-    }
-  ];
+  // Lot Tracking State
+  final TextEditingController _batchNoController = TextEditingController();
+  bool _isTracing = false;
+  Map<String, dynamic>? _traceResult;
+  String? _traceError;
+  
+  // AI Forecast State
+  int _forecastPeriod = 30;
+  bool _isForecasting = false;
+  Map<String, dynamic>? _forecastResult;
+  String? _forecastError;
+
+  final List<Map<String, dynamic>> _expiredBatches = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-
+    _tabController = TabController(length: 5, vsync: this);
     
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
@@ -86,13 +76,48 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
 
     _loadMedicines(reset: true);
     _loadGoodsReceipts();
+    _loadExpirationReport();
     _startHealthCheck();
+    _runForecast(_forecastPeriod);
+  }
+
+  Future<void> _loadExpirationReport() async {
+    try {
+      final report = await ApiService.getExpirationReport();
+      if (mounted) {
+        setState(() {
+          _expiredBatches.clear();
+          for (var item in report) {
+            _expiredBatches.add({
+              'medicineName': item['medicineName'] ?? item['name'] ?? 'Thuốc',
+              'batchNo': item['batchNo'] ?? 'Lô KD',
+              'expDate': item['expDate'] ?? '2026-12-31',
+              'stock': item['stock'] ?? 0,
+              'unit': item['unit'] ?? 'Hộp',
+              'status': item['status'] ?? 'EXPIRED',
+            });
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading expiration report: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi kết nối DB (Hạn dùng): $e', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _scrollController.dispose();
+    _batchNoController.dispose();
     _debounceTimer?.cancel();
     _healthCheckTimer?.cancel();
     super.dispose();
@@ -104,7 +129,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         final response = await http.get(Uri.parse('${ApiService.baseUrl}/api/medicines?limit=1')).timeout(
           const Duration(seconds: 2),
         );
-        final isConnected = response.statusCode == 200;
+        final isConnected = response.statusCode == 200 || response.statusCode == 401;
         if (isConnected != _hasRealServerConnection) {
           setState(() {
             _hasRealServerConnection = isConnected;
@@ -171,7 +196,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
 
         mapped.add({
           'id': gr['_id']?.toString() ?? '',
-          'poId': gr['poId']?.toString() ?? 'PO-Unknown',
+          'poId': gr['poCode']?.toString() ?? (gr['poId'] != null ? 'PO-${gr['poId'].toString().length > 18 ? gr['poId'].toString().substring(18).toUpperCase() : gr['poId'].toString().toUpperCase()}' : 'PO-Unknown'),
           'supplier': gr['supplier']?.toString() ?? 'Đối tác Dược phẩm',
           'status': grStatus,
           'date': gr['createdAt'] != null
@@ -187,6 +212,15 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
       });
     } catch (e) {
       debugPrint("Error loading goods receipts: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi kết nối DB (Phiếu Nhập Kho): $e', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -231,6 +265,15 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
       setState(() {
         _isLoading = false;
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi kết nối DB (Danh Mục Thuốc): $e', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 
@@ -440,16 +483,22 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         ),
         elevation: 4,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [
+          NotificationBadge(iconColor: Colors.white),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
           indicatorColor: Colors.white,
           indicatorWeight: 3.5,
+          isScrollable: true,
           tabs: const [
             Tab(text: 'Tồn Kho'),
             Tab(text: 'Kiểm Nhận AI'),
-            Tab(text: 'Báo Cáo Hết Hạn'),
+            Tab(text: 'Hết Hạn'),
+            Tab(text: 'Truy Xuất Lô'),
+            Tab(text: 'Dự Báo AI'),
           ],
         ),
       ),
@@ -459,6 +508,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
           _buildInventoryTab(),
           _buildGrnInspectionTab(),
           _buildExpirationReportTab(),
+          _buildLotTrackingTab(),
+          _buildAIForecastTab(),
         ],
       ),
 
@@ -940,6 +991,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
             _selectedReceipt = gr;
             _selectedItem = null;
             _selectedImagePath = null;
+            _selectedImageBytes = null;
             _actualQtyController.clear();
           });
         } : () {
@@ -988,6 +1040,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                           _selectedReceipt = null;
                           _selectedItem = null;
                           _selectedImagePath = null;
+                          _selectedImageBytes = null;
                         });
                       },
                     ),
@@ -1016,6 +1069,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                               _selectedItem = items[idx];
                               _currentInspectionIndex = idx;
                               _selectedImagePath = null;
+                              _selectedImageBytes = null;
                               _actualQtyController.clear();
                               _aiErrorCountForCurrentItem = 0;
                             });
@@ -1163,6 +1217,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                                       _selectedItem = item;
                                       _currentInspectionIndex = idx;
                                       _selectedImagePath = null;
+                                      _selectedImageBytes = null;
                                       _actualQtyController.clear();
                                       _aiErrorCountForCurrentItem = 0;
                                       if (isChecked) {
@@ -1252,38 +1307,44 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   color: Colors.grey.shade50,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton.icon(
-                        onPressed: _currentInspectionIndex > 0 ? _goToPrev : null,
-                        icon: const Icon(Icons.chevron_left, size: 16),
-                        label: const Text('Trước đó', style: TextStyle(fontSize: 11)),
-                        style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF00838F),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _currentInspectionIndex > 0 ? _goToPrev : null,
+                          icon: const Icon(Icons.chevron_left, size: 16),
+                          label: const Text('Trước đó', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF00838F),
+                          ),
                         ),
-                      ),
-                      TextButton.icon(
-                        onPressed: _skipCurrentItem,
-                        icon: const Icon(Icons.redo_rounded, size: 14),
-                        label: const Text('Bỏ qua', style: TextStyle(fontSize: 11)),
-                        style: TextButton.styleFrom(foregroundColor: Colors.orange.shade700),
-                      ),
-                      TextButton.icon(
-                        onPressed: _goToWorksheet,
-                        icon: const Icon(Icons.list_alt_rounded, size: 14),
-                        label: const Text('Danh sách', style: TextStyle(fontSize: 11)),
-                        style: TextButton.styleFrom(foregroundColor: Colors.blueGrey),
-                      ),
-                      TextButton.icon(
-                        onPressed: _currentInspectionIndex < items.length - 1 ? _goToNext : null,
-                        icon: const Icon(Icons.chevron_right, size: 16),
-                        label: const Text('Tiếp theo', style: TextStyle(fontSize: 11)),
-                        style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF00838F),
+                        const SizedBox(width: 4),
+                        TextButton.icon(
+                          onPressed: _skipCurrentItem,
+                          icon: const Icon(Icons.redo_rounded, size: 14),
+                          label: const Text('Bỏ qua', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(foregroundColor: Colors.orange.shade700),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        TextButton.icon(
+                          onPressed: _goToWorksheet,
+                          icon: const Icon(Icons.list_alt_rounded, size: 14),
+                          label: const Text('Danh sách', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(foregroundColor: Colors.blueGrey),
+                        ),
+                        const SizedBox(width: 4),
+                        TextButton.icon(
+                          onPressed: _currentInspectionIndex < items.length - 1 ? _goToNext : null,
+                          icon: const Icon(Icons.chevron_right, size: 16),
+                          label: const Text('Tiếp theo', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF00838F),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const Divider(height: 1),
@@ -1403,13 +1464,17 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade200),
               ),
-              child: _selectedImagePath != null
+              child: _selectedImagePath != null && _selectedImageBytes != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.file(
-                        File(_selectedImagePath!),
-                        fit: BoxFit.cover,
-                      ),
+                      child: kIsWeb
+                        ? Image.memory(_selectedImageBytes!, width: double.infinity, height: double.infinity, fit: BoxFit.cover)
+                        : Image.file(
+                            File(_selectedImagePath!),
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
                     )
                   : (item['image'] != null && item['image'].toString().isNotEmpty
                       ? ClipRRect(
@@ -1579,6 +1644,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                     item['recordId'] = null;
                     item['image'] = null;
                     _selectedImagePath = null;
+                    _selectedImageBytes = null;
                     _actualQtyController.clear();
                   });
                 },
@@ -1690,8 +1756,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         imageQuality: 85,
       );
       if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
         setState(() {
           _selectedImagePath = pickedFile.path;
+          _selectedImageBytes = bytes;
         });
       }
     } catch (e) {
@@ -1701,28 +1769,34 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
 
   // Mock a mock sample photo for testing in emulators where file picker/camera might fail
   Future<void> _mockCaptureSamplePhoto() async {
-    // Generate a simple mock text file or just pretend we have a picture to invoke testing
-    // To be compatible with http MultipartFile, we write a small mock png/jpg file in the app data directory
     try {
-      final tempDir = Directory.systemTemp;
-      final mockFile = File('${tempDir.path}/mock_medicine_cluster.jpg');
+      final bytes = Uint8List.fromList(List.generate(100, (index) => index));
+      String path = 'mock_grn_image.jpg';
       
-      // Write some mock pixel bytes representing a JPEG
-      await mockFile.writeAsBytes(List.generate(100, (index) => index));
+      if (!kIsWeb) {
+        final Directory tempDir = await getTemporaryDirectory();
+        final File mockFile = File('${tempDir.path}/mock_grn_image.jpg');
+        if (!await mockFile.exists()) {
+          await mockFile.writeAsBytes(bytes);
+        }
+        path = mockFile.path;
+      }
+      
       setState(() {
-        _selectedImagePath = mockFile.path;
+        _selectedImagePath = path;
+        _selectedImageBytes = bytes;
       });
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Đã tải ảnh giả lập thành công! Hãy nhấn Bắt đầu phân tích AI để test.'),
+          content: Text('Da tai anh gia lap thanh cong!'),
           backgroundColor: Colors.purple,
           duration: Duration(seconds: 2),
         ),
       );
     } catch (e) {
-      debugPrint("Mock photo capture failed: $e");
+      debugPrint('Mock error: ' + e.toString());
     }
   }
 
@@ -1737,6 +1811,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
         receiptId: _selectedReceipt!['id'],
         receiptItemId: _selectedItem!['id'],
         filePath: _selectedImagePath!,
+        fileBytes: _selectedImageBytes,
       );
       
       setState(() {
@@ -2064,6 +2139,532 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
           Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
         ],
       ),
+    );
+  }
+
+  Future<void> _runTrace(String batchNo) async {
+    if (batchNo.trim().isEmpty) return;
+    setState(() {
+      _isTracing = true;
+      _traceResult = null;
+      _traceError = null;
+    });
+
+    try {
+      final res = await ApiService.traceLot(batchNo.trim());
+      setState(() {
+        _traceResult = res;
+      });
+    } catch (e) {
+      setState(() {
+        _traceError = 'Không thể truy xuất thông tin lô thuốc này.';
+      });
+    } finally {
+      setState(() {
+        _isTracing = false;
+      });
+    }
+  }
+
+  Future<void> _runForecast(int periodDays) async {
+    setState(() {
+      _isForecasting = true;
+      _forecastResult = null;
+      _forecastError = null;
+    });
+
+    try {
+      final res = await ApiService.getAIForecast(periodDays);
+      setState(() {
+        _forecastResult = res;
+      });
+    } catch (e) {
+      setState(() {
+        _forecastError = 'Lỗi kết nối API AI Forecast DB: $e';
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi AI Forecast DB: $e', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isForecasting = false;
+      });
+    }
+  }
+
+  Widget _buildLotTrackingTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Truy xuất mã lô thuốc', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _batchNoController,
+                          decoration: InputDecoration(
+                            hintText: 'Nhập mã lô thuốc (VD: INIT-BATCH)...',
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          ),
+                          onSubmitted: (val) => _runTrace(val),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () => _runTrace(_batchNoController.text),
+                        icon: _isTracing 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.search, color: Colors.white),
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFF00838F),
+                          padding: const EdgeInsets.all(12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text('Mẫu:', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                      ...['INIT-BATCH', 'LOT-2026-A', 'LOT-2026-B'].map((lot) => GestureDetector(
+                        onTap: () {
+                          _batchNoController.text = lot;
+                          _runTrace(lot);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.cyan.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.cyan.shade200)),
+                          child: Text(lot, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF006064))),
+                        ),
+                      )),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_isTracing)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 40.0),
+                child: CircularProgressIndicator(color: Color(0xFF00838F)),
+              ),
+            )
+          else if (_traceError != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40.0),
+                child: Text(_traceError!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              ),
+            )
+          else if (_traceResult != null) ...[
+            _buildTraceInfoCard(),
+            const SizedBox(height: 16),
+            _buildTraceOriginCard(),
+            const SizedBox(height: 16),
+            const Text('Hành Trình Lưu Uyển (Timeline)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B))),
+            const SizedBox(height: 12),
+            _buildTraceTimeline(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTraceInfoCard() {
+    final med = _traceResult!['medicine'] ?? {};
+    final batches = _traceResult!['batches'] as List? ?? [];
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(8)),
+              child: const Text('Thông tin dược phẩm', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.indigo)),
+            ),
+            const SizedBox(height: 12),
+            Text(med['name'] ?? 'Thuốc không tên', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B))),
+            const SizedBox(height: 8),
+            _buildDetailRow('Mã lô hàng', _traceResult!['batchNo'] ?? ''),
+            _buildDetailRow('Phân nhóm', med['category'] ?? 'N/A'),
+            _buildDetailRow('Đơn vị tính', med['unit'] ?? 'Hộp'),
+            _buildDetailRow('Mã SKU', med['sku'] ?? 'N/A'),
+            const Divider(height: 24),
+            const Text('Tồn kho thực tế các chi nhánh', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+            const SizedBox(height: 8),
+            ...batches.map((b) {
+              final isCentral = b['branchId'] == 'CENTRAL_WH';
+              final isActive = b['status'] == 'ACTIVE';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(isCentral ? 'Kho Tổng Trung Tâm' : 'Chi nhánh ${b['branchId']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        const SizedBox(height: 2),
+                        Text('Hạn dùng: ${b['expDate'].toString().substring(0, 10)}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                    Text('${b['stock']} ${med['unit'] ?? 'Hộp'}', style: TextStyle(fontWeight: FontWeight.bold, color: isActive ? Colors.indigo : Colors.red)),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTraceOriginCard() {
+    final origin = _traceResult!['origin'];
+    if (origin == null) return const SizedBox.shrink();
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
+              child: const Text('Nguồn gốc nhập hàng', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green)),
+            ),
+            const SizedBox(height: 12),
+            _buildDetailRow('Nhà cung cấp', origin['supplierName'] ?? 'Không rõ'),
+            _buildDetailRow('Ngày nhập kho', origin['importDate'].toString().substring(0, 10)),
+            _buildDetailRow('Số lượng nhập', '${origin['importQty']}'),
+            _buildDetailRow('Đơn giá nhập', '${origin['importPrice']} ₫'),
+            _buildDetailRow('Thủ kho nhận', origin['receivedBy'] ?? '—'),
+            const Divider(height: 20),
+            Text('Mã phiếu nhập (GRN): ${origin['grnId'].toString().substring(18).toUpperCase()}', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
+            Text('Mã đơn hàng (PO): ${origin['poId'].toString().length > 18 ? origin['poId'].toString().substring(18).toUpperCase() : origin['poId'].toString().toUpperCase()}', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTraceTimeline() {
+    final timeline = _traceResult!['timeline'] as List? ?? [];
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: timeline.length,
+      itemBuilder: (context, idx) {
+        final item = timeline[idx];
+        final isPositive = item['quantityChange'] > 0;
+        IconData icon = Icons.remove_circle;
+        Color color = Colors.blue;
+        String title = item['type'];
+        if (item['type'] == 'GRN_IMPORT') {
+          icon = Icons.add_circle;
+          color = Colors.green;
+          title = 'Nhập kho hàng loạt';
+        } else if (item['type'] == 'SALE_EXPORT') {
+          icon = Icons.shopping_basket;
+          color = Colors.indigo;
+          title = 'Bán hàng cho khách';
+        } else if (item['type'] == 'TRANSFER') {
+          icon = Icons.swap_horiz;
+          color = Colors.amber;
+          title = 'Chuyển kho nội bộ';
+        } else if (item['type'] == 'DISPOSE') {
+          icon = Icons.delete_forever;
+          color = Colors.red;
+          title = 'Tiêu hủy thuốc';
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              children: [
+                Icon(icon, color: color, size: 24),
+                if (idx < timeline.length - 1)
+                  Container(width: 2, height: 60, color: Colors.grey.shade300),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text(
+                          isPositive ? '+${item['quantityChange']}' : '${item['quantityChange']}',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: isPositive ? Colors.green : Colors.red),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(item['notes'] ?? '', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Tồn: ${item['stockBefore']} -> ${item['stockAfter']}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text('Bởi: ${item['performedBy']}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAIForecastTab() {
+    return RefreshIndicator(
+      onRefresh: () => _runForecast(_forecastPeriod),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Phân tích nhu cầu kỳ tới:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                DropdownButton<int>(
+                  value: _forecastPeriod,
+                  items: const [
+                    DropdownMenuItem(value: 7, child: Text('7 ngày')),
+                    DropdownMenuItem(value: 30, child: Text('30 ngày')),
+                    DropdownMenuItem(value: 90, child: Text('90 ngày')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _forecastPeriod = val;
+                      });
+                      _runForecast(val);
+                    }
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_isForecasting)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 60.0),
+                  child: Column(
+                    children: [
+                      CircularProgressIndicator(color: Color(0xFF00838F)),
+                      SizedBox(height: 12),
+                      Text('AI đang chạy mô hình dự báo...', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              )
+            else if (_forecastError != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40.0),
+                  child: Text(_forecastError!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                ),
+              )
+            else if (_forecastResult != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF311B92), Color(0xFF00838F)]),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: Colors.deepPurple.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.auto_awesome, color: Colors.yellow, size: 18),
+                        SizedBox(width: 8),
+                        Text('TÓM TẮT DỰ BÁO AI (INSIGHTS)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.0)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _forecastResult!['summary'] ?? '',
+                      style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text('Đề xuất kế hoạch nhập kho', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B))),
+              const SizedBox(height: 12),
+              _buildForecastRecommendations(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForecastRecommendations() {
+    final recs = _forecastResult!['recommendations'] as List? ?? [];
+    if (recs.isEmpty) {
+      return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text('Không có đề xuất bổ sung nào.')));
+    }
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: recs.length,
+      itemBuilder: (context, idx) {
+        final r = recs[idx];
+        final urgency = r['urgency'] ?? 'LOW';
+        Color color = Colors.blue;
+        if (urgency == 'HIGH') {
+          color = Colors.red;
+        } else if (urgency == 'MEDIUM') {
+          color = Colors.orange;
+        }
+        
+        return Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(r['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B))),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Text(
+                        urgency == 'HIGH' ? 'Khẩn cấp' : urgency == 'MEDIUM' ? 'Cần nhập' : 'Thường',
+                        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(r['category'] ?? '', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                const Divider(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildMiniStat('Tồn kho', '${r['currentStock']}'),
+                    _buildMiniStat('Bán/ngày', '${r['averageDailySales']}'),
+                    _buildMiniStat('Đang về', '${r['expectedIncoming']}'),
+                    _buildMiniStat('Khuyến nghị', '${r['suggestedOrderQty']}', highlight: r['suggestedOrderQty'] > 0),
+                  ],
+                ),
+                if (r['reason'] != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(10)),
+                    child: Text(
+                      r['reason'],
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700, height: 1.4),
+                    ),
+                  ),
+                ],
+                if (r['suggestedOrderQty'] > 0) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Đã gửi yêu cầu PR cho ${r['name']} (${r['suggestedOrderQty']} ${r['unit']}) lên Admin!', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              backgroundColor: const Color(0xFF00838F),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00838F),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        ),
+                        icon: const Icon(Icons.add_shopping_cart, size: 14),
+                        label: const Text('Lập PR nhanh', style: TextStyle(fontSize: 11)),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMiniStat(String label, String value, {bool highlight = false}) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey)),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: highlight ? const Color(0xFF00838F) : const Color(0xFF1E293B),
+          ),
+        ),
+      ],
     );
   }
 }

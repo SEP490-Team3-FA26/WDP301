@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 
-void main() {
+import 'services/env_service.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await EnvService.init();
   runApp(const MyApp());
 }
 

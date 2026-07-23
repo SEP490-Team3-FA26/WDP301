@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CreditCard, Banknote, QrCode, ClipboardList, Printer, ShoppingBag, FileCheck, CheckCircle2, ChevronRight, XCircle } from "lucide-react";
-import { orderService } from "../../services/order.service";
-import { cartService } from "../../services/cart.service";
-import { voucherService } from "../../services/voucher.service";
-import { userService } from "../../services/user.service";
+import { orderService } from "../../services/sales/order.service";
+import { cartService } from "../../services/sales/cart.service";
+import { voucherService } from "../../services/sales/voucher.service";
+import { userService } from "../../services/auth/user.service";
 
 export function CustomerCheckout() {
   const navigate = useNavigate();

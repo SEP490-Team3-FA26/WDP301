@@ -5,9 +5,10 @@ import {
   Loader2, ClipboardList, Building, Calendar, Eye, ArrowRight, FileText
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { purchaseRequisitionService } from "../../services/purchaseRequisition.service";
-import { branchService } from "../../services/branch.service";
-import api from "../../services/api";
+import { purchaseRequisitionService } from "../../services/purchase/purchaseRequisition.service";
+import { branchService } from "../../services/admin/branch.service";
+import { CreatePOModal } from "../../components/CreatePOModal";
+import api from "../../services/core/api";
 
 // --- In-memory cache for instant back-navigation (resets on page refresh/new login) ---
 const prCache: Record<string, { data: any[]; ts: number }> = {};
@@ -44,6 +45,8 @@ export function PurchaseRequisition() {
   const [detailPr, setDetailPr] = useState<any>(null);
   const [branches, setBranches] = useState<any[]>([]);
   const [selectedSourceBranch, setSelectedSourceBranch] = useState("CENTRAL_WH");
+  const [showCreatePOModal, setShowCreatePOModal] = useState(false);
+  const [prefillData, setPrefillData] = useState<any[]>([]);
 
   useEffect(() => {
     const loadBranches = async () => {
@@ -101,7 +104,7 @@ export function PurchaseRequisition() {
   return (
     <div className="flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-y-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-100 text-amber-700"><ClipboardList size={20} /></div>
           <div>
@@ -109,6 +112,13 @@ export function PurchaseRequisition() {
             <p className="text-slate-500 text-sm mt-0.5">Nhận PR từ chi nhánh → Chọn & tạo Đơn đặt hàng (PO) → Admin thanh toán</p>
           </div>
         </div>
+        <button 
+          onClick={() => { setPrefillData([]); setShowCreatePOModal(true); }}
+          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm flex items-center gap-2 transition-colors"
+        >
+          <Package size={18} />
+          Tạo Đơn Nhập Hàng (PO)
+        </button>
       </div>
 
       {/* Workflow */}
@@ -155,7 +165,8 @@ export function PurchaseRequisition() {
                 prCode: pr.prCode,
               }))
             );
-            navigate("/warehouse/inventory/import/new", { state: { prefillPrItems } });
+            setPrefillData(prefillPrItems);
+            setShowCreatePOModal(true);
           }}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm">
             <FileText size={14} /> Tiếp tục tạo Đơn Đặt Hàng (PO)
@@ -293,6 +304,18 @@ export function PurchaseRequisition() {
           </div>
         )}
       </AnimatePresence>
+
+      {showCreatePOModal && (
+        <CreatePOModal 
+          prefillPrItems={prefillData}
+          onClose={() => setShowCreatePOModal(false)}
+          onSuccess={() => {
+            setMsg({ type: "success", text: "Tạo đơn nhập hàng (PO) thành công!" });
+            fetchData(true);
+            setSelectedPrs([]);
+          }}
+        />
+      )}
     </div>
   );
 }

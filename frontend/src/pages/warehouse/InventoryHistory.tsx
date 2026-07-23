@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   Search, Filter, ArrowDownToLine, ArrowUpFromLine, Trash2,
   Calendar, FileText, Plus, ChevronRight, X, Package,
@@ -7,11 +7,11 @@ import {
   AlertTriangle, Loader2, Image
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { supplierService } from "../../services/supplier.service";
-import { medicineService } from "../../services/medicine.service";
-import { purchaseOrderService } from "../../services/purchaseOrder.service";
-import { goodsReceiptService } from "../../services/goodsReceipt.service";
-import api from "../../services/api";
+import { supplierService } from "../../services/purchase/supplier.service";
+import { medicineService } from "../../services/inventory/medicine.service";
+import { purchaseOrderService } from "../../services/purchase/purchaseOrder.service";
+import { goodsReceiptService } from "../../services/purchase/goodsReceipt.service";
+import api from "../../services/core/api";
 
 interface InventoryHistoryProps {
   type: "import" | "export" | "dispose";
@@ -19,7 +19,11 @@ interface InventoryHistoryProps {
 
 export function InventoryHistory({ type }: InventoryHistoryProps) {
   const navigate = useNavigate();
-  const [activeSubTab, setActiveSubTab] = useState<"grn" | "po">("grn");
+  const location = useLocation();
+  const isAdmin = location.pathname.includes('/admin');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeSubTab = (searchParams.get("tab") as "grn" | "po") || "grn";
+  const setActiveSubTabHandler = (tab: "grn" | "po") => setSearchParams({ tab });
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
 
@@ -174,7 +178,8 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
 
   const handleCreate = () => {
     if (type === "import") {
-      navigate("new");
+      const basePath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;
+      navigate(`${basePath}new`);
     }
   };
 
@@ -331,7 +336,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
       {type === "import" && (
         <div className="flex border-b border-slate-200 mb-6 gap-2">
           <button
-            onClick={() => setActiveSubTab("grn")}
+            onClick={() => setActiveSubTabHandler("grn")}
             className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${activeSubTab === "grn"
                 ? "border-[#0057cd] text-[#0057cd]"
                 : "border-transparent text-slate-500 hover:text-slate-700"
@@ -341,7 +346,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
             Phiếu Nhập Kho (GRN)
           </button>
           <button
-            onClick={() => setActiveSubTab("po")}
+            onClick={() => setActiveSubTabHandler("po")}
             className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${activeSubTab === "po"
                 ? "border-[#0057cd] text-[#0057cd]"
                 : "border-transparent text-slate-500 hover:text-slate-700"
@@ -489,9 +494,10 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
                                 e.stopPropagation();
                                 setSelectedPoForReceipt(r);
                               }}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition-all flex items-center gap-1.5"
                             >
-                              Bắt đầu kiểm hàng
+                              <ClipboardCheck size={14} />
+                              Mở phiên tiếp nhận hàng
                             </button>
                           </div>
                         ) : (

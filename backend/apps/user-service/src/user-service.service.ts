@@ -14,6 +14,8 @@ import { randomUUID } from 'crypto';
 import { ExportJob } from './interfaces/export-job.interface';
 import { ExportJobStatusDto } from './dto/export-job-status.dto';
 import { RpcException } from '@nestjs/microservices';
+import * as bcrypt from 'bcryptjs';
+import { subscribeToKafkaTopics } from '../../api-gateway/src/common/kafka.helper';
 
 @Injectable()
 export class UserService implements OnModuleInit, OnApplicationShutdown {
@@ -38,12 +40,12 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
     private readonly auditLogModel: Model<AuditLogDocument>,
     @Inject('INVENTORY_SERVICE')
     private readonly inventoryClient: ClientKafka,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     this.inventoryClient.subscribeToResponseOf('inventory.medicine.get_by_id');
     this.inventoryClient.subscribeToResponseOf('inventory.medicine.get_by_ids');
-    
+
     // Start periodic bulk flush timer (every 150ms)
     this.flushInterval = setInterval(() => {
       this.flushLogs().catch((err) => this.logger.error('Error in periodic flushLogs', err));
@@ -62,10 +64,17 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
           throw err;
         }
         this.logger.warn(`Kafka INVENTORY_SERVICE connection attempt ${i + 1} failed. Retrying in ${delay}ms...`);
-        try { await this.inventoryClient.close(); } catch(e) {}
+        try { await this.inventoryClient.close(); } catch (e) { }
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
+    await subscribeToKafkaTopics(
+      this.inventoryClient,
+      ['inventory.medicine.get_by_id', 'inventory.medicine.get_by_ids'],
+      20,
+      3000,
+    );
+    this.logger.log('Successfully connected ClientKafka for INVENTORY_SERVICE');
   }
 
   async onApplicationShutdown() {
@@ -77,9 +86,9 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
   }
 
 
-  async editProfile(userId: string, data: { fullName?: string }) {
+  async editProfile(userId: string, data: { fullName?: string; phone?: string; address?: string }) {
     this.logger.log(`Editing profile for user ${userId}`);
-    
+
     const user = await this.userModel.findById(userId);
     if (!user) {
       return { error: true, message: 'User not found', statusCode: 404 };
@@ -87,6 +96,12 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
 
     if (data.fullName) {
       user.fullName = data.fullName;
+    }
+    if (data.phone) {
+      user.phone = data.phone;
+    }
+    if (data.address) {
+      user.address = data.address;
     }
 
     await user.save();
@@ -98,7 +113,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
 
   async changeAvatar(userId: string, avatarUrl: string) {
     this.logger.log(`Changing avatar for user ${userId}`);
-    
+
     const user = await this.userModel.findById(userId);
     if (!user) {
       return { error: true, message: 'User not found', statusCode: 404 };
@@ -128,7 +143,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
 
     const itemIds = cart.items.map((it) => it.medicineId);
     let medicineDetails: any[] = [];
-    
+
     try {
       medicineDetails = await lastValueFrom(
         this.inventoryClient.send('inventory.medicine.get_by_ids', { ids: itemIds })
@@ -213,7 +228,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
 
   async addToCart(userId: string, medicineId: string, quantity: number) {
     let medicine: any;
-    
+
     try {
       this.logger.log(`[addToCart] Sending Kafka request to inventory for medicineId: ${medicineId} (userId: ${userId})`);
       medicine = await lastValueFrom(
@@ -246,7 +261,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
         return { error: true, message: `Chỉ còn ${currentStock} sản phẩm khả dụng trong kho!`, statusCode: 400 };
       }
       cart.items[existingIndex].quantity = newQty;
-      
+
       // Update addedPrice to reflect new tiered price if applicable
       let currentPrice = medicine.price;
       if (medicine.priceTiers && medicine.priceTiers.length > 0) {
@@ -259,12 +274,12 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
         }
       }
       cart.items[existingIndex].addedPrice = currentPrice;
-      
+
     } else {
       if (quantity > currentStock) {
         return { error: true, message: `Chỉ còn ${currentStock} sản phẩm khả dụng trong kho!`, statusCode: 400 };
       }
-      
+
       let initialPrice = medicine.price;
       if (medicine.priceTiers && medicine.priceTiers.length > 0) {
         const applicableTiers = [...medicine.priceTiers].sort((a: any, b: any) => b.minQuantity - a.minQuantity);
@@ -275,7 +290,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
           }
         }
       }
-      
+
       cart.items.push({
         medicineId,
         quantity,
@@ -320,7 +335,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
     }
 
     cart.items[existingIndex].quantity = quantity;
-    
+
     // Update addedPrice to reflect new tiered price if applicable
     if (medicine) {
       let currentPrice = medicine.price;
@@ -335,7 +350,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
       }
       cart.items[existingIndex].addedPrice = currentPrice;
     }
-    
+
     await cart.save();
     return { success: true, message: 'Cập nhật số lượng thành công!' };
   }
@@ -552,7 +567,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
 
   async exportAuditLogs(query: any) {
     const jobId = randomUUID();
-    
+
     // Initialize background export job
     this.exportJobs.set(jobId, {
       id: jobId,
@@ -686,7 +701,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
       }
 
       gzip.end();
-      
+
       await new Promise<void>((resolve, reject) => {
         writeStream.on('finish', () => resolve());
         writeStream.on('error', (err) => reject(err));
@@ -703,8 +718,104 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
       try {
         gzip.end();
         writeStream.end();
-      } catch (e) {}
+      } catch (e) { }
     }
+  }
+
+  // --- ADMIN EMPLOYEE MANAGEMENT ---
+
+  async createEmployee(data: any) {
+    this.logger.log(`Admin creating new employee: ${data.email}`);
+    const existing = await this.userModel.findOne({ email: data.email }).exec();
+    if (existing) {
+      return { error: true, message: 'Email đã tồn tại', statusCode: 409 };
+    }
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
+
+    const newUser = new this.userModel({
+      email: data.email,
+      passwordHash,
+      fullName: data.fullName,
+      role: data.role,
+      branchId: data.branchId || null,
+      isActive: true,
+      isEmailVerified: true, // Auto verify for employee
+    });
+
+    await newUser.save();
+    const result = newUser.toObject();
+    delete result.passwordHash;
+    return result;
+  }
+
+  async listEmployees(query: any) {
+    this.logger.log('Admin listing employees');
+    // Mặc định bỏ qua role 'user' (khách hàng)
+    const filter: any = { role: { $ne: 'user' } };
+    if (query?.role) {
+      filter.role = query.role;
+    }
+    
+    if (query?.unassigned === 'true' || query?.unassigned === true) {
+      filter.branchId = { $in: [null, ""] };
+    } else if (query?.branchId) {
+      filter.branchId = query.branchId;
+    }
+
+    const employees = await this.userModel.find(filter).select('-passwordHash').sort({ createdAt: -1 }).exec();
+    return employees;
+  }
+
+  async getEmployeeById(id: string) {
+    this.logger.log(`Admin fetching employee: ${id}`);
+    const employee = await this.userModel.findById(id).select('-passwordHash').exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+    return employee;
+  }
+
+  async updateEmployee(id: string, data: any) {
+    this.logger.log(`Admin updating employee: ${id}`);
+    const employee = await this.userModel.findById(id).exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+
+    if (data.fullName) employee.fullName = data.fullName;
+    if (data.role) employee.role = data.role;
+    if (data.branchId !== undefined) employee.branchId = data.branchId;
+
+    await employee.save();
+    const result = employee.toObject();
+    delete result.passwordHash;
+    return result;
+  }
+
+  async toggleBanEmployee(id: string) {
+    this.logger.log(`Admin toggling ban for employee: ${id}`);
+    const employee = await this.userModel.findById(id).exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+
+    // Toggle trạng thái isActive
+    employee.isActive = !employee.isActive;
+    await employee.save();
+
+    const result = employee.toObject();
+    delete result.passwordHash;
+    return result;
+  }
+
+  async deleteEmployee(id: string) {
+    this.logger.log(`Deleting employee: ${id}`);
+    const employee = await this.userModel.findByIdAndDelete(id).exec();
+    if (!employee) {
+      return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
+    }
+    return { success: true, message: 'Xóa nhân viên thành công' };
   }
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck, Tag, TrendingDown } from "lucide-react";
-import { medicineService } from "../../services/medicine.service";
+import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck, Tag, TrendingDown, Trash2, RotateCcw } from "lucide-react";
+import { medicineService } from "../../services/inventory/medicine.service";
 
 export function Inventory() {
   const navigate = useNavigate();
@@ -150,6 +150,58 @@ export function Inventory() {
     }
   };
 
+  // Expiration Action Proposal States
+  const [selectedExpirationBatch, setSelectedExpirationBatch] = useState<any>(null);
+  const [expirationActionModalOpen, setExpirationActionModalOpen] = useState(false);
+  const [expirationAction, setExpirationAction] = useState<'DISPOSE' | 'RETURN_SUPPLIER' | 'DISCOUNT'>('DISPOSE');
+  const [expirationQty, setExpirationQty] = useState<number>(0);
+  const [expirationNotes, setExpirationNotes] = useState<string>("");
+  const [expirationDiscountPrice, setExpirationDiscountPrice] = useState<number>(0);
+  const [expirationProcessing, setExpirationProcessing] = useState(false);
+
+  const openExpirationActionModal = (batch: any) => {
+    setSelectedExpirationBatch(batch);
+    setExpirationAction('DISPOSE');
+    setExpirationQty(batch.stock || 0);
+    setExpirationNotes("");
+    setExpirationDiscountPrice(Math.round((batch.price || 50000) * 0.7)); // Default 30% discount
+    setExpirationActionModalOpen(true);
+  };
+
+  const handleConfirmExpirationAction = async () => {
+    if (!selectedExpirationBatch) return;
+    if (expirationQty <= 0 && expirationAction !== 'DISCOUNT') {
+      alert("Số lượng xử lý phải lớn hơn 0");
+      return;
+    }
+    if (expirationAction === 'DISCOUNT' && (!expirationDiscountPrice || expirationDiscountPrice <= 0)) {
+      alert("Giá khuyến mãi phải lớn hơn 0");
+      return;
+    }
+
+    setExpirationProcessing(true);
+    try {
+      await medicineService.handleExpirationAction({
+        batchId: selectedExpirationBatch.id,
+        action: expirationAction,
+        quantity: expirationQty,
+        notes: expirationNotes,
+        discountPrice: expirationAction === 'DISCOUNT' ? expirationDiscountPrice : undefined,
+        performedBy: "Quản lý"
+      });
+      alert("Xử lý đề xuất xử lý thuốc hết hạn thành công!");
+      setExpirationActionModalOpen(false);
+      setSelectedExpirationBatch(null);
+      fetchExpirationReport();
+      fetchStats();
+    } catch (err: any) {
+      console.error(err);
+      alert("Lỗi khi xử lý đề xuất: " + (err.response?.data?.message || err.message));
+    } finally {
+      setExpirationProcessing(false);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
   }, [inventory]);
@@ -205,7 +257,7 @@ export function Inventory() {
           classification: selectedClassification || undefined
         });
         setInventory(result.data);
-        setTotal(result.total);
+        setTotal(result.pagination?.total || 0);
       } catch (error) {
         console.error("Error fetching inventory:", error);
       } finally {
@@ -694,6 +746,7 @@ export function Inventory() {
                   <th scope="col" className="px-6 py-4 font-bold text-center">Tồn Lô</th>
                   <th scope="col" className="px-6 py-4 font-bold">Hạn Sử Dụng</th>
                   <th scope="col" className="px-6 py-4 font-bold text-center">Trạng Thái</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Đề xuất xử lý</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -722,6 +775,14 @@ export function Inventory() {
                       `}>
                         {batch.status === 'EXPIRED' ? 'Đã hết hạn' : 'Sắp hết hạn'}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => openExpirationActionModal(batch)}
+                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-black px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95 flex items-center gap-1.5 mx-auto"
+                      >
+                        Đề xuất xử lý
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -1290,6 +1351,175 @@ export function Inventory() {
               >
                 {tieredPricingSaving && <Loader2 className="animate-spin" size={13} />}
                 {tieredPricingSaving ? "Đang lưu..." : "Lưu cấu hình"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expiration Action Proposal Modal */}
+      {expirationActionModalOpen && selectedExpirationBatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/50 to-white">
+              <div>
+                <h2 className="text-lg font-black text-slate-900">Đề Xuất Xử Lý Thuốc Hết Hạn / Cận Hạn</h2>
+                <p className="text-xs text-indigo-600 font-bold mt-0.5">Lô: {selectedExpirationBatch.batchNo} | Thuốc: {selectedExpirationBatch.medicineName}</p>
+              </div>
+              <button
+                onClick={() => setExpirationActionModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {/* Batch Info Card */}
+              <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 grid grid-cols-2 gap-4 text-xs font-semibold text-slate-600">
+                <div>
+                  <span className="text-slate-400 block mb-0.5">Hạn sử dụng:</span>
+                  <span className="text-slate-800 font-bold text-sm">{new Date(selectedExpirationBatch.expDate).toLocaleDateString("vi-VN")}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block mb-0.5">Tồn kho hiện tại của lô:</span>
+                  <span className="text-slate-800 font-bold text-sm">{selectedExpirationBatch.stock} {selectedExpirationBatch.unit}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block mb-0.5">Đơn giá bán lẻ hiện tại:</span>
+                  <span className="text-slate-800 font-bold text-sm">{selectedExpirationBatch.price?.toLocaleString("vi-VN")} ₫</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block mb-0.5">Trạng thái:</span>
+                  <span className={`px-2 py-0.5 rounded-full font-bold inline-block border ${
+                    selectedExpirationBatch.status === 'EXPIRED'
+                      ? 'bg-rose-50 text-rose-700 border-rose-100'
+                      : 'bg-amber-50 text-amber-700 border-amber-100'
+                  }`}>
+                    {selectedExpirationBatch.status === 'EXPIRED' ? 'Đã hết hạn' : 'Sắp hết hạn'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Selection Cards */}
+              <div className="space-y-3">
+                <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider block">Chọn hành động xử lý:</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Dispose Card */}
+                  <button
+                    onClick={() => {
+                      setExpirationAction('DISPOSE');
+                      setExpirationQty(selectedExpirationBatch.stock);
+                    }}
+                    className={`flex flex-col items-center justify-center p-4 rounded-2xl border text-center transition-all ${
+                      expirationAction === 'DISPOSE'
+                        ? 'border-rose-500 bg-rose-50/40 text-rose-700 shadow-sm ring-2 ring-rose-500/20'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    <Trash2 size={24} className={expirationAction === 'DISPOSE' ? 'text-rose-600' : 'text-slate-400'} />
+                    <span className="text-xs font-bold mt-2">Xuất hủy</span>
+                  </button>
+
+                  {/* Return Supplier Card */}
+                  <button
+                    onClick={() => {
+                      setExpirationAction('RETURN_SUPPLIER');
+                      setExpirationQty(selectedExpirationBatch.stock);
+                    }}
+                    className={`flex flex-col items-center justify-center p-4 rounded-2xl border text-center transition-all ${
+                      expirationAction === 'RETURN_SUPPLIER'
+                        ? 'border-amber-500 bg-amber-50/40 text-amber-700 shadow-sm ring-2 ring-amber-500/20'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    <RotateCcw size={24} className={expirationAction === 'RETURN_SUPPLIER' ? 'text-amber-600' : 'text-slate-400'} />
+                    <span className="text-xs font-bold mt-2">Gửi trả NCC</span>
+                  </button>
+
+                  {/* Discount Card */}
+                  <button
+                    onClick={() => setExpirationAction('DISCOUNT')}
+                    className={`flex flex-col items-center justify-center p-4 rounded-2xl border text-center transition-all ${
+                      expirationAction === 'DISCOUNT'
+                        ? 'border-emerald-500 bg-emerald-50/40 text-emerald-700 shadow-sm ring-2 ring-emerald-500/20'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    <Tag size={24} className={expirationAction === 'DISCOUNT' ? 'text-emerald-600' : 'text-slate-400'} />
+                    <span className="text-xs font-bold mt-2">Khuyến mãi</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Dynamic Inputs Based on Selection */}
+              <div className="space-y-4 pt-2 border-t border-slate-100">
+                {expirationAction !== 'DISCOUNT' ? (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 block">Số lượng xử lý ({selectedExpirationBatch.unit})</label>
+                    <input
+                      type="number"
+                      max={selectedExpirationBatch.stock}
+                      min={1}
+                      value={expirationQty}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setExpirationQty(Math.min(val, selectedExpirationBatch.stock));
+                      }}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold"
+                    />
+                    <p className="text-[10px] text-slate-400 font-medium">Tối đa có thể xử lý: {selectedExpirationBatch.stock} {selectedExpirationBatch.unit}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 block">Đơn giá khuyến mãi mới (₫)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={expirationDiscountPrice}
+                      onChange={(e) => setExpirationDiscountPrice(parseInt(e.target.value) || 0)}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold text-emerald-700 bg-emerald-50/20"
+                    />
+                    <p className="text-[10px] text-slate-400 font-medium">Giá cũ: {selectedExpirationBatch.price?.toLocaleString("vi-VN")} ₫ (Gợi ý giảm 30%: {Math.round((selectedExpirationBatch.price || 50000) * 0.7).toLocaleString("vi-VN")} ₫)</p>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 block">Ghi chú / Lý do xử lý</label>
+                  <textarea
+                    rows={3}
+                    placeholder={
+                      expirationAction === 'DISPOSE' ? 'Nhập lý do xuất hủy...' :
+                      expirationAction === 'RETURN_SUPPLIER' ? 'Nhập lý do gửi trả nhà cung cấp...' :
+                      'Nhập lý do/chi tiết khuyến mãi...'
+                    }
+                    value={expirationNotes}
+                    onChange={(e) => setExpirationNotes(e.target.value)}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none font-medium"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 sticky bottom-0 z-10 shrink-0">
+              <button
+                onClick={() => setExpirationActionModalOpen(false)}
+                disabled={expirationProcessing}
+                className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm text-sm"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={handleConfirmExpirationAction}
+                disabled={expirationProcessing}
+                className={`px-6 py-2.5 text-white font-extrabold rounded-xl transition-all shadow-sm text-sm flex items-center gap-2 ${
+                  expirationAction === 'DISPOSE' ? 'bg-rose-600 hover:bg-rose-700' :
+                  expirationAction === 'RETURN_SUPPLIER' ? 'bg-amber-600 hover:bg-amber-700' :
+                  'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                {expirationProcessing && <Loader2 className="animate-spin" size={16} />}
+                {expirationProcessing ? "Đang xử lý..." : "Xác nhận xử lý"}
               </button>
             </div>
           </div>

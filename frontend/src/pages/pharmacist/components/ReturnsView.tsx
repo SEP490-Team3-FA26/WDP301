@@ -3,8 +3,29 @@ import {
   Search, RotateCcw, ArrowLeftRight, CheckCircle2, XCircle, AlertTriangle, Printer,
   Plus, Minus, Trash2, User, Phone, Calendar, DollarSign, X, RefreshCw, FileText, ChevronRight
 } from "lucide-react";
-import { orderService } from "../../../services/order.service";
-import { medicineService } from "../../../services/medicine.service";
+import { orderService } from "../../../services/sales/order.service";
+import { medicineService } from "../../../services/inventory/medicine.service";
+function getBranchInfoFromToken() {
+  const token = localStorage.getItem("token");
+  if (!token) return { branchId: null, fullName: null };
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const decoded = JSON.parse(jsonPayload);
+    return {
+      branchId: decoded.branchId,
+      fullName: decoded.fullName
+    };
+  } catch (err) {
+    return { branchId: null, fullName: null };
+  }
+}
 
 interface ReturnsViewProps {
   showToast: (message: string, type?: "success" | "error" | "warning") => void;
@@ -89,7 +110,8 @@ export default function ReturnsView({ showToast }: ReturnsViewProps) {
     const delay = setTimeout(async () => {
       setLoadingMedicines(true);
       try {
-        const data = await medicineService.getMedicines({ limit: 10, search: medicineSearchQuery });
+        const { branchId } = getBranchInfoFromToken();
+        const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: medicineSearchQuery });
         setMedicineSearchResults(data.data || []);
       } catch (err) {
         console.error("Lỗi khi tìm kiếm thuốc đổi:", err);

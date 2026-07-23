@@ -15,8 +15,8 @@ export class OrderItem {
   @Prop({ type: Number, required: true, min: 0 })
   price: number;
 
-  @Prop({ type: String, required: true })
-  unit: string;
+  @Prop({ type: String, default: 'Hộp' })
+  unit?: string;
 }
 export const OrderItemSchema = SchemaFactory.createForClass(OrderItem);
 
@@ -52,7 +52,7 @@ export class Order extends Document {
   @Prop({ type: String })
   payosPaymentLinkId: string;
 
-  @Prop({ type: String, default: 'ONLINE', enum: ['ONLINE', 'RETAIL'] })
+  @Prop({ type: String, default: 'ONLINE', enum: ['ONLINE', 'RETAIL', 'POS_SALE'] })
   type: string;
 
   @Prop({ type: String })
@@ -69,6 +69,9 @@ export class Order extends Document {
 
   @Prop({ type: Number, default: 0 })
   earnedPoints?: number;
+
+  @Prop({ type: String })
+  userId?: string;
 
   @Prop({ type: String, default: 'BR-001' })
   branchId?: string;

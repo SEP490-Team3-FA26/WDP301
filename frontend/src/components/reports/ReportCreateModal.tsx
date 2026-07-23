@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, RefreshCw } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../services/core/api';
 
 interface ReportCreateModalProps {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface ReportCreateModalProps {
 
 export function ReportCreateModal({ isOpen, onClose, onSuccess, userDetails }: ReportCreateModalProps) {
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'quarter'>('month');
+  const [reportType, setReportType] = useState<'revenue' | 'profit'>('revenue');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [branchIdInput, setBranchIdInput] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -43,7 +44,7 @@ export function ReportCreateModal({ isOpen, onClose, onSuccess, userDetails }: R
     }
 
     try {
-      let url = `/api/reports/revenue?period=${period}&date=${date}`;
+      let url = `/api/reports/${reportType}?period=${period}&date=${date}`;
       if (branchIdInput) {
         url += `&branchId=${branchIdInput}`;
       }
@@ -57,10 +58,10 @@ export function ReportCreateModal({ isOpen, onClose, onSuccess, userDetails }: R
         if (!newReport) {
           newReport = {
             id: 'REP-' + Math.floor(100 + Math.random() * 900),
-            name: `Báo cáo doanh thu ${
+            name: `Báo cáo ${reportType === 'revenue' ? 'doanh thu' : 'lợi nhuận'} ${
               period === 'day' ? 'ngày' : period === 'week' ? 'tuần' : period === 'month' ? 'tháng' : 'quý'
             } - ${branchIdInput || 'Tất cả'}`,
-            type: 'Doanh thu',
+            type: reportType === 'revenue' ? 'Doanh thu' : 'Lợi nhuận',
             format: 'PDF',
             date: new Date().toLocaleDateString('vi-VN'),
             size: '2.7 KB',
@@ -77,7 +78,7 @@ export function ReportCreateModal({ isOpen, onClose, onSuccess, userDetails }: R
           };
         }
 
-        setSuccessMessage('Khởi tạo báo cáo doanh thu thành công!');
+        setSuccessMessage('Khởi tạo báo cáo thành công!');
         onSuccess(newReport);
 
         // Gắn URL thật vào tab trống đã mở lúc nãy
@@ -137,10 +138,13 @@ export function ReportCreateModal({ isOpen, onClose, onSuccess, userDetails }: R
               Loại báo cáo
             </label>
             <select
-              disabled
-              className="w-full px-3.5 py-2.5 bg-slate-150 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500 cursor-not-allowed"
+              value={reportType}
+              onChange={(e) => setReportType(e.target.value as any)}
+              disabled={!isAdmin}
+              className="w-full px-3.5 py-2.5 bg-white disabled:bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 disabled:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0057cd] focus:border-[#0057cd]"
             >
-              <option>Báo cáo doanh thu (Revenue Report)</option>
+              <option value="revenue">Báo cáo doanh thu (Revenue Report)</option>
+              {isAdmin && <option value="profit">Báo cáo lợi nhuận (Profit Report)</option>}
             </select>
           </div>
 

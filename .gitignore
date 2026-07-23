@@ -37,3 +37,14 @@ taste-skill/
 .idea/
 .vscode/
 !.vscode/settings.json
+
+docker-compose.yml
+next
+
+# Docker Compose personal overrides
+docker-compose.override.yml
+
+.last_phone_ip
+connect_mobile.ps1
+
+

@@ -5,10 +5,11 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { ClientKafka } from '@nestjs/microservices';
 import { PayOS } from '@payos/node';
-import { lastValueFrom } from 'rxjs';
+import { timeout } from 'rxjs';
 import { Order } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Voucher } from './schemas/voucher.schema';
+import { subscribeToKafkaTopics, sendKafkaMessage } from '../../api-gateway/src/common/kafka.helper';
 
 const DEFAULT_PHONE_NUMBER = '0900000000';
 
@@ -71,11 +72,13 @@ export class OrdersServiceService implements OnModuleInit {
 
         // Refund points if they were redeemed
         if (order.redeemedPoints > 0 && order.patientPhone !== '0900000000') {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
+          await sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.update_points',
+            {
               phone: order.patientPhone,
               pointsDelta: order.redeemedPoints,
-            })
+            }
           );
         }
         this.logger.log(`Cancelled expired order: ${order.orderCode}`);
@@ -91,8 +94,16 @@ export class OrdersServiceService implements OnModuleInit {
   }
 
 
-  async createOrder(data: CreateOrderDto) {
-    this.logger.log(`Creating order in DB. PaymentMethod: ${data.paymentMethod}`);
+  async createOrder(rawData: any) {
+    let data = rawData;
+    if (typeof rawData === 'string') {
+      try {
+        data = JSON.parse(rawData);
+      } catch (e) {
+        this.logger.error(`Failed to parse string rawData: ${rawData}`);
+      }
+    }
+    this.logger.log(`Creating order in DB. PaymentMethod: ${data?.paymentMethod}, patientName: ${data?.patientName}, totalAmount: ${data?.totalAmount}`);
 
     // Generate a unique 64-bit int order code for PayOS
     const orderCode = Math.floor(100000 + Math.random() * 90000000);
@@ -118,29 +129,41 @@ export class OrdersServiceService implements OnModuleInit {
     // Nếu đơn hàng từ UserLoyalty, lấy thông tin email
     if (data.userId) {
       try {
-        const userLoyalty = await lastValueFrom(
-          this.userClient.send('user.loyalty.get', { userId: data.userId })
-        );
+        const userLoyalty: any = await Promise.race([
+          sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.get',
+            { userId: data.userId }
+          ),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Loyalty get timeout')), 2500))
+        ]).catch(() => null);
+
         if (userLoyalty) {
           // Gắn email để gửi hóa đơn
           if (userLoyalty.email && !patientEmail) {
             patientEmail = userLoyalty.email;
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         this.logger.warn(`Failed to fetch user loyalty for ID ${data.userId}: ${err.message}`);
       }
 
       // Fallback: Lấy email từ auth-service (bảng users) nếu chưa có patientEmail
       if (!patientEmail) {
         try {
-          const authUser = await lastValueFrom(
-            this.authClient.send('auth.get.user.by.id', data.userId)
-          );
+          const authUser: any = await Promise.race([
+            sendKafkaMessage(
+              this.authClient,
+              'auth.get.user.by.id',
+              data.userId
+            ),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Auth get user timeout')), 2500))
+          ]).catch(() => null);
+
           if (authUser && authUser.email) {
             patientEmail = authUser.email;
           }
-        } catch (err) {
+        } catch (err: any) {
           this.logger.warn(`Failed to fetch user email from auth-service for ID ${data.userId}: ${err.message}`);
         }
       }
@@ -148,9 +171,18 @@ export class OrdersServiceService implements OnModuleInit {
 
     if (data.patientPhone && data.patientPhone !== DEFAULT_PHONE_NUMBER) {
       try {
-        const userLoyalty = await lastValueFrom(
-          this.userClient.send('user.loyalty.lookup', { phone: data.patientPhone })
-        );
+        const userLoyalty: any = await Promise.race([
+          sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.lookup',
+            { phone: data.patientPhone }
+          ),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Loyalty lookup timeout')), 2500))
+        ]).catch(e => {
+          this.logger.warn(`Loyalty lookup timeout or error: ${e.message}`);
+          return null;
+        });
+
         if (userLoyalty && !userLoyalty.error) {
           const userPoints = userLoyalty.points || 0;
           if (redeemedPoints > userPoints) {
@@ -196,11 +228,13 @@ export class OrdersServiceService implements OnModuleInit {
 
     // Instantly deduct points from user balance if redeeming
     if (redeemedPoints > 0) {
-      await lastValueFrom(
-        this.userClient.send('user.loyalty.update_points', {
+      await sendKafkaMessage(
+        this.userClient,
+        'user.loyalty.update_points',
+        {
           phone: data.patientPhone,
           pointsDelta: -redeemedPoints,
-        })
+        }
       );
     }
 
@@ -210,7 +244,13 @@ export class OrdersServiceService implements OnModuleInit {
       patientPhone: data.patientPhone,
       patientEmail,
       shippingAddress: data.shippingAddress || 'Mua tại quầy',
-      items: data.items,
+      items: (data.items || []).map((it: any) => ({
+        medicineId: it.medicineId,
+        name: it.name,
+        quantity: it.quantity,
+        price: it.price,
+        unit: it.unit || 'Hộp',
+      })),
       totalAmount: data.totalAmount,
       paymentMethod: data.paymentMethod || 'QR_PAY',
       paymentStatus: 'PENDING',
@@ -220,6 +260,7 @@ export class OrdersServiceService implements OnModuleInit {
       redeemedPoints,
       pointsDiscount,
       earnedPoints,
+      userId: data.userId,
       branchId: data.branchId || 'BR-001',
     });
 
@@ -245,42 +286,52 @@ export class OrdersServiceService implements OnModuleInit {
       }
     }
 
-      let saleRes;
+    let saleRes;
     try {
       // Step 2: Deduct Loyalty Points (Reserve)
       if (redeemedPoints > 0) {
-        await lastValueFrom(
-          this.userClient.send('user.loyalty.update_points', {
+        await sendKafkaMessage(
+          this.userClient,
+          'user.loyalty.update_points',
+          {
             phone: newOrder.patientPhone,
             pointsDelta: -redeemedPoints,
-          })
+          }
         );
       }
     } catch (err) {
       this.logger.error('Error reserving loyalty points:', err);
       throw new RpcException({ message: `Lỗi trừ điểm tích lũy: ${err.message}` });
     }
-
     // Branching logic based on payment method
     if (data.paymentMethod === 'QR_PAY') {
       try {
-        // Step 4A: Generate PayOS Link
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-        
-        // Clean description to avoid PayOS validation error (alphanumeric, no spaces, max 25 chars)
+        const apiGatewayUrl = this.configService.get<string>('API_GATEWAY_URL') || 'http://10.0.2.2:4000';
+
+        const defaultReturnUrl = `${apiGatewayUrl}/api/orders/payos-callback?orderCode=${orderCode}`;
+        const defaultCancelUrl = `${apiGatewayUrl}/api/orders/payos-callback?orderCode=${orderCode}&cancel=true`;
+
+        const returnUrl = data.returnUrl
+          ? (data.returnUrl.includes('?') ? `${data.returnUrl}&orderCode=${orderCode}` : `${data.returnUrl}?orderCode=${orderCode}`)
+          : defaultReturnUrl;
+
+        const cancelUrl = data.cancelUrl
+          ? (data.cancelUrl.includes('?') ? `${data.cancelUrl}&orderCode=${orderCode}` : `${data.cancelUrl}?orderCode=${orderCode}`)
+          : defaultCancelUrl;
+
         const description = `WDP${orderCode}`.substring(0, 25);
 
         const paymentBody = {
           orderCode,
           amount: data.totalAmount,
           description,
-          items: data.items.map((it: any) => ({
+          items: (data.items || []).map((it: any) => ({
             name: it.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').substring(0, 20),
             quantity: it.quantity,
             price: it.price,
           })),
-          returnUrl: `${frontendUrl}/customer/checkout?success=true&orderCode=${orderCode}`,
-          cancelUrl: `${frontendUrl}/customer/checkout?cancel=true&orderCode=${orderCode}`,
+          returnUrl,
+          cancelUrl,
         };
 
         this.logger.log(`Calling PayOS with orderCode: ${orderCode}`);
@@ -301,60 +352,66 @@ export class OrdersServiceService implements OnModuleInit {
         this.logger.error('Error creating PayOS payment link:', err);
         throw new RpcException({ message: `Lỗi tạo link thanh toán PayOS: ${err.message}` });
       }
-    } else {
-      // CASH or CARD: Complete order instantly
-      newOrder.paymentStatus = 'PAID';
-      await newOrder.save();
+    }
 
-      // Increment voucher usage on successful payment
-      if (newOrder.voucherCode) {
-        await this.voucherModel.updateOne(
-          { code: newOrder.voucherCode },
-          { $inc: { usedCount: 1 } }
-        ).exec();
-      }
+    // CASH or CARD: Complete order instantly
+    newOrder.paymentStatus = 'PAID';
+    await newOrder.save();
 
-      // Deduct inventory and record sale
-      try {
-        const saleRes = await this.deductInventory(newOrder);
-        
-        // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
-        if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
+    // Increment voucher usage on successful payment
+    if (newOrder.voucherCode) {
+      await this.voucherModel.updateOne(
+        { code: newOrder.voucherCode },
+        { $inc: { usedCount: 1 } }
+      ).exec();
+    }
+
+    // Deduct inventory and record sale
+    try {
+      const saleRes = await this.deductInventory(newOrder);
+
+      // CREDIT POINTS ON SUCCESSFUL CASH/CARD PAYMENT
+      if (newOrder.earnedPoints > 0 && newOrder.patientPhone !== '0900000000') {
+        try {
+          await sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.update_points',
+            {
               phone: newOrder.patientPhone,
               pointsDelta: newOrder.earnedPoints,
               accumulatedDelta: newOrder.earnedPoints,
-            })
-          );
+            }
+          ).catch((e: any) => this.logger.warn(`Failed to update loyalty points for phone ${newOrder.patientPhone}: ${e.message}`));
+        } catch (e: any) {
+          this.logger.warn(`Loyalty update skipped for phone ${newOrder.patientPhone}: ${e.message}`);
         }
-
-        newOrder.paymentStatus = 'PAID';
-        await newOrder.save();
-        this.sendInvoiceEmailAsync(newOrder);
-
-        return {
-          success: true,
-          orderCode,
-          paymentMethod: data.paymentMethod,
-          order: newOrder,
-          saleResult: saleRes,
-        };
-      } catch (err: any) {
-        this.logger.error('Error deducting inventory:', err);
-        
-        // Asynchronously trigger sending invoice email even if inventory deduction fails
-        this.sendInvoiceEmailAsync(newOrder);
-
-        // Save with warning
-        return {
-          success: true,
-          orderCode,
-          paymentMethod: data.paymentMethod,
-          order: newOrder,
-          warning: `Đơn hàng đã lưu nhưng trừ kho thất bại: ${err.message}`,
-        };
       }
+
+      newOrder.paymentStatus = 'PAID';
+      await newOrder.save();
+      this.sendInvoiceEmailAsync(newOrder);
+
+      return {
+        success: true,
+        orderCode,
+        paymentMethod: data.paymentMethod,
+        order: newOrder,
+        saleResult: saleRes,
+      };
+    } catch (err: any) {
+      this.logger.error('Error deducting inventory:', err);
+
+      // Asynchronously trigger sending invoice email even if inventory deduction fails
+      this.sendInvoiceEmailAsync(newOrder);
+
+      // Save with warning
+      return {
+        success: true,
+        orderCode,
+        paymentMethod: data.paymentMethod,
+        order: newOrder,
+        warning: `Đơn hàng đã lưu nhưng trừ kho thất bại: ${err.message}`,
+      };
     }
   }
 
@@ -391,12 +448,14 @@ export class OrdersServiceService implements OnModuleInit {
 
         // CREDIT POINTS ON SUCCESSFUL PAYOS PAYMENT
         if (order.earnedPoints > 0 && order.patientPhone !== '0900000000') {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
+          await sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.update_points',
+            {
               phone: order.patientPhone,
               pointsDelta: order.earnedPoints,
               accumulatedDelta: order.earnedPoints,
-            })
+            }
           );
         }
 
@@ -408,26 +467,28 @@ export class OrdersServiceService implements OnModuleInit {
         await order.save();
 
         // SAGA REVERT FOR CANCELLED QR_PAY
-        
+
         // 1. Revert Inventory
-        await lastValueFrom(this.inventoryClient.send('inventory.sale.revert', { orderCode: order.orderCode })).catch(e => this.logger.error('Failed to revert inventory on cancel', e));
+        await sendKafkaMessage(this.inventoryClient, 'inventory.sale.revert', { orderCode: order.orderCode }).catch(e => this.logger.error('Failed to revert inventory on cancel', e));
 
         // 2. Refund Points
         if (order.redeemedPoints > 0 && order.patientPhone !== DEFAULT_PHONE_NUMBER) {
-          await lastValueFrom(
-            this.userClient.send('user.loyalty.update_points', {
+          await sendKafkaMessage(
+            this.userClient,
+            'user.loyalty.update_points',
+            {
               phone: order.patientPhone,
               pointsDelta: order.redeemedPoints,
-            })
+            }
           ).catch(e => this.logger.error('Failed to refund points on cancel', e));
         }
 
         // 3. Revert Voucher
         if (order.voucherCode) {
-           await this.voucherModel.updateOne(
-             { code: order.voucherCode },
-             { $inc: { usedCount: -1 } }
-           ).exec();
+          await this.voucherModel.updateOne(
+            { code: order.voucherCode },
+            { $inc: { usedCount: -1 } }
+          ).exec();
         }
 
         return { success: true, status: 'CANCELLED', order };
@@ -470,14 +531,48 @@ export class OrdersServiceService implements OnModuleInit {
     return this.orderModel.find().sort({ createdAt: -1 }).exec();
   }
 
+  async getMyOrders(userId?: string, fullName?: string, phone?: string) {
+    const cleanUserId = userId && userId.trim() !== '' ? userId.trim() : null;
+    const cleanPhone = phone && phone.trim() !== '' ? phone.trim() : null;
+    const cleanName = fullName && fullName.trim() !== '' ? fullName.trim() : null;
+
+    if (!cleanUserId && !cleanPhone && !cleanName) {
+      return [];
+    }
+
+    const orConditions: any[] = [];
+
+    if (cleanUserId) {
+      orConditions.push({ userId: cleanUserId });
+    }
+    if (cleanPhone) {
+      orConditions.push({ patientPhone: cleanPhone });
+    }
+    if (cleanName) {
+      orConditions.push({ patientName: { $regex: cleanName, $options: 'i' } });
+    }
+
+    if (orConditions.length === 0) {
+      return [];
+    }
+
+    const query = { $or: orConditions };
+
+    this.logger.log(`[getMyOrders] Querying orders for userId=${cleanUserId}, fullName=${cleanName}, phone=${cleanPhone}`);
+    const results = await this.orderModel.find(query).sort({ createdAt: -1 }).exec();
+    this.logger.log(`[getMyOrders] Found ${results.length} orders`);
+    return results;
+  }
+
   private async deductInventory(order: any) {
     this.logger.log(`Sending stock deduction to inventory-service for orderCode: ${order.orderCode}`);
     const payload = {
       orderCode: order.orderCode,
       type: order.type === 'ONLINE' ? 'RETAIL' : order.type,
       paymentMethod: order.paymentMethod,
-      items: order.items.map((it: any) => ({
+      items: (order.items || []).map((it: any) => ({
         medicineId: it.medicineId,
+        name: it.name,
         quantity: it.quantity,
       })),
       patientName: order.patientName,
@@ -486,10 +581,16 @@ export class OrdersServiceService implements OnModuleInit {
       branchId: order.branchId || null,
     };
 
-    return new Promise((resolve, reject) => {
-      this.inventoryClient.send('inventory.sale.create', payload).subscribe({
-        next: (res) => resolve(res),
-        error: (err) => reject(err),
+    return new Promise((resolve) => {
+      this.inventoryClient.send('inventory.sale.create', payload).pipe(timeout(10000)).subscribe({
+        next: (res) => {
+          this.logger.log(`Inventory deduction success for orderCode ${order.orderCode}: ${JSON.stringify(res)}`);
+          resolve(res);
+        },
+        error: (err) => {
+          this.logger.warn(`Inventory deduction failed/timed out for orderCode ${order.orderCode}: ${err.message}`);
+          resolve({ warning: err.message || 'Hệ thống kho chưa phản hồi' });
+        },
       });
     });
   }

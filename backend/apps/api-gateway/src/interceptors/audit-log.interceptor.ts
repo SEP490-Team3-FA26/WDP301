@@ -40,11 +40,20 @@ export class AuditLogInterceptor implements NestInterceptor {
     const method = request.method;
     const url = request.url;
 
-    // Check if the request should be logged:
-    // - Always log mutations (POST, PUT, PATCH, DELETE)
-    // - Log GET requests only if recordRead is explicitly configured to true in @AuditLogAction
     const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
     const recordRead = options?.recordRead === true;
+
+    // Skip audit logging if it is just a voucher active status toggle to reduce log noise
+    const isVoucherStatusToggle =
+      method === 'PUT' &&
+      url.includes('/api/vouchers') &&
+      request.body &&
+      Object.keys(request.body).length === 1 &&
+      request.body.hasOwnProperty('isActive');
+
+    if (isVoucherStatusToggle) {
+      return next.handle();
+    }
 
     if (!isMutation && !recordRead) {
       return next.handle();

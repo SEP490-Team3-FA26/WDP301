@@ -22,6 +22,9 @@ export const PurchaseOrderItemSchema = SchemaFactory.createForClass(PurchaseOrde
 
 @Schema({ timestamps: true, collection: 'purchaseorders' })
 export class PurchaseOrder extends Document {
+  @Prop({ type: String })
+  poCode?: string;
+
   @Prop({ type: String, required: true })
   supplierId: string;
 
@@ -34,21 +37,27 @@ export class PurchaseOrder extends Document {
   @Prop({
     type: String,
     default: 'PENDING_APPROVAL',
-    enum: ['PENDING_APPROVAL', 'SHIPPING', 'PARTIAL_RECEIVED', 'COMPLETED', 'RETURNED', 'CANCELLED'],
+    enum: ['PENDING_APPROVAL', 'SHIPPING', 'RECEIVING', 'PARTIAL_RECEIVED', 'COMPLETED', 'RETURNED', 'CANCELLED'],
   })
   status: string;
 
   @Prop({ type: String }) // Optional user ID of creator
   createdBy: string;
 
-  @Prop({ type: String }) // Liên kết ngược lại PR gốc (nếu PO được tạo từ PR đã duyệt)
-  linkedPrId: string;
+  @Prop({ type: [String], default: [] }) // Liên kết ngược lại các PR gốc
+  linkedPrIds: string[];
+
+  @Prop({ type: [String], default: [] }) // Lưu mã PR để hiển thị và tìm kiếm
+  linkedPrCodes: string[];
 
   @Prop({ type: Number, default: 0 }) // Pipeline/Incoming Stock — hàng dự kiến về
   expectedIncoming: number;
 
   @Prop({ type: String, default: 'PAID', enum: ['PAID', 'CREDIT'] })
   paymentType: string; // Thanh toán ngay (PAID) vs Mua nợ (CREDIT) — UC-07
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const PurchaseOrderSchema = SchemaFactory.createForClass(PurchaseOrder);

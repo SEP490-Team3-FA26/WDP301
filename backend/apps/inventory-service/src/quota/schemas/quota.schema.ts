@@ -8,6 +8,9 @@ export class Quota {
   @Prop({ required: true })
   branchId: string;
 
+  @Prop()
+  branchName?: string;
+
   @Prop({ required: true })
   cycle: string;
 
@@ -19,8 +22,12 @@ export class Quota {
 
   @Prop({ default: 'Active' })
   status: string;
+
+  @Prop()
+  note?: string;
 }
 
 export const QuotaSchema = SchemaFactory.createForClass(Quota);
 
 QuotaSchema.index({ branchId: 1, cycle: 1 }, { unique: true });
+

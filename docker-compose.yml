@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine
-    container_name: wdp301-redis
+
     ports:
       - "6379:6379"
     command: redis-server --save 60 1 --loglevel warning
@@ -11,8 +9,8 @@ services:
       - wdp301-network
 
   kafka:
-    image: confluentinc/cp-kafka:7.4.0
-    container_name: wdp301-kafka
+    image: confluentinc/confluent-local:7.5.0
+
     ports:
       - "9092:9092"
     environment:
@@ -20,14 +18,16 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
       KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@localhost:29093'
       KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_HEAP_OPTS: '-Xmx512m -Xms256m'
       KAFKA_LOG4J_ROOT_LOGLEVEL: 'ERROR'
       KAFKA_LOG4J_LOGGERS: 'org.apache.kafka.image.loader.MetadataLoader=ERROR,org.apache.kafka=ERROR,kafka=ERROR,state.change.logger=ERROR,kafka.log.LogCleaner=ERROR'
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
@@ -44,13 +44,14 @@ services:
 
   backend:
     image: node:20-alpine
-    container_name: wdp301-backend
     restart: on-failure
     working_dir: /app
     volumes:
-      - ./backend:/app
-      - /app/node_modules
-      # - ~/.aws:/root/.aws:ro
+      - type: bind
+        source: ./backend
+        target: /app
+      - type: volume
+        target: /app/node_modules
     env_file:
       - ./backend/.env
     ports:
@@ -61,6 +62,9 @@ services:
       - REDIS_PORT=6379
       - KAFKA_BROKERS=kafka:29092
       - TS_NODE_TRANSPILE_ONLY=true
+      #hot module reload
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     command: sh -c "npm install --legacy-peer-deps && npm run dev:all"
     depends_on:
       kafka:
@@ -72,13 +76,21 @@ services:
 
   frontend:
     image: node:20-alpine
-    container_name: wdp301-frontend
     working_dir: /app
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - type: bind
+        source: ./frontend
+        target: /app
+      - type: volume
+        target: /app/node_modules
     ports:
       - "3000:3000"
+    environment:
+      - DOCKER=true
+      #hot module reload
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - VITE_USE_POLLING=true
     command: sh -c "npm install --no-audit --no-fund --quiet && npm run dev"
     depends_on:
       - backend
@@ -90,6 +102,8 @@ services:
       context: ./backend/apps/ai-service
     container_name: wdp301-ai-service
     restart: on-failure
+    volumes:
+      - ./backend/apps/ai-service:/app
     env_file:
       - ./backend/.env
     ports:
@@ -120,4 +134,3 @@ networks:
 
 volumes:
   qdrant_data:
-
