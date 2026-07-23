@@ -60,6 +60,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Gửi thông báo Discord cho Team (Thành công)
+        if: success()
+        uses: tsickert/discord-webhook@v5.3.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          content: "✅ Báo cáo sếp: CI/CD Pipeline chạy thành công trên nhánh `${{ github.ref_name }}` rồi nha! 🎉"
+
   # ──────────────────────────────────────────────
   # CD — (ĐÃ BỎ) Deploy lên Railway
   # Lý do: Railway đã tự động bắt event push trên nhánh main nên không cần cấu hình bằng tay nữa.
