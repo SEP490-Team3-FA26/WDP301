@@ -3,9 +3,9 @@ import { ClientKafka } from '@nestjs/microservices';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../guards/optional-jwt-auth.guard';
 
 @Controller('api/prescriptions')
-@UseGuards(JwtAuthGuard)
 export class PrescriptionController implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
@@ -18,7 +18,12 @@ export class PrescriptionController implements OnModuleInit {
     ]);
   }
 
+  private getAiServiceHost(): string {
+    return process.env.AI_SERVICE_URL || 'http://localhost:8000';
+  }
+
   @Post('scan-ai')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 5))
   async scanPrescriptionImages(
     @UploadedFiles() files: Express.Multer.File[],
@@ -39,7 +44,7 @@ export class PrescriptionController implements OnModuleInit {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for multi-page vision
 
-      const aiServiceHost = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+      const aiServiceHost = this.getAiServiceHost();
       const response = await fetch(`${aiServiceHost}/api/ai/scan-prescription-v2`, {
         method: 'POST',
         headers: {
@@ -47,6 +52,16 @@ export class PrescriptionController implements OnModuleInit {
         },
         body: formData,
         signal: controller.signal,
+      }).catch(async () => {
+        // Fallback for docker container naming if localhost fails
+        return await fetch('http://ai-service:8000/api/ai/scan-prescription-v2', {
+          method: 'POST',
+          headers: {
+            'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
+          },
+          body: formData,
+          signal: controller.signal,
+        });
       });
 
       clearTimeout(timeoutId);
@@ -69,6 +84,7 @@ export class PrescriptionController implements OnModuleInit {
   }
 
   @Post('recommend')
+  @UseGuards(OptionalJwtAuthGuard)
   @UseInterceptors(FileInterceptor('audio'))
   async recommendPrescription(
     @UploadedFile() file: Express.Multer.File,
@@ -92,13 +108,23 @@ export class PrescriptionController implements OnModuleInit {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for STT + RAG + LLM
 
-      const response = await fetch('http://ai-service:8000/api/prescription', {
+      const aiServiceHost = this.getAiServiceHost();
+      const response = await fetch(`${aiServiceHost}/api/prescription`, {
         method: 'POST',
         headers: {
           'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
         },
         body: formData,
         signal: controller.signal,
+      }).catch(async () => {
+        return await fetch('http://ai-service:8000/api/prescription', {
+          method: 'POST',
+          headers: {
+            'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
+          },
+          body: formData,
+          signal: controller.signal,
+        });
       });
 
       clearTimeout(timeoutId);
@@ -121,17 +147,27 @@ export class PrescriptionController implements OnModuleInit {
   }
 
   @Post('symptom-consult')
+  @UseGuards(OptionalJwtAuthGuard)
   async textConsult(@Body('symptoms') symptoms: string) {
     if (!symptoms) {
       throw new HttpException('Vui lòng cung cấp triệu chứng', HttpStatus.BAD_REQUEST);
     }
     try {
-      const response = await fetch('http://ai-service:8000/api/ai/symptom-consult', {
+      const aiServiceHost = this.getAiServiceHost();
+      const response = await fetch(`${aiServiceHost}/api/ai/symptom-consult`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ symptoms }),
+      }).catch(async () => {
+        return await fetch('http://ai-service:8000/api/ai/symptom-consult', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ symptoms }),
+        });
       });
 
       if (!response.ok) {
@@ -149,11 +185,13 @@ export class PrescriptionController implements OnModuleInit {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   async listPrescriptions() {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.list', {});
   }
 
   @Get(':code')
+  @UseGuards(JwtAuthGuard)
   async getPrescriptionByCode(@Param('code') code: string) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.get', { code });
   }
