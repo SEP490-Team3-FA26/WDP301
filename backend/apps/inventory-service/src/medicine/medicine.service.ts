@@ -479,16 +479,20 @@ export class MedicineService implements OnModuleInit {
 
           const batchesByMedId = new Map<string, any[]>();
           for (const batch of allBatches) {
-            const list = batchesByMedId.get(batch.medicineId) || [];
+            const medIdStr = batch.medicineId ? String(batch.medicineId) : '';
+            if (!medIdStr) continue;
+            const list = batchesByMedId.get(medIdStr) || [];
             list.push(batch);
-            batchesByMedId.set(batch.medicineId, list);
+            batchesByMedId.set(medIdStr, list);
           }
 
           const mappedData = data.map((med) => {
             const medId = med._id.toString();
             const medBatches = batchesByMedId.get(medId) || [];
-            const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-            const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + b.stock, 0) : (med.stock || 0);
+            const activeBatches = medBatches.filter(b => 
+              (!b.status || String(b.status).toUpperCase() === 'ACTIVE') && Number(b.stock) > 0
+            );
+            const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + Number(b.stock || 0), 0) : (med.stock || 0);
 
             let earliestExpiryStr = '2026-12-31';
             if (activeBatches.length > 0) {
@@ -550,22 +554,33 @@ export class MedicineService implements OnModuleInit {
         const medIds = data.map(med => med._id.toString());
         const batchFilter: any = { medicineId: { $in: medIds } };
         if (query.branchId) {
-          batchFilter.branchId = query.branchId;
+          const bId = String(query.branchId).trim();
+          const regexStr = bId.replace(/^BR-0*/i, ''); // e.g. BR-001 -> 1
+          batchFilter.$or = [
+            { branchId: bId },
+            { branchId: new RegExp(bId, 'i') },
+            { branchId: new RegExp(`CN-?0*${regexStr}$`, 'i') },
+            { branchId: new RegExp(`Quận\\s*${regexStr}`, 'i') },
+          ];
         }
         const allBatches = await this.batchModel.find(batchFilter).lean().exec();
 
         const batchesByMedId = new Map<string, any[]>();
         for (const batch of allBatches) {
-          const list = batchesByMedId.get(batch.medicineId) || [];
+          const medIdStr = batch.medicineId ? String(batch.medicineId) : '';
+          if (!medIdStr) continue;
+          const list = batchesByMedId.get(medIdStr) || [];
           list.push(batch);
-          batchesByMedId.set(batch.medicineId, list);
+          batchesByMedId.set(medIdStr, list);
         }
 
         const mappedData = data.map((med) => {
           const medId = med._id.toString();
           const medBatches = batchesByMedId.get(medId) || [];
-          const activeBatches = medBatches.filter(b => b.status === 'ACTIVE' && b.stock > 0);
-          const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + b.stock, 0) : (med.stock || 0);
+          const activeBatches = medBatches.filter(b => 
+            (!b.status || String(b.status).toUpperCase() === 'ACTIVE') && Number(b.stock) > 0
+          );
+          const totalStock = query.branchId ? activeBatches.reduce((sum, b) => sum + Number(b.stock || 0), 0) : (med.stock || 0);
 
           let earliestExpiryStr = '2026-12-31';
           if (activeBatches.length > 0) {

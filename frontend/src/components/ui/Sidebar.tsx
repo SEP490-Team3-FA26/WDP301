@@ -1,6 +1,6 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { ReactNode, useState } from "react";
-import { ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Logo } from "./Logo";
 
 export interface NavItem {
@@ -21,13 +21,9 @@ interface SidebarProps {
 
 export function Sidebar({
   navItems,
-  userRole,
   isMobileMenuOpen,
   setIsMobileMenuOpen,
-  handleLogout,
-  getRoleLabel
 }: SidebarProps) {
-  const navigate = useNavigate();
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
 
   const toggleMenu = (name: string) => {
@@ -110,26 +106,6 @@ export function Sidebar({
           );
         })}
       </nav>
-
-      <div className="px-3 pb-4 space-y-1">
-        <div className="pt-4 mt-2 mb-2 px-2 border-t border-slate-100 flex items-center justify-between group">
-          <div
-            className="flex items-center gap-3 cursor-pointer"
-            onClick={() => navigate("/dashboard/profile")}
-          >
-            <div className="w-10 h-10 rounded-full border border-[#cbd5e1] overflow-hidden flex-shrink-0 shadow-sm">
-              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User Avatar" className="w-full h-full object-cover" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-slate-900 truncate">Nguyễn Văn A</div>
-              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">{getRoleLabel(userRole)}</div>
-            </div>
-          </div>
-          <button onClick={handleLogout} className="text-slate-400 hover:text-rose-600 transition-colors opacity-0 group-hover:opacity-100 p-1" title="Logout">
-            <LogOut size={16} />
-          </button>
-        </div>
-      </div>
     </aside>
   );
 }
