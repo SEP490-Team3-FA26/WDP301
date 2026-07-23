@@ -1,0 +1,47 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" agent="PythonScript">
+  <diagram id="class_uc_26" name="UC-26: Send E-Invoice Via Email">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram (View of Participating Classes)&lt;/b&gt;&lt;br/&gt;UC-26: Send E-Invoice Via Email" parent="1" vertex="1" style="html=1;whiteSpace=wrap;align=center;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=14;fontStyle=1;">
+          <mxGeometry x="50" y="30" width="1400" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_boundary" value="&lt;b&gt;ClientUI / Boundary&lt;/b&gt;&lt;hr/&gt;- routeUrl: String&lt;br/&gt;- isRequesting: Boolean&lt;br/&gt;- statePayload: Object&lt;hr/&gt;+ renderView()&lt;br/&gt;+ triggerAction()&lt;br/&gt;+ handleResponse()" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=28;verticalAlign=top;fontFamily=Helvetica;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=6;spacingRight=6;spacingTop=4;shadow=1;">
+          <mxGeometry x="60" y="120" width="250" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="c_ctrl" value="&lt;b&gt;PosSalesController&lt;/b&gt;&lt;hr/&gt;- microserviceClient: ClientProxy&lt;br/&gt;- logger: Logger&lt;hr/&gt;+ handleRequest(payload)&lt;br/&gt;+ validateDto(dto)&lt;br/&gt;+ sendKafkaEvent()" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=28;verticalAlign=top;fontFamily=Helvetica;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=6;spacingRight=6;spacingTop=4;shadow=1;">
+          <mxGeometry x="360" y="120" width="260" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="c_dto" value="&lt;b&gt;SendEInvoiceDto&lt;/b&gt;&lt;hr/&gt;+ id: String&lt;br/&gt;+ requestData: Object&lt;br/&gt;+ timestamp: Date&lt;hr/&gt;+ validate()&lt;br/&gt;+ toEntity()" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=28;verticalAlign=top;fontFamily=Helvetica;fontSize=11;fillColor=#f8cecc;strokeColor=#b85450;align=left;spacingLeft=6;spacingRight=6;spacingTop=4;shadow=1;">
+          <mxGeometry x="360" y="360" width="260" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="c_svc" value="&lt;b&gt;InvoicePdfService&lt;/b&gt;&lt;hr/&gt;- repository: Model&lt;br/&gt;- eventBus: KafkaService&lt;hr/&gt;+ executeBusinessLogic()&lt;br/&gt;+ findDatabaseRecord()&lt;br/&gt;+ publishEvent()" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=28;verticalAlign=top;fontFamily=Helvetica;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=6;spacingRight=6;spacingTop=4;shadow=1;">
+          <mxGeometry x="670" y="120" width="270" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="c_schema" value="&lt;b&gt;SalesOrderSchema&lt;/b&gt;&lt;hr/&gt;- _id: ObjectId&lt;br/&gt;- createdAt: Date&lt;br/&gt;- updatedAt: Date&lt;hr/&gt;+ findOne()&lt;br/&gt;+ save()&lt;br/&gt;+ updateOne()" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=28;verticalAlign=top;fontFamily=Helvetica;fontSize=11;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=6;spacingRight=6;spacingTop=4;shadow=1;">
+          <mxGeometry x="990" y="120" width="260" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="c_ext" value="&lt;b&gt;BrevoSmtpClient&lt;/b&gt;&lt;hr/&gt;- endpointUrl: String&lt;br/&gt;- config: Object&lt;hr/&gt;+ processExternalEvent()&lt;br/&gt;+ emitResponse()" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=28;verticalAlign=top;fontFamily=Helvetica;fontSize=11;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;spacingLeft=6;spacingRight=6;spacingTop=4;shadow=1;">
+          <mxGeometry x="670" y="380" width="270" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="1. Sends Request HTTP / Socket" parent="1" source="c_boundary" target="c_ctrl" style="endArrow=open;endSize=10;html=1;strokeColor=#666666;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="2. Instantiates &amp; Validates" parent="1" source="c_ctrl" target="c_dto" style="endArrow=open;endSize=10;html=1;dashed=1;strokeColor=#b85450;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="3. Dispatches via Kafka / RPC" parent="1" source="c_ctrl" target="c_svc" style="endArrow=open;endSize=10;html=1;strokeColor=#9673a6;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="4. Queries / Persists Document" parent="1" source="c_svc" target="c_schema" style="endArrow=open;endSize=10;html=1;strokeColor=#6c8ebf;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="5. Integrates External Engine / Bus" parent="1" source="c_svc" target="c_ext" style="endArrow=open;endSize=10;html=1;dashed=1;strokeColor=#d79b00;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

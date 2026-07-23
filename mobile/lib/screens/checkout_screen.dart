@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
+import 'payment_webview_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
@@ -154,15 +154,40 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       // Check if PayOS URL returned
       final checkoutUrl = result['checkoutUrl'] ?? result['paymentUrl'];
       if (_paymentMethod == 'PAYOS' && checkoutUrl != null && checkoutUrl.toString().isNotEmpty) {
-        final uri = Uri.parse(checkoutUrl.toString());
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
-      }
+        final orderCode = result['orderCode'] ?? result['order']?['orderCode'];
+        if (!mounted) return;
+        final webViewResult = await Navigator.push<Map<String, dynamic>>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaymentWebViewScreen(
+              checkoutUrl: checkoutUrl.toString(),
+              orderCode: orderCode,
+            ),
+          ),
+        );
 
-      if (!mounted) return;
-      // Return true to caller so Cart is cleared and navigated to Orders tab
-      Navigator.pop(context, {'success': true, 'result': result});
+        if (!mounted) return;
+
+        if (webViewResult != null && webViewResult['paid'] == true) {
+          // Payment confirmed paid: Return true to caller so Cart is cleared
+          Navigator.pop(context, {'success': true, 'result': result});
+        } else {
+          // Payment cancelled or pending: Keep cart intact
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                webViewResult?['message'] ?? 'Thanh toán chưa hoàn tất. Đơn hàng đã được lưu với trạng thái Chưa thanh toán.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      } else {
+        if (!mounted) return;
+        // CASH payment: Return true to clear cart
+        Navigator.pop(context, {'success': true, 'result': result});
+      }
     } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

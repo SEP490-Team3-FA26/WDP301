@@ -1,0 +1,143 @@
+<mxfile host="Electron">
+  <diagram name="Admin-Screenflow" id="0">
+    <mxGraphModel dx="1568" dy="806" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="hub" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#37474f;strokeColor=#263238;fontColor=#ffffff;fontStyle=1;fontSize=14;arcSize=20;" value="HQ Admin Dashboard&#xa;( /admin )" vertex="1">
+          <mxGeometry height="65" width="180" x="350" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="login" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#607d8b;strokeColor=#263238;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="User Login&#xa;( /auth/login )" vertex="1">
+          <mxGeometry height="60" width="150" y="452.5" as="geometry" />
+        </mxCell>
+        <mxCell id="e_login_hub" edge="1" parent="1" source="login" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#263238;strokeWidth=2;fontColor=#263238;" target="hub" value="Role: admin / head_branch">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_app" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#455a64;strokeColor=#263238;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="HQ Requisition Approvals&#xa;( /admin/approvals )" vertex="1">
+          <mxGeometry height="60" width="200" x="600" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_review" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cfd8dc;strokeColor=#37474f;fontColor=#000000;fontStyle=1;arcSize=20;" value="Review Branch PR" vertex="1">
+          <mxGeometry height="60" width="170" x="850" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_po" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cfd8dc;strokeColor=#37474f;fontColor=#000000;fontStyle=1;arcSize=20;" value="Consolidate PR &amp; Issue PO" vertex="1">
+          <mxGeometry height="60" width="200" x="1060" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="e_app_review" edge="1" parent="1" source="b1_app" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b1_review" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_review_po" edge="1" parent="1" source="b1_review" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b1_po" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b2_branches" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#455a64;strokeColor=#263238;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Branch &amp; Employee Admin&#xa;( /admin/branches )" vertex="1">
+          <mxGeometry height="60" width="200" x="600" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="b2_emp" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cfd8dc;strokeColor=#37474f;fontColor=#000000;fontStyle=1;arcSize=20;" value="Employee Roster &amp; Roles&#xa;( /admin/employees )" vertex="1">
+          <mxGeometry height="60" width="200" x="850" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="e_branch_emp" edge="1" parent="1" source="b2_branches" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b2_emp" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b3_finance" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#455a64;strokeColor=#263238;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="System Finance Control&#xa;( /admin/finance )" vertex="1">
+          <mxGeometry height="60" width="200" x="600" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="b3_credit" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cfd8dc;strokeColor=#37474f;fontColor=#000000;fontStyle=1;arcSize=20;" value="Supplier Credit &amp; Debt (UC-07)&#xa;( /admin/supplier-credit )" vertex="1">
+          <mxGeometry height="60" width="220" x="850" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fin_credit" edge="1" parent="1" source="b3_finance" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b3_credit" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b4_vouchers" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#455a64;strokeColor=#263238;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Vouchers &amp; Inventory Quotas&#xa;( /admin/vouchers )" vertex="1">
+          <mxGeometry height="60" width="210" x="600" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="b4_quotas" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cfd8dc;strokeColor=#37474f;fontColor=#000000;fontStyle=1;arcSize=20;" value="Quota Management&#xa;( /admin/quotas )" vertex="1">
+          <mxGeometry height="60" width="180" x="860" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="e_voucher_quotas" edge="1" parent="1" source="b4_vouchers" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b4_quotas" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b5_ai" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#455a64;strokeColor=#263238;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="AI Insights &amp; Supply Chain&#xa;( /admin/ai-insights )" vertex="1">
+          <mxGeometry height="60" width="210" x="600" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="b5_forecast" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cfd8dc;strokeColor=#37474f;fontColor=#000000;fontStyle=1;arcSize=20;" value="AI Sales Forecast&#xa;( /admin/ai-forecast )" vertex="1">
+          <mxGeometry height="60" width="180" x="860" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="b5_supply" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cfd8dc;strokeColor=#37474f;fontColor=#000000;fontStyle=1;arcSize=20;" value="Supply Chain Analytics&#xa;( /admin/supply-chain )" vertex="1">
+          <mxGeometry height="60" width="190" x="860" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ai_forecast" edge="1" parent="1" source="b5_ai" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b5_forecast" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="830" y="690" />
+              <mxPoint x="830" y="650" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_ai_supply" edge="1" parent="1" source="b5_ai" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b5_supply" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="830" y="690" />
+              <mxPoint x="830" y="730" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b6_reports" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#455a64;strokeColor=#263238;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="System Reports &amp; Audit Logs&#xa;( /admin/reports )" vertex="1">
+          <mxGeometry height="60" width="220" x="600" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="b6_audit" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cfd8dc;strokeColor=#37474f;fontColor=#000000;fontStyle=1;arcSize=20;" value="System Audit Logs&#xa;( /admin/audit-logs )" vertex="1">
+          <mxGeometry height="60" width="180" x="870" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="e_reports_audit" edge="1" parent="1" source="b6_reports" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b6_audit" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_h_b1" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#263238;strokeWidth=2;" target="b1_app" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="130" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b2" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#263238;strokeWidth=2;" target="b2_branches" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="270" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b3" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#263238;strokeWidth=2;" target="b3_finance" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="410" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b4" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#263238;strokeWidth=2;" target="b4_vouchers" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="550" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b5" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#263238;strokeWidth=2;" target="b5_ai" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="690" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b6" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#263238;strokeWidth=2;" target="b6_reports" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="830" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

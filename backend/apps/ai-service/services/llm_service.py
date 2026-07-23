@@ -3,8 +3,11 @@ from groq import AsyncGroq
 import json
 import re
 
-api_key = os.getenv("GROQ_API_KEY") or os.getenv("EXPO_PUBLIC_GROQ_API_KEY")
-client = AsyncGroq(api_key=api_key)
+def get_groq_client() -> AsyncGroq:
+    key = os.getenv("GROQ_API_KEY") or os.getenv("EXPO_PUBLIC_GROQ_API_KEY")
+    if not key:
+        raise RuntimeError("GROQ_API_KEY is not configured")
+    return AsyncGroq(api_key=key)
 
 RETRIEVAL_NORMALIZATION_PROMPT = """Bạn làm nhiệm vụ làm sạch bản ghi âm tiếng Việt cho tìm kiếm y tế.
 Hãy sửa các lỗi nhận dạng giọng nói rõ ràng và rút gọn thành các triệu chứng/ngữ cảnh y tế có trong lời nói.
@@ -18,7 +21,7 @@ async def normalize_transcript_for_retrieval(transcript: str) -> str:
         return transcript
 
     try:
-        response = await client.chat.completions.create(
+        response = await get_groq_client().chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": RETRIEVAL_NORMALIZATION_PROMPT},
@@ -72,7 +75,7 @@ async def generate_prescription(transcript: str, context: str) -> dict:
     """
     system_prompt = MEDICAL_SYSTEM_PROMPT.replace("{rag_context}", context or "Không có dữ liệu ngữ cảnh.")
     
-    response = await client.chat.completions.create(
+    response = await get_groq_client().chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": system_prompt},
@@ -155,7 +158,7 @@ async def check_drug_interactions(medicines_list: list[str], context: str) -> di
         "{medicines_list}", ", ".join(medicines_list)
     )
     
-    response = await client.chat.completions.create(
+    response = await get_groq_client().chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": system_prompt},
@@ -232,7 +235,7 @@ async def generate_demand_forecast(dataset: list, period_days: int) -> dict:
         dataset_str = json.dumps(compact_samples, ensure_ascii=False)
         user_prompt = f"Số ngày dự báo: {period_days} ngày. Tổng danh mục trong kho: {len(dataset)}. Dưới đây là 350 sản phẩm dược phẩm ưu tiên hàng đầu:\n{dataset_str}"
         
-        response = await client.chat.completions.create(
+        response = await get_groq_client().chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": FORECAST_SYSTEM_PROMPT},
@@ -410,7 +413,7 @@ async def analyze_seasonal_trends(dataset: list, weather_region: str, current_se
     user_prompt = f"Dưới đây là tập dữ liệu thống kê doanh số bán hàng và dự báo:\n{json.dumps(dataset_to_llm, ensure_ascii=False)}"
     
     try:
-        response = await client.chat.completions.create(
+        response = await get_groq_client().chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -522,7 +525,7 @@ async def match_prescription_with_inventory(ocr_data: dict, rag_context: str) ->
     ).replace("{rag_context}", rag_context or "Không có dữ liệu kho thuốc.")
 
     try:
-        response = await client.chat.completions.create(
+        response = await get_groq_client().chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
