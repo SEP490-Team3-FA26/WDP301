@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Edit2, Ban, ShieldCheck, Mail, Lock, User as UserIcon, Building2, CheckCircle2, AlertTriangle, X } from "lucide-react";
+import { Search, Plus, Edit2, Ban, ShieldCheck, Mail, Lock, User as UserIcon, Building2, CheckCircle2, AlertTriangle, X, Clock, CheckCheck, XCircle } from "lucide-react";
 import { employeeService, Employee } from "../../services/admin/employee.service";
 import { branchService } from "../../services/admin/branch.service";
 
 export function Employees() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("all");
+  const [activeTab, setActiveTab] = useState<"all" | "pending" | "rejected">("all");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -46,17 +48,28 @@ export function Employees() {
     fetchData();
   }, [filterRole]);
 
-  const filteredEmployees = employees.filter(emp =>
+  // Derived lists based on tab
+  const pendingEmployees = employees.filter(emp => emp.isApproved === 'pending');
+  const rejectedEmployees = employees.filter(emp => emp.isApproved === 'rejected');
+
+  const baseFiltered = (() => {
+    if (activeTab === 'pending') return pendingEmployees;
+    if (activeTab === 'rejected') return rejectedEmployees;
+    return employees;
+  })();
+
+  const filteredEmployees = baseFiltered.filter(emp =>
     emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     emp.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleOpenModal = (employee?: Employee) => {
+    setModalError(null);
     if (employee) {
       setEditingEmployee(employee);
       setFormData({
         email: employee.email,
-        password: "", // Leave blank for edit (we don't change password here usually, or if we do it's a separate API. UC-45 is just Admin set default pass on create)
+        password: "",
         fullName: employee.fullName,
         role: employee.role,
         branchId: employee.branchId || "",
@@ -77,10 +90,12 @@ export function Employees() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingEmployee(null);
+    setModalError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setModalError(null);
     try {
       if (editingEmployee) {
         await employeeService.updateEmployee(editingEmployee._id, {
@@ -89,18 +104,20 @@ export function Employees() {
           branchId: formData.branchId || undefined,
         });
       } else {
+        // Admin tạo → active ngay (createdByRole = 'admin')
         await employeeService.createEmployee({
           email: formData.email,
           password: formData.password,
           fullName: formData.fullName,
           role: formData.role,
           branchId: formData.branchId || undefined,
+          createdByRole: 'admin',
         });
       }
       handleCloseModal();
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.message || "Lưu thất bại");
+      setModalError(err.response?.data?.message || err.message || "Lưu thất bại");
     }
   };
 
@@ -110,7 +127,19 @@ export function Employees() {
         await employeeService.toggleBanEmployee(id);
         fetchData();
       } catch (err: any) {
-        alert("Thao tác thất bại");
+        setError(err.response?.data?.message || "Thao tác thất bại");
+      }
+    }
+  };
+
+  const handleApprove = async (id: string, action: 'approve' | 'reject') => {
+    const label = action === 'approve' ? 'phê duyệt' : 'từ chối';
+    if (window.confirm(`Bạn có chắc chắn muốn ${label} tài khoản này?`)) {
+      try {
+        await employeeService.approveEmployee(id, action);
+        fetchData();
+      } catch (err: any) {
+        setError(err.response?.data?.message || `Thao tác ${label} thất bại`);
       }
     }
   };
@@ -121,6 +150,32 @@ export function Employees() {
     warehouse: { label: "Thủ kho", color: "bg-orange-100 text-orange-800" },
     branch: { label: "Quản lý chi nhánh", color: "bg-indigo-100 text-indigo-800" },
     pharmacist: { label: "Dược sĩ", color: "bg-green-100 text-green-800" },
+  };
+
+  const getStatusBadge = (emp: Employee) => {
+    if (emp.isApproved === 'pending') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+          <Clock size={11} /> Chờ duyệt
+        </span>
+      );
+    }
+    if (emp.isApproved === 'rejected') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+          <XCircle size={11} /> Từ chối
+        </span>
+      );
+    }
+    return emp.isActive ? (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        <CheckCircle2 size={11} /> Hoạt động
+      </span>
+    ) : (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+        Đã khóa
+      </span>
+    );
   };
 
   return (
@@ -140,6 +195,50 @@ export function Employees() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'all'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Tất cả ({employees.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'pending'
+              ? 'border-amber-500 text-amber-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Clock size={15} /> Chờ duyệt
+          {pendingEmployees.length > 0 && (
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold">
+              {pendingEmployees.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('rejected')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'rejected'
+              ? 'border-red-500 text-red-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <XCircle size={15} /> Đã từ chối
+          {rejectedEmployees.length > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-gray-200 text-gray-600 text-xs font-bold">
+              {rejectedEmployees.length}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Filters */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
@@ -152,18 +251,20 @@ export function Employees() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <select
-          className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white min-w-[200px]"
-          value={filterRole}
-          onChange={(e) => setFilterRole(e.target.value)}
-        >
-          <option value="all">Tất cả vai trò</option>
-          <option value="admin">Admin</option>
-          <option value="head_branch">Quản lý chuỗi</option>
-          <option value="warehouse">Thủ kho</option>
-          <option value="branch">Quản lý chi nhánh</option>
-          <option value="pharmacist">Dược sĩ</option>
-        </select>
+        {activeTab === 'all' && (
+          <select
+            className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white min-w-[200px]"
+            value={filterRole}
+            onChange={(e) => setFilterRole(e.target.value)}
+          >
+            <option value="all">Tất cả vai trò</option>
+            <option value="admin">Admin</option>
+            <option value="head_branch">Quản lý chuỗi</option>
+            <option value="warehouse">Thủ kho</option>
+            <option value="branch">Quản lý chi nhánh</option>
+            <option value="pharmacist">Dược sĩ</option>
+          </select>
+        )}
       </div>
 
       {/* Error State */}
@@ -171,6 +272,16 @@ export function Employees() {
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center">
           <AlertTriangle className="mr-2" size={20} />
           {error}
+        </div>
+      )}
+
+      {/* Pending Notice Banner */}
+      {activeTab === 'pending' && pendingEmployees.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex items-center gap-2">
+          <Clock size={18} className="flex-shrink-0" />
+          <span className="text-sm">
+            Có <strong>{pendingEmployees.length}</strong> tài khoản nhân viên đang chờ bạn xem xét và phê duyệt.
+          </span>
         </div>
       )}
 
@@ -207,7 +318,9 @@ export function Employees() {
               ) : filteredEmployees.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
-                    Không tìm thấy nhân viên nào
+                    {activeTab === 'pending' ? 'Không có tài khoản nào đang chờ duyệt' :
+                     activeTab === 'rejected' ? 'Không có tài khoản nào bị từ chối' :
+                     'Không tìm thấy nhân viên nào'}
                   </td>
                 </tr>
               ) : (
@@ -216,10 +329,14 @@ export function Employees() {
                   const branch = branches.find(b => b.branchCode === emp.branchId || b._id === emp.branchId);
                   
                   return (
-                    <tr key={emp._id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={emp._id} className={`hover:bg-gray-50 transition-colors ${emp.isApproved === 'pending' ? 'bg-amber-50/30' : ''}`}>
                       <td className="px-6 py-4">
                         <div className="flex items-center">
-                          <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold uppercase">
+                          <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold uppercase ${
+                            emp.isApproved === 'pending' ? 'bg-amber-100 text-amber-600' :
+                            emp.isApproved === 'rejected' ? 'bg-red-100 text-red-600' :
+                            'bg-indigo-100 text-indigo-600'
+                          }`}>
                             {emp.fullName.charAt(0)}
                           </div>
                           <div className="ml-4">
@@ -243,36 +360,53 @@ export function Employees() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {emp.isActive ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Hoạt động
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Đã khóa
-                          </span>
-                        )}
+                        {getStatusBadge(emp)}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
-                          <button 
-                            onClick={() => handleOpenModal(emp)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Chỉnh sửa"
-                          >
-                            <Edit2 size={18} />
-                          </button>
-                          <button 
-                            onClick={() => handleToggleBan(emp._id)}
-                            className={`p-2 rounded-lg transition-colors ${
-                              emp.isActive 
-                                ? "text-red-600 hover:bg-red-50" 
-                                : "text-green-600 hover:bg-green-50"
-                            }`}
-                            title={emp.isActive ? "Khóa tài khoản" : "Mở khóa tài khoản"}
-                          >
-                            {emp.isActive ? <Ban size={18} /> : <CheckCircle2 size={18} />}
-                          </button>
+                          {/* Nút Phê duyệt / Từ chối – chỉ hiện khi pending */}
+                          {emp.isApproved === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => handleApprove(emp._id, 'approve')}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors"
+                                title="Phê duyệt tài khoản"
+                              >
+                                <CheckCheck size={14} /> Duyệt
+                              </button>
+                              <button
+                                onClick={() => handleApprove(emp._id, 'reject')}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                                title="Từ chối tài khoản"
+                              >
+                                <XCircle size={14} /> Từ chối
+                              </button>
+                            </>
+                          )}
+
+                          {/* Nút Edit và Ban – chỉ hiện khi đã approved */}
+                          {(emp.isApproved === 'approved' || !emp.isApproved) && (
+                            <>
+                              <button 
+                                onClick={() => handleOpenModal(emp)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Chỉnh sửa"
+                              >
+                                <Edit2 size={18} />
+                              </button>
+                              <button 
+                                onClick={() => handleToggleBan(emp._id)}
+                                className={`p-2 rounded-lg transition-colors ${
+                                  emp.isActive 
+                                    ? "text-red-600 hover:bg-red-50" 
+                                    : "text-green-600 hover:bg-green-50"
+                                }`}
+                                title={emp.isActive ? "Khóa tài khoản" : "Mở khóa tài khoản"}
+                              >
+                                {emp.isActive ? <Ban size={18} /> : <CheckCircle2 size={18} />}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -301,6 +435,13 @@ export function Employees() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {modalError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-medium">
+                  <AlertTriangle size={18} className="flex-shrink-0 text-red-500" />
+                  <span>{modalError}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <div className="relative">

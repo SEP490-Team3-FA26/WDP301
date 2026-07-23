@@ -30,6 +30,9 @@ export class User extends Document {
   @Prop({ default: false })
   isEmailVerified: boolean;
 
+  @Prop({ type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved' })
+  isApproved: string;
+
   @Prop()
   avatarUrl?: string;
 

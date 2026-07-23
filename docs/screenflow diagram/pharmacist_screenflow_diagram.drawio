@@ -1,0 +1,139 @@
+<mxfile host="Electron">
+  <diagram name="Pharmacist-Screenflow" id="0">
+    <mxGraphModel dx="1191" dy="806" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="hub" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#8e24aa;strokeColor=#4a148c;fontColor=#ffffff;fontStyle=1;fontSize=14;arcSize=20;" value="Pharmacist Dashboard&#xa;( /pharmacist )" vertex="1">
+          <mxGeometry height="65" width="180" x="350" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="login" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ba68c8;strokeColor=#4a148c;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="User Login&#xa;( /auth/login )" vertex="1">
+          <mxGeometry height="60" width="150" x="60" y="452.5" as="geometry" />
+        </mxCell>
+        <mxCell id="e_login_hub" edge="1" parent="1" source="login" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4a148c;strokeWidth=2;fontColor=#4a148c;" target="hub" value="Role: pharmacist">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_sales" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ab47bc;strokeColor=#4a148c;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="POS Sales Terminal&#xa;( /pharmacist/sales )" vertex="1">
+          <mxGeometry height="60" width="190" x="600" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_rx_fill" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;fontColor=#000000;fontStyle=1;arcSize=20;" value="Prescription Scan &amp; Fill" vertex="1">
+          <mxGeometry height="60" width="190" x="840" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_otc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;fontColor=#000000;fontStyle=1;arcSize=20;" value="OTC Retail Checkout" vertex="1">
+          <mxGeometry height="60" width="190" x="840" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="b1_print" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;fontColor=#000000;fontStyle=1;arcSize=20;" value="Sales Receipt Print" vertex="1">
+          <mxGeometry height="60" width="180" x="1080" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="e_sales_rx" edge="1" parent="1" source="b1_sales" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b1_rx_fill" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="810" y="180" />
+              <mxPoint x="810" y="140" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_sales_otc" edge="1" parent="1" source="b1_sales" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b1_otc" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="810" y="180" />
+              <mxPoint x="810" y="220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rx_print" edge="1" parent="1" source="b1_rx_fill" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b1_print" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1050" y="140" />
+              <mxPoint x="1050" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_otc_print" edge="1" parent="1" source="b1_otc" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b1_print" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1050" y="220" />
+              <mxPoint x="1050" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b2_interact" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ab47bc;strokeColor=#4a148c;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Drug Interactions Check&#xa;( /interactions )" vertex="1">
+          <mxGeometry height="60" width="200" x="600" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="b2_warning" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;fontColor=#000000;fontStyle=1;arcSize=20;" value="Interaction Warnings" vertex="1">
+          <mxGeometry height="60" width="190" x="850" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="e_interact_warning" edge="1" parent="1" source="b2_interact" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b2_warning" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b3_lots" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ab47bc;strokeColor=#4a148c;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Lot &amp; Expiry Tracking&#xa;( /pharmacist/lot-tracking )" vertex="1">
+          <mxGeometry height="60" width="200" x="600" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="b3_batch" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;fontColor=#000000;fontStyle=1;arcSize=20;" value="Search Batch &amp; Stock" vertex="1">
+          <mxGeometry height="60" width="190" x="850" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="e_lots_batch" edge="1" parent="1" source="b3_lots" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b3_batch" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b4_reports" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ab47bc;strokeColor=#4a148c;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Shift Sales Reports&#xa;( /pharmacist/reports )" vertex="1">
+          <mxGeometry height="60" width="200" x="600" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="b4_cash" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;fontColor=#000000;fontStyle=1;arcSize=20;" value="Daily Cash Summary" vertex="1">
+          <mxGeometry height="60" width="190" x="850" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="e_reports_cash" edge="1" parent="1" source="b4_reports" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b4_cash" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b5_profile" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ab47bc;strokeColor=#4a148c;fontColor=#ffffff;fontStyle=1;arcSize=20;" value="Pharmacist Profile&#xa;( /pharmacist/profile )" vertex="1">
+          <mxGeometry height="60" width="190" x="600" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="b5_info" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;fontColor=#000000;fontStyle=1;arcSize=20;" value="Personal Info &amp; Shift Logs" vertex="1">
+          <mxGeometry height="60" width="200" x="850" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="e_profile_info" edge="1" parent="1" source="b5_profile" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#444444;strokeWidth=1.5;" target="b5_info" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_h_b1" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8e24aa;strokeWidth=2;" target="b1_sales" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b2" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8e24aa;strokeWidth=2;" target="b2_interact" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b3" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8e24aa;strokeWidth=2;" target="b3_lots" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="480" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b4" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8e24aa;strokeWidth=2;" target="b4_reports" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="620" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_h_b5" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8e24aa;strokeWidth=2;" target="b5_profile" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="482.5" />
+              <mxPoint x="550" y="760" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

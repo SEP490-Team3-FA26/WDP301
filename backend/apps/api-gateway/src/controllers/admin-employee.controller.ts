@@ -34,6 +34,7 @@ export class AdminEmployeeController implements OnModuleInit {
       'user.admin.employee.update',
       'user.admin.employee.ban_unban',
       'user.admin.employee.delete',
+      'user.admin.employee.approve',
     ]);
   }
 
@@ -71,5 +72,12 @@ export class AdminEmployeeController implements OnModuleInit {
   @ApiOperation({ summary: 'Xóa tài khoản nhân viên' })
   async deleteEmployee(@Param('id') id: string) {
     return await sendKafkaMessage(this.kafkaClient, 'user.admin.employee.delete', { id });
+  }
+
+  @Put(':id/approve')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Phê duyệt / Từ chối tài khoản nhân viên (chỉ Admin)' })
+  async approveEmployee(@Param('id') id: string, @Body() body: { action: 'approve' | 'reject' }) {
+    return await sendKafkaMessage(this.kafkaClient, 'user.admin.employee.approve', { id, action: body.action });
   }
 }

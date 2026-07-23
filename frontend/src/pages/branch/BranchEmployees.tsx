@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Edit2, Ban, ShieldCheck, Mail, Lock, User as UserIcon, Building2, CheckCircle2, AlertTriangle, X, Trash2 } from "lucide-react";
+import { Search, Plus, Edit2, Ban, ShieldCheck, Mail, Lock, User as UserIcon, Building2, CheckCircle2, AlertTriangle, X, Trash2, Clock } from "lucide-react";
 import { employeeService, Employee } from "../../services/admin/employee.service";
 
 function getBranchIdFromToken() {
@@ -20,6 +20,8 @@ export function BranchEmployees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const currentBranchId = getBranchIdFromToken() || "BR-001";
 
@@ -59,6 +61,7 @@ export function BranchEmployees() {
   );
 
   const handleOpenModal = (employee?: Employee) => {
+    setModalError(null);
     if (employee) {
       setEditingEmployee(employee);
       setFormData({
@@ -82,10 +85,12 @@ export function BranchEmployees() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingEmployee(null);
+    setModalError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setModalError(null);
     try {
       if (editingEmployee) {
         await employeeService.updateEmployee(editingEmployee._id, {
@@ -93,6 +98,7 @@ export function BranchEmployees() {
           role: formData.role,
           branchId: currentBranchId,
         });
+        setSuccessMessage("Cập nhật thông tin nhân viên thành công!");
       } else {
         await employeeService.createEmployee({
           email: formData.email,
@@ -100,12 +106,15 @@ export function BranchEmployees() {
           fullName: formData.fullName,
           role: formData.role,
           branchId: currentBranchId,
+          createdByRole: 'branch', // branch tạo → cần admin duyệt
         });
+        setSuccessMessage("Tài khoản đã được tạo và đang chờ Admin phê duyệt!");
       }
       handleCloseModal();
       fetchData();
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: any) {
-      alert(err.response?.data?.message || "Lưu nhân viên thất bại");
+      setModalError(err.response?.data?.message || err.message || "Lưu nhân viên thất bại");
     }
   };
 
@@ -115,7 +124,7 @@ export function BranchEmployees() {
         await employeeService.toggleBanEmployee(id);
         fetchData();
       } catch (err: any) {
-        alert("Thao tác thất bại");
+        setError(err.response?.data?.message || "Thao tác thất bại");
       }
     }
   };
@@ -126,7 +135,7 @@ export function BranchEmployees() {
         await employeeService.deleteEmployee(id);
         fetchData();
       } catch (err: any) {
-        alert("Xóa thất bại");
+        setError(err.response?.data?.message || "Xóa thất bại");
       }
     }
   };
@@ -168,6 +177,17 @@ export function BranchEmployees() {
           />
         </div>
       </div>
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl flex items-center gap-2 animate-pulse">
+          <CheckCircle2 size={18} className="flex-shrink-0 text-emerald-600" />
+          <span className="text-sm font-medium">{successMessage}</span>
+          <button onClick={() => setSuccessMessage(null)} className="ml-auto text-emerald-500 hover:text-emerald-700">
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       {loading ? (
@@ -214,7 +234,11 @@ export function BranchEmployees() {
                         </td>
                         <td className="px-6 py-4 text-slate-600 font-medium">{emp.branchId || currentBranchId}</td>
                         <td className="px-6 py-4">
-                          {emp.isActive ? (
+                          {emp.isApproved === 'pending' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                              <Clock size={11} /> Chờ Admin duyệt
+                            </span>
+                          ) : emp.isActive ? (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
                               Hoạt động
                             </span>
@@ -276,6 +300,13 @@ export function BranchEmployees() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {modalError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl flex items-center gap-2 text-sm font-medium">
+                  <AlertTriangle size={18} className="flex-shrink-0 text-rose-500" />
+                  <span>{modalError}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Email *</label>
                 <div className="relative">

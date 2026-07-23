@@ -1,0 +1,107 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" agent="PythonScript">
+  <diagram id="class_diagram_1" name="WDP301 System Class Diagram">
+    <mxGraphModel dx="2000" dy="1500" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="c_user" value="&lt;b&gt;User&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- phone: String&lt;br/&gt;- passwordHash: String&lt;br/&gt;- fullName: String&lt;br/&gt;- email: String&lt;br/&gt;- role: UserRoleEnum&lt;br/&gt;- branchId: String&lt;br/&gt;- points: Number&lt;br/&gt;- tier: CustomerTierEnum&lt;hr/&gt;+ createAccount(): Promise&lt;User&gt;&lt;br/&gt;+ updateProfile(): Promise&lt;User&gt;&lt;br/&gt;+ addLoyaltyPoints(delta): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="60" y="80" width="280" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="c_branch" value="&lt;b&gt;Branch&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- branchCode: String&lt;br/&gt;- name: String&lt;br/&gt;- address: String&lt;br/&gt;- phone: String&lt;br/&gt;- managerId: String&lt;br/&gt;- status: BranchStatusEnum&lt;hr/&gt;+ createBranch(): Promise&lt;Branch&gt;&lt;br/&gt;+ updateInfo(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="380" y="80" width="260" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="c_audit" value="&lt;b&gt;AuditLog&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- action: String&lt;br/&gt;- performedBy: String&lt;br/&gt;- resource: String&lt;br/&gt;- entityId: String&lt;br/&gt;- details: Object&lt;br/&gt;- timestamp: Date&lt;hr/&gt;+ logAction(): void&lt;br/&gt;+ exportReport(): Promise&lt;String&gt;" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="680" y="80" width="250" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="c_medicine" value="&lt;b&gt;Medicine&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- medicineCode: String&lt;br/&gt;- sku: String&lt;br/&gt;- name: String&lt;br/&gt;- activeIngredient: String&lt;br/&gt;- category: String&lt;br/&gt;- unit: String&lt;br/&gt;- basePrice: Number&lt;br/&gt;- isPrescriptionRequired: Boolean&lt;br/&gt;- minStockLevel: Number&lt;hr/&gt;+ addMedicine(): Promise&lt;Medicine&gt;&lt;br/&gt;+ updateCatalog(): void&lt;br/&gt;+ checkQuota(): Boolean" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="60" y="420" width="300" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="c_batch" value="&lt;b&gt;MedicineBatch&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- batchNo: String&lt;br/&gt;- medicineId: String&lt;br/&gt;- branchId: String&lt;br/&gt;- supplierId: String&lt;br/&gt;- quantity: Number&lt;br/&gt;- importPrice: Number&lt;br/&gt;- manufacturingDate: Date&lt;br/&gt;- expiryDate: Date&lt;br/&gt;- status: BatchStatusEnum&lt;hr/&gt;+ updateQuantity(delta): void&lt;br/&gt;+ deductFEFO(qty): void&lt;br/&gt;+ checkExpiry(): Boolean" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="400" y="420" width="280" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="c_check" value="&lt;b&gt;InventoryCheck&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- checkCode: String&lt;br/&gt;- branchId: String&lt;br/&gt;- inventoryManagerId: String&lt;br/&gt;- scope: CheckScopeEnum&lt;br/&gt;- items: Array&lt;CheckItem&gt;&lt;br/&gt;- status: CheckStatusEnum&lt;hr/&gt;+ scanItems(items): void&lt;br/&gt;+ reconcileStock(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="720" y="420" width="280" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="c_quota" value="&lt;b&gt;MedicineQuota&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- medicineId: String&lt;br/&gt;- branchId: String&lt;br/&gt;- monthlyQuota: Number&lt;br/&gt;- usedQuantity: Number&lt;br/&gt;- period: String&lt;hr/&gt;+ verifyQuota(qty): Boolean&lt;br/&gt;+ consumeQuota(qty): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="1040" y="420" width="240" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="c_supplier" value="&lt;b&gt;Supplier&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- supplierCode: String&lt;br/&gt;- name: String&lt;br/&gt;- taxCode: String&lt;br/&gt;- gdpLicense: String&lt;br/&gt;- phone: String&lt;br/&gt;- reliabilityRating: Number&lt;hr/&gt;+ addSupplier(): Promise&lt;Supplier&gt;&lt;br/&gt;+ updateRating(score): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="60" y="780" width="260" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pr" value="&lt;b&gt;PurchaseRequisition&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- prCode: String&lt;br/&gt;- branchId: String&lt;br/&gt;- requestedBy: String&lt;br/&gt;- items: Array&lt;PRItem&gt;&lt;br/&gt;- status: PRStatusEnum&lt;hr/&gt;+ submitPR(): void&lt;br/&gt;+ approvePR(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="360" y="780" width="270" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_po" value="&lt;b&gt;PurchaseOrder&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- poCode: String&lt;br/&gt;- supplierId: String&lt;br/&gt;- items: Array&lt;POItem&gt;&lt;br/&gt;- totalAmount: Number&lt;br/&gt;- paymentStatus: PaymentStatusEnum&lt;br/&gt;- status: POStatusEnum&lt;hr/&gt;+ autoGenerateFromAI(): PO&lt;br/&gt;+ approvePO(): void&lt;br/&gt;+ processPayment(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="670" y="780" width="280" height="270" as="geometry" />
+        </mxCell>
+        <mxCell id="c_grn" value="&lt;b&gt;GoodsReceiptNote&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- grnCode: String&lt;br/&gt;- poCode: String&lt;br/&gt;- supplierId: String&lt;br/&gt;- items: Array&lt;GRNItem&gt;&lt;br/&gt;- inspectedByAI: Boolean&lt;br/&gt;- status: GRNStatusEnum&lt;hr/&gt;+ inspectGoodsAI(): void&lt;br/&gt;+ receiveStock(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="990" y="780" width="280" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="c_transfer" value="&lt;b&gt;StockTransfer&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- transferCode: String&lt;br/&gt;- fromBranchId: String&lt;br/&gt;- toBranchId: String&lt;br/&gt;- items: Array&lt;TransferItem&gt;&lt;br/&gt;- status: TransferStatusEnum&lt;hr/&gt;+ requestTransfer(): void&lt;br/&gt;+ confirmReceipt(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="1310" y="780" width="270" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_sales_order" value="&lt;b&gt;SalesOrder&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- orderCode: String&lt;br/&gt;- branchId: String&lt;br/&gt;- pharmacistId: String&lt;br/&gt;- customerId: String&lt;br/&gt;- invoiceType: InvoiceTypeEnum&lt;br/&gt;- items: Array&lt;SalesOrderItem&gt;&lt;br/&gt;- discountAmount: Number&lt;br/&gt;- finalAmount: Number&lt;br/&gt;- paymentMethod: PaymentMethodEnum&lt;hr/&gt;+ createPOSInvoice(): SalesOrder&lt;br/&gt;+ processExchange(): void&lt;br/&gt;+ sendEInvoiceEmail(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="60" y="1140" width="300" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="c_online_order" value="&lt;b&gt;OnlineOrder&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- orderCode: String&lt;br/&gt;- customerId: String&lt;br/&gt;- items: Array&lt;OrderItem&gt;&lt;br/&gt;- shippingAddress: String&lt;br/&gt;- deliveryFee: Number&lt;br/&gt;- totalAmount: Number&lt;br/&gt;- payosTransactionId: String&lt;br/&gt;- deliveryStatus: DeliveryStatusEnum&lt;hr/&gt;+ checkoutPayOS(): String&lt;br/&gt;+ updateDeliveryStatus(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="400" y="1140" width="290" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cart" value="&lt;b&gt;Cart&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- customerId: String&lt;br/&gt;- items: Array&lt;CartItem&gt;&lt;hr/&gt;+ addItem(item): void&lt;br/&gt;+ removeItem(itemId): void&lt;br/&gt;+ clearCart(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="730" y="1140" width="240" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="c_voucher" value="&lt;b&gt;Voucher&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- voucherCode: String&lt;br/&gt;- discountPercent: Number&lt;br/&gt;- maxDiscountAmount: Number&lt;br/&gt;- minOrderValue: Number&lt;br/&gt;- expiryDate: Date&lt;hr/&gt;+ applyVoucher(total): Number" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="1010" y="1140" width="260" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="c_prescription" value="&lt;b&gt;Prescription&lt;/b&gt;&lt;hr/&gt;- id: String&lt;br/&gt;- prescriptionCode: String&lt;br/&gt;- patientName: String&lt;br/&gt;- doctorName: String&lt;br/&gt;- imageUrl: String&lt;br/&gt;- recognizedMedicines: Array&lt;Object&gt;&lt;hr/&gt;+ scanViaGeminiAI(): void&lt;br/&gt;+ autoPopulateCart(): void" parent="1" vertex="1" style="html=1;whiteSpace=wrap;overflow=hidden;shape=table;childLayout=tableLayout;startSize=30;verticalAlign=top;fontFamily=Helvetica;fontSize=12;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=8;spacingRight=8;spacingTop=4;shadow=1;">
+          <mxGeometry x="1300" y="1140" width="280" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1" value="1 : N (belongs to)" parent="1" source="c_user" target="c_branch" style="endArrow=open;endSize=12;html=1;strokeColor=#d79b00;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_2" value="1 : N (performs)" parent="1" source="c_user" target="c_audit" style="endArrow=open;endSize=12;html=1;strokeColor=#d79b00;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_3" value="1 : N (has batches)" parent="1" source="c_medicine" target="c_batch" style="endArrow=diamond;endSize=12;html=1;strokeColor=#6c8ebf;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_4" value="1 : N (stocks)" parent="1" source="c_branch" target="c_batch" style="endArrow=open;endSize=12;html=1;strokeColor=#6c8ebf;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_5" value="1 : N (restricted quota)" parent="1" source="c_medicine" target="c_quota" style="endArrow=open;endSize=12;html=1;strokeColor=#6c8ebf;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_6" value="1 : N (audits)" parent="1" source="c_branch" target="c_check" style="endArrow=open;endSize=12;html=1;strokeColor=#6c8ebf;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_7" value="1 : N (supplies)" parent="1" source="c_supplier" target="c_po" style="endArrow=open;endSize=12;html=1;strokeColor=#82b366;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_8" value="1 : 1 (consolidates to)" parent="1" source="c_pr" target="c_po" style="endArrow=open;endSize=12;html=1;dashed=1;strokeColor=#82b366;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_9" value="1 : N (fulfills via)" parent="1" source="c_po" target="c_grn" style="endArrow=open;endSize=12;html=1;strokeColor=#82b366;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_10" value="1 : N (transfers stock)" parent="1" source="c_branch" target="c_transfer" style="endArrow=open;endSize=12;html=1;strokeColor=#82b366;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_11" value="1 : N (processes/buys)" parent="1" source="c_user" target="c_sales_order" style="endArrow=open;endSize=12;html=1;strokeColor=#9673a6;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_12" value="1 : N (places order)" parent="1" source="c_user" target="c_online_order" style="endArrow=open;endSize=12;html=1;strokeColor=#9673a6;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_13" value="1 : 1 (owns cart)" parent="1" source="c_user" target="c_cart" style="endArrow=diamond;endSize=12;html=1;strokeColor=#9673a6;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_14" value="N : M (deducts FEFO)" parent="1" source="c_sales_order" target="c_batch" style="endArrow=open;endSize=12;html=1;strokeColor=#9673a6;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+        <mxCell id="e_15" value="1 : 1 (populates)" parent="1" source="c_prescription" target="c_cart" style="endArrow=open;endSize=12;html=1;dashed=1;strokeColor=#9673a6;fontSize=10;fontColor=#333333;edgeStyle=orthogonalEdgeStyle;curved=1;">
+          <mxGeometry as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

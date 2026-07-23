@@ -8,6 +8,7 @@ export interface Employee {
   branchId?: string;
   isActive: boolean;
   isEmailVerified: boolean;
+  isApproved?: 'pending' | 'approved' | 'rejected';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -47,5 +48,11 @@ export const employeeService = {
   deleteEmployee: async (id: string) => {
     const response = await api.delete(`/api/admin/employees/${id}`);
     return response.data;
-  }
+  },
+
+  // Phê duyệt / Từ chối nhân viên (chỉ Admin)
+  approveEmployee: async (id: string, action: 'approve' | 'reject') => {
+    const response = await api.put(`/api/admin/employees/${id}/approve`, { action });
+    return response.data;
+  },
 };

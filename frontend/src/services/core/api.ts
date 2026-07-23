@@ -2,7 +2,7 @@ import axios from 'axios';
 import { notifyAuthTokenChanged } from '../../utils/authEvents';
 
 const api = axios.create({
-  baseURL: '', // Relative URL to resolve via dev server proxy or same origin
+  baseURL: import.meta.env.VITE_API_URL || '', // Resolves to backend URL in prod, or relative in dev
 });
 
 // Automatically inject JWT Token to requests if present in localStorage

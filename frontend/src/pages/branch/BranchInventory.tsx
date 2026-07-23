@@ -375,22 +375,27 @@ export function BranchInventory() {
                             <div className="absolute left-6 mt-1 w-64 rounded-xl bg-white border border-slate-200 shadow-xl z-30 p-2 py-3 space-y-2 text-xs divide-y divide-slate-100 text-left animate-in fade-in zoom-in-95 duration-100">
                               <div className="font-extrabold text-slate-700 px-2 pb-1 bg-slate-50 rounded">Chi tiết các lô hàng chi nhánh:</div>
                               <div className="pt-2 max-h-40 overflow-y-auto space-y-1 px-1 custom-scrollbar">
-                                {item.batches.map((b: any) => (
-                                  <div key={b.batchNo} className="flex flex-col py-1 px-1 justify-between hover:bg-slate-50 rounded">
-                                    <div className="flex justify-between font-bold text-slate-800">
-                                      <span>Lô: {b.batchNo}</span>
-                                      <span className={b.status === 'EXPIRED' ? 'text-rose-600' : 'text-slate-600'}>
-                                        {b.stock} {item.unit || 'Hộp'}
-                                      </span>
+                                {item.batches.map((b: any) => {
+                                  const isExpired = b.status === 'EXPIRED' || (b.expDate && new Date(b.expDate) < new Date());
+                                  return (
+                                    <div key={b.batchNo} className="flex flex-col py-1 px-1 justify-between hover:bg-slate-50 rounded">
+                                      <div className="flex justify-between font-bold text-slate-800">
+                                        <span>Lô: {b.batchNo}</span>
+                                        <span className={isExpired ? 'text-rose-600 font-extrabold' : 'text-slate-600'}>
+                                          {b.stock} {item.unit || 'Hộp'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between text-[11px] mt-0.5">
+                                        <span className={isExpired ? 'text-rose-600 font-bold' : 'text-slate-500'}>
+                                          Hạn: {new Date(b.expDate).toLocaleDateString("vi-VN")}
+                                        </span>
+                                        <span className={`font-semibold ${isExpired ? 'text-rose-600 bg-rose-50 px-1 rounded' : 'text-emerald-500'}`}>
+                                          {isExpired ? 'Hết hạn' : 'Hoạt động'}
+                                        </span>
+                                      </div>
                                     </div>
-                                    <div className="flex justify-between text-[11px] text-slate-500 mt-0.5">
-                                      <span>Hạn: {new Date(b.expDate).toLocaleDateString("vi-VN")}</span>
-                                      <span className={`font-semibold ${b.status === 'EXPIRED' ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                        {b.status === 'EXPIRED' ? 'Hết hạn' : 'Hoạt động'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           </>
