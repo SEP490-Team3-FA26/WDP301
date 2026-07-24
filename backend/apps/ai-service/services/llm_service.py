@@ -177,19 +177,24 @@ async def check_drug_interactions(medicines_list: list[str], context: str) -> di
 FORECAST_SYSTEM_PROMPT = """Bạn là Chuyên gia Kế hoạch & Phân tích Chuỗi cung ứng Dược phẩm bằng AI tại Việt Nam.
 Nhiệm vụ của bạn là phân tích báo cáo doanh số kỳ trước và tồn kho hiện tại để đề xuất nhu cầu nhập thêm hàng cho kỳ tiếp theo.
 
-NGUYÊN TẮC QUAN TRỌNG:
-1. Bạn phải phân tích dựa trên:
-   - Tốc độ bán trung bình ngày (averageDailySales).
-   - Tồn kho thực tế hiện tại (currentStock).
-   - Số lượng hàng đang trên đường về (expectedIncoming).
-   - Định mức tồn tối thiểu (minStock).
-2. Hãy tính toán đề xuất nhập kho:
-   - Nếu tồn kho hiện tại + hàng đang về không đủ dùng cho số ngày dự báo kỳ tới (periodDays), hãy đề xuất nhập thêm.
-   - Công thức gợi ý: Đề xuất nhập thêm = tối đa là (Tốc độ bán ngày * Số ngày dự báo + Dự phòng an toàn) - (Tồn hiện tại + Hàng đang về).
-3. Đánh giá mức độ khẩn cấp (urgency):
-   - "HIGH": Khi tồn kho hiện tại gần bằng 0 hoặc hết hàng hoàn toàn mà tốc độ bán nhanh.
-   - "MEDIUM": Khi tồn kho hiện tại dưới định mức minStock hoặc sắp hết hàng trong vòng 10 ngày tới.
-   - "LOW": Khi tồn kho dồi dào nhưng cần bổ sung nhẹ để duy trì hoạt động bình thường.
+NGUYÊN TẮC TÍNH TOÁN BẮT BUỘC:
+1. Bạn phải tính toán toán học chính xác theo công thức:
+   - Nhu cầu kỳ dự báo = (averageDailySales * periodDays) + minStock.
+   - Hàng khả dụng = currentStock + expectedIncoming.
+   - Đề xuất nhập thô = Nhu cầu kỳ dự báo - Hàng khả dụng.
+
+2. Quy tắc đề xuất nhập kho (suggestedOrderQty):
+   - NẾU Hàng khả dụng >= Nhu cầu kỳ dự báo (Tồn kho và hàng đang về đã đủ dùng cho kỳ dự báo):
+     * BẮT BUỘC ĐẶT `suggestedOrderQty = 0`!
+     * BẮT BUỘC ĐẶT `urgency = "LOW"`.
+     * Lý do (reason) PHẢI GHI: "Tồn kho hiện tại và lượng hàng đang về đủ đáp ứng nhu cầu tiêu thụ trong kỳ dự báo. Không cần nhập thêm."
+   - NẾU Hàng khả dụng < Nhu cầu kỳ dự báo (Thiếu hàng):
+     * Tính `suggestedOrderQty` = làm tròn lên bội số 10 gần nhất của Đề xuất nhập thô.
+     * `urgency = "HIGH"` nếu currentStock <= 10 hoặc cạn kiệt hàng.
+     * `urgency = "MEDIUM"` nếu currentStock < minStock.
+
+3. TUYỆT ĐỐI KHÔNG ĐƯỢC gán số mặc định 50 cho sản phẩm đã đủ hàng. Sản phẩm không thiếu hàng BẮT BUỘC suggestedOrderQty = 0.
+
 4. Trả về đúng định dạng JSON mà KHÔNG giải thích thêm gì khác ngoài nội dung JSON.
 
 BẮT BUỘC TRẢ VỀ JSON HỢP LỆ THEO SCHEMA SAU:
@@ -199,12 +204,14 @@ BẮT BUỘC TRẢ VỀ JSON HỢP LỆ THEO SCHEMA SAU:
     {
       "medicineId": "ID của thuốc",
       "name": "Tên thuốc",
+      "category": "Danh mục thuốc",
+      "unit": "Đơn vị tính (Hộp/Chai/Vỉ...)",
       "currentStock": 100,
       "averageDailySales": 5.2,
       "expectedIncoming": 0,
-      "suggestedOrderQty": 150,
+      "suggestedOrderQty": 0,
       "urgency": "HIGH | MEDIUM | LOW",
-      "reason": "Lý do AI phân tích cụ thể cho loại thuốc này (VD: nhu cầu tăng cao, sắp hết hàng...)"
+      "reason": "Lý do AI phân tích cụ thể cho loại thuốc này"
     }
   ]
 }"""
@@ -246,24 +253,85 @@ async def generate_demand_forecast(dataset: list, period_days: int) -> dict:
         )
         
         content = response.choices[0].message.content
-        return json.loads(content)
+        result = json.loads(content)
+
+        # Enforce mathematical accuracy & eliminate LLM hallucination on sufficient stock items
+        import math
+        processed_recs = []
+        rec_list = result.get("recommendations", [])
+        med_map = {str(m.get("medicineId") or m.get("_id")): m for m in dataset}
+
+        for rec in rec_list:
+            med_id = str(rec.get("medicineId", ""))
+            med = med_map.get(med_id, {})
+            stock = med.get("currentStock", rec.get("currentStock", 0))
+            sales = med.get("averageDailySales", rec.get("averageDailySales", 0))
+            incoming = med.get("expectedIncoming", rec.get("expectedIncoming", 0))
+            unit = med.get("unit") or rec.get("unit") or "Hộp"
+            reorder_point = med.get("minStock") or med.get("reorderPoint") or 30
+
+            needed = int(math.ceil(sales * period_days + reorder_point))
+            available = stock + incoming
+            suggested_raw = max(0, needed - available)
+
+            if suggested_raw <= 0:
+                rec["suggestedOrderQty"] = 0
+                rec["urgency"] = "LOW"
+                rec["reason"] = f"Tồn kho hiện tại ({stock} {unit}) và hàng đang về (+{incoming}) đáp ứng đủ nhu cầu tiêu thụ trong {period_days} ngày tới. Không cần nhập thêm."
+            else:
+                suggested_qty = max(10, int(math.ceil(suggested_raw / 10.0) * 10))
+                rec["suggestedOrderQty"] = suggested_qty
+                if stock <= 10:
+                    rec["urgency"] = "HIGH"
+                else:
+                    rec["urgency"] = "MEDIUM"
+                if not rec.get("reason") or "bổ sung dự báo" in rec.get("reason", ""):
+                    rec["reason"] = f"Tồn kho hiện tại ({stock} {unit}) sắp chạm ngưỡng an toàn. Đề xuất nhập thêm {suggested_qty} {unit}."
+
+            rec["unit"] = unit
+            rec["currentStock"] = stock
+            rec["averageDailySales"] = sales
+            rec["expectedIncoming"] = incoming
+            processed_recs.append(rec)
+
+        result["recommendations"] = processed_recs
+        return result
     except Exception as e:
         print(f"⚠️ Warning: LLM Forecast failed ({e}), falling back to deterministic recommendations...")
         # Fallback local calculation
+        import math
         recommendations = []
         for m in dataset[:50]:
             stock = m.get("currentStock", 0)
-            sales = m.get("averageDailySales", 1.0)
-            suggested = max(0, int(sales * period_days + 30 - stock))
+            sales = m.get("averageDailySales", 0)
+            incoming = m.get("expectedIncoming", 0)
+            unit = m.get("unit") or "Hộp"
+            reorder_point = m.get("minStock") or m.get("reorderPoint") or 30
+
+            total_needed = int(math.ceil(sales * period_days + reorder_point))
+            available = stock + incoming
+            suggested_raw = max(0, total_needed - available)
+
+            if suggested_raw > 0:
+                suggested_qty = max(10, int(math.ceil(suggested_raw / 10.0) * 10))
+                urgency = "HIGH" if stock <= 10 else "MEDIUM"
+                reason = f"Tồn kho ({stock} {unit}) và hàng đang về (+{incoming}) sắp chạm ngưỡng an toàn. Đề xuất nhập thêm {suggested_qty} {unit}."
+            else:
+                suggested_qty = 0
+                urgency = "LOW"
+                reason = f"Tồn kho ({stock} {unit}) và hàng đang về (+{incoming}) đáp ứng đủ nhu cầu {period_days} ngày tới. Không cần nhập thêm."
+
             recommendations.append({
-                "medicineId": m.get("medicineId") or m.get("_id") or "med-1",
+                "medicineId": str(m.get("medicineId") or m.get("_id") or "med-1"),
                 "name": m.get("name") or "Dược phẩm",
+                "category": m.get("category") or m.get("cat") or "Dược phẩm",
+                "unit": unit,
                 "currentStock": stock,
                 "averageDailySales": sales,
-                "expectedIncoming": m.get("expectedIncoming", 0),
-                "suggestedOrderQty": max(50, suggested),
-                "urgency": "HIGH" if stock <= 10 else "MEDIUM" if stock <= 30 else "LOW",
-                "reason": f"Tồn kho hiện tại ({stock} {m.get('unit','Hộp')}) cần bổ sung dự báo cho {period_days} ngày."
+                "expectedIncoming": incoming,
+                "suggestedOrderQty": suggested_qty,
+                "urgency": urgency,
+                "reason": reason
             })
         return {
             "summary": f"Dự báo nhu cầu cho {len(dataset)} dược phẩm trong {period_days} ngày tới từ dữ liệu bán hàng thực tế MongoDB.",

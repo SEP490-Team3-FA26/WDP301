@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, UseInterceptors, Param, Body, Patch, Inject, OnModuleInit, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Query, UseInterceptors, Param, Body, Patch, Inject, OnModuleInit, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
@@ -32,6 +32,8 @@ export class MedicineController implements OnModuleInit {
       'inventory.medicine.safe_stock_chain',
       'inventory.medicine.detect_anomalies',
       'inventory.medicine.branch_list',
+      'inventory.medicine.create',
+      'inventory.medicine.update',
     ]);
   }
 
@@ -191,6 +193,38 @@ export class MedicineController implements OnModuleInit {
     @Body('price') price: number
   ) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.update_price', { id, price });
+  }
+
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'head_branch', 'warehouse')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Tạo mới dược phẩm (SKU)' })
+  @AuditLogAction({
+    actionCode: 'MEDICINE_CREATE',
+    actionName: 'Tạo mới dược phẩm',
+    module: 'Inventory',
+    eventType: 'CREATE',
+    entityType: 'Medicine',
+  })
+  async createMedicine(@Body() body: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.create', body);
+  }
+
+  @Put(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'head_branch', 'warehouse')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cập nhật thông tin dược phẩm (SKU)' })
+  @AuditLogAction({
+    actionCode: 'MEDICINE_UPDATE',
+    actionName: 'Cập nhật thông tin dược phẩm',
+    module: 'Inventory',
+    eventType: 'UPDATE',
+    entityType: 'Medicine',
+  })
+  async updateMedicine(@Param('id') id: string, @Body() body: any) {
+    return await sendKafkaMessage(this.inventoryClient, 'inventory.medicine.update', { id, updateData: body });
   }
 
   @Get()

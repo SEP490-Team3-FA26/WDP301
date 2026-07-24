@@ -16,6 +16,26 @@ export class MedicineController {
     }
   }
 
+  @MessagePattern('inventory.medicine.create')
+  async createMedicine(@Payload() data: any) {
+    try {
+      return await this.medicineService.createMedicine(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tạo dược phẩm');
+    }
+  }
+
+  @MessagePattern('inventory.medicine.update')
+  async updateMedicine(@Payload() data: { id: string; updateData: any }) {
+    try {
+      return await this.medicineService.updateMedicine(data.id, data.updateData);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi cập nhật dược phẩm');
+    }
+  }
+
   @MessagePattern('inventory.medicine.branch_list')
   async listBranchMedicines(@Payload() query: any) {
     try {

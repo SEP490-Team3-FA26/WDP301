@@ -24,11 +24,8 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
       const isLastAttempt = i === retries - 1;
       if (isLastAttempt) {
         console.error(`❌ Kafka client failed to connect to topics: ${topics.join(', ')} after ${retries} attempts.`, error);
-        try { await client.close(); } catch(e) {}
         throw error;
       }
-      // Xoá cache connection cũ để NestJS ClientKafka thử kết nối lại thực sự từ đầu
-      try { await client.close(); } catch(e) {}
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -47,7 +44,7 @@ export async function sendKafkaMessage(client: ClientKafka, topic: string, data:
     const payload = (data && typeof data === 'object') ? JSON.parse(JSON.stringify(data)) : data;
     console.log(`[API-Gateway][sendKafkaMessage] Sending to topic "${topic}"`);
     const result: any = await lastValueFrom(
-      client.send(topic, payload).pipe(timeout(15000))
+      client.send(topic, payload).pipe(timeout(30000))
     );
     console.log(`[API-Gateway][sendKafkaMessage] Received response from topic "${topic}"`);
     if (result?.error) {

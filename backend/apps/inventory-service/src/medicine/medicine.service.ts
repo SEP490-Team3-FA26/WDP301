@@ -90,6 +90,95 @@ export class MedicineService implements OnModuleInit {
     }
   }
 
+  async createMedicine(data: any) {
+    try {
+      this.logger.log(`[createMedicine] Creating new medicine: ${data?.name}`);
+      if (!data?.name) {
+        throw new RpcException('Tên dược phẩm không được để trống');
+      }
+
+      const sku = data.sku || Math.floor(100000 + Math.random() * 900000).toString();
+      const barcode = data.barcode || sku;
+      const drug_classification = data.drug_classification || 'NORMAL';
+      const category = data.category || 'Thuốc thường';
+      const unit = data.unit || 'Hộp';
+      const price = Number(data.price) || 0;
+      const safetyStock = Number(data.safetyStock) || 50;
+      const reorderPoint = Number(data.reorderPoint) || 100;
+      const initialStock = Number(data.stock) || 0;
+
+      const newMedicine = new this.medicineModel({
+        ...data,
+        sku,
+        barcode,
+        drug_classification,
+        category,
+        unit,
+        price,
+        safetyStock,
+        reorderPoint,
+        stock: initialStock,
+        status: data.status || 'ACTIVE',
+      });
+
+      const saved = await newMedicine.save();
+
+      // If initial stock > 0, create an initial batch
+      if (initialStock > 0) {
+        const expDate = data.expiry_date ? new Date(data.expiry_date) : new Date('2027-12-31');
+        await this.batchModel.create({
+          medicineId: saved._id.toString(),
+          batchNo: `INIT-${saved.sku || saved._id.toString().substring(0, 6)}`,
+          expDate,
+          mfgDate: new Date(),
+          stock: initialStock,
+          importPrice: Math.round(price * 0.7),
+          supplierId: data.supplierId || null,
+          status: 'ACTIVE',
+        });
+      }
+
+      this.logger.log(`[createMedicine] Successfully created medicine with ID: ${saved._id}`);
+      return {
+        ...saved.toObject(),
+        id: saved._id.toString(),
+      };
+    } catch (error) {
+      this.logger.error(`[createMedicine] Error creating medicine: ${error.message}`, error.stack);
+      throw new RpcException(error.message || 'Lỗi khi tạo dược phẩm mới');
+    }
+  }
+
+  async updateMedicine(id: string, updateData: any) {
+    try {
+      this.logger.log(`[updateMedicine] Updating medicine with ID: "${id}"`);
+      const existing = await this.medicineModel.findById(id).exec();
+      if (!existing) {
+        throw new RpcException(`Không tìm thấy dược phẩm với ID: ${id}`);
+      }
+
+      const { _id, id: medId, ...cleanData } = updateData;
+      if (cleanData.price !== undefined) cleanData.price = Number(cleanData.price);
+      if (cleanData.safetyStock !== undefined) cleanData.safetyStock = Number(cleanData.safetyStock);
+      if (cleanData.reorderPoint !== undefined) cleanData.reorderPoint = Number(cleanData.reorderPoint);
+
+      const updated = await this.medicineModel.findByIdAndUpdate(
+        id,
+        { $set: cleanData },
+        { new: true }
+      ).exec();
+
+      this.logger.log(`[updateMedicine] Successfully updated medicine "${updated?.name}"`);
+      return {
+        ...updated?.toObject(),
+        id: updated?._id.toString(),
+      };
+    } catch (error) {
+      this.logger.error(`[updateMedicine] Error updating medicine "${id}": ${error.message}`, error.stack);
+      throw new RpcException(error.message || 'Lỗi khi cập nhật thông tin dược phẩm');
+    }
+  }
+
   async getMedicineById(id: string) {
     try {
       this.logger.log(`[getMedicineById] Querying medicine by ID from MongoDB: "${id}"`);
@@ -1624,6 +1713,124 @@ export class MedicineService implements OnModuleInit {
     } catch (error) {
       this.logger.error('Failed to detect anomalies:', error);
       throw new RpcException(error.message || 'Lỗi phát hiện bất thường tồn kho');
+    }
+  }
+
+  async getExpirationReport() {
+    try {
+      this.logger.log('[getExpirationReport] Calculating expiring batches...');
+      const now = new Date();
+      const next90Days = new Date();
+      next90Days.setDate(now.getDate() + 90);
+
+      const batches = await this.batchModel
+        .find({
+          status: 'ACTIVE',
+          stock: { $gt: 0 },
+          expDate: { $lte: next90Days },
+        })
+        .lean()
+        .exec();
+
+      const medicineIds = [...new Set(batches.map((b) => b.medicineId))];
+      const medicines = await this.medicineModel
+        .find({ _id: { $in: medicineIds } }, { _id: 1, name: 1, sku: 1, unit: 1, drug_classification: 1 })
+        .lean()
+        .exec();
+
+      const medMap = new Map(medicines.map((m) => [String(m._id), m]));
+
+      const report = batches.map((b) => {
+        const med: any = medMap.get(String(b.medicineId)) || {};
+        const daysLeft = Math.ceil((new Date(b.expDate).getTime() - now.getTime()) / (1000 * 3600 * 24));
+        return {
+          batchId: b._id,
+          batchNo: b.batchNo,
+          medicineId: b.medicineId,
+          medicineName: med.name || 'Dược phẩm',
+          sku: med.sku || 'N/A',
+          unit: med.unit || 'Hộp',
+          stock: b.stock,
+          expDate: b.expDate,
+          daysLeft,
+          status: daysLeft <= 0 ? 'EXPIRED' : daysLeft <= 30 ? 'CRITICAL' : 'WARNING',
+        };
+      });
+
+      return report.sort((a, b) => a.daysLeft - b.daysLeft);
+    } catch (error) {
+      this.logger.error(`[getExpirationReport] Error: ${error.message}`, error.stack);
+      throw new RpcException(error.message || 'Lỗi khi lấy báo cáo hết hạn');
+    }
+  }
+
+  async handleExpirationAction(data: {
+    batchId: string;
+    action: 'DISPOSE' | 'RETURN_SUPPLIER' | 'DISCOUNT';
+    quantity: number;
+    notes?: string;
+    discountPrice?: number;
+    performedBy?: string;
+  }) {
+    try {
+      this.logger.log(`[handleExpirationAction] Action ${data?.action} on batch ${data?.batchId}`);
+      const batch = await this.batchModel.findById(data?.batchId);
+      if (!batch) {
+        throw new RpcException('Không tìm thấy lô hàng');
+      }
+
+      if (data.action === 'DISPOSE' || data.action === 'RETURN_SUPPLIER') {
+        const qtyToReduce = Math.min(batch.stock, data.quantity || batch.stock);
+        batch.stock -= qtyToReduce;
+        if (batch.stock <= 0) {
+          batch.status = 'EXPIRED';
+        }
+        await batch.save();
+
+        await this.medicineModel.findByIdAndUpdate(batch.medicineId, {
+          $inc: { stock: -qtyToReduce },
+        });
+      } else if (data.action === 'DISCOUNT') {
+        if (data.discountPrice && data.discountPrice > 0) {
+          await this.medicineModel.findByIdAndUpdate(batch.medicineId, {
+            price: data.discountPrice,
+          });
+        }
+      }
+
+      return { success: true, message: 'Xử lý hành động hết hạn thành công', batchId: batch._id };
+    } catch (error) {
+      this.logger.error(`[handleExpirationAction] Error: ${error.message}`, error.stack);
+      throw new RpcException(error.message || 'Lỗi khi xử lý hành động hết hạn');
+    }
+  }
+
+  async getLowStockReport() {
+    try {
+      this.logger.log('[getLowStockReport] Calculating low stock medicines...');
+      const medicines = await this.medicineModel.find({}).lean().exec();
+
+      const lowStockItems = medicines
+        .filter((m) => {
+          const stock = m.stock || 0;
+          const safetyStock = m.safetyStock ?? 50;
+          return stock <= safetyStock;
+        })
+        .map((m) => ({
+          medicineId: m._id,
+          name: m.name,
+          sku: m.sku || 'N/A',
+          stock: m.stock || 0,
+          safetyStock: m.safetyStock ?? 50,
+          reorderPoint: m.reorderPoint ?? 100,
+          unit: m.unit || 'Hộp',
+          status: (m.stock || 0) === 0 ? 'OUT_OF_STOCK' : 'LOW_STOCK',
+        }));
+
+      return lowStockItems.sort((a, b) => a.stock - b.stock);
+    } catch (error) {
+      this.logger.error(`[getLowStockReport] Error: ${error.message}`, error.stack);
+      throw new RpcException(error.message || 'Lỗi khi lấy báo cáo thuốc sắp hết hàng');
     }
   }
 }

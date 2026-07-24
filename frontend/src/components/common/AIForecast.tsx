@@ -103,17 +103,22 @@ export function AIForecast() {
   const filteredRecommendations = useMemo(() => {
     if (!forecast?.recommendations) return [];
     return forecast.recommendations.filter(item => {
+      const nameStr = (item.name || "").toLowerCase();
+      const catStr = (item.category || "").toLowerCase();
+      const medIdStr = (item.medicineId || "").toLowerCase();
+      const q = searchQuery.toLowerCase();
+
       // Search text match
       const matchesSearch = 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.medicineId.toLowerCase().includes(searchQuery.toLowerCase());
+        nameStr.includes(q) ||
+        catStr.includes(q) ||
+        medIdStr.includes(q);
 
       // Urgency match
       const matchesUrgency = selectedUrgency === "ALL" || item.urgency === selectedUrgency;
 
       // Category match
-      const matchesCategory = selectedCategory === "ALL" || item.category.trim() === selectedCategory.trim();
+      const matchesCategory = selectedCategory === "ALL" || (item.category || "").trim() === selectedCategory.trim();
 
       return matchesSearch && matchesUrgency && matchesCategory;
     });
@@ -528,11 +533,11 @@ export function AIForecast() {
                             </td>
                             <td className="px-5 py-4 text-center">
                               <span className={`font-bold ${isLowStock ? 'text-rose-600' : 'text-slate-800'}`}>
-                                {item.currentStock.toLocaleString('vi-VN')} {item.unit}
+                                {item.currentStock.toLocaleString('vi-VN')} {item.unit || 'Hộp'}
                               </span>
                             </td>
                             <td className="px-5 py-4 text-center font-medium text-slate-700">
-                              {(item.totalSold !== undefined && item.totalSold > 0 ? item.totalSold : Math.round(item.averageDailySales * period)).toLocaleString('vi-VN')} {item.unit}
+                              {(item.totalSold !== undefined && item.totalSold > 0 ? item.totalSold : Math.round(item.averageDailySales * period)).toLocaleString('vi-VN')} {item.unit || 'Hộp'}
                             </td>
                             <td className="px-5 py-4 text-center font-semibold text-slate-700">
                               {item.averageDailySales} /ngày
@@ -544,7 +549,7 @@ export function AIForecast() {
                             </td>
                             <td className="px-5 py-4 text-center bg-purple-50/30 border-x border-purple-100 font-black text-purple-700">
                               {item.suggestedOrderQty > 0 
-                                ? `${item.suggestedOrderQty.toLocaleString('vi-VN')} ${item.unit}` 
+                                ? `${item.suggestedOrderQty.toLocaleString('vi-VN')} ${item.unit || 'Hộp'}` 
                                 : item.expectedIncoming > 0 
                                   ? "Đang chờ hàng về" 
                                   : "Đủ hàng"}

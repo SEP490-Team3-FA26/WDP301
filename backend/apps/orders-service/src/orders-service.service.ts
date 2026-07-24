@@ -9,6 +9,7 @@ import { timeout } from 'rxjs';
 import { Order } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Voucher } from './schemas/voucher.schema';
+import { Expense } from './schemas/expense.schema';
 import { subscribeToKafkaTopics, sendKafkaMessage } from '../../api-gateway/src/common/kafka.helper';
 
 const DEFAULT_PHONE_NUMBER = '0900000000';
@@ -21,6 +22,7 @@ export class OrdersServiceService implements OnModuleInit {
   constructor(
     @InjectModel(Order.name) private readonly orderModel: Model<Order>,
     @InjectModel(Voucher.name) private readonly voucherModel: Model<Voucher>,
+    @InjectModel(Expense.name) private readonly expenseModel: Model<Expense>,
     private readonly configService: ConfigService,
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
     @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
@@ -761,5 +763,150 @@ export class OrdersServiceService implements OnModuleInit {
       discountValue: voucher.discountValue,
       discount,
     };
+  }
+
+  async createExpense(data: any) {
+    try {
+      this.logger.log(`[createExpense] Logging fixed expense: ${data?.title}`);
+      if (!data?.category) {
+        throw new RpcException('Vui lòng chọn loại chi phí (Mặt bằng, Lương, Điện nước...)');
+      }
+      const amount = Number(data?.amount);
+      if (isNaN(amount) || amount <= 0) {
+        throw new RpcException('Số tiền chi phí phải là số dương > 0');
+      }
+
+      const categoryNames: Record<string, string> = {
+        RENT: 'Chi phí Mặt bằng',
+        SALARY: 'Chi phí Lương nhân viên',
+        UTILITY: 'Chi phí Điện nước & Dịch vụ',
+        OTHER: 'Chi phí Khác',
+      };
+
+      const newExpense = new this.expenseModel({
+        branchId: data.branchId || 'BR-001',
+        branchName: data.branchName || `Chi nhánh ${data.branchId || 'BR-001'}`,
+        category: data.category,
+        title: data.title || categoryNames[data.category] || 'Chi phí vận hành',
+        amount,
+        transactionDate: data.transactionDate ? new Date(data.transactionDate) : new Date(),
+        notes: data.notes || '',
+        createdBy: data.createdBy || 'Admin',
+      });
+
+      const saved = await newExpense.save();
+      this.logger.log(`[createExpense] Successfully recorded expense: ${saved._id}`);
+      return saved;
+    } catch (error) {
+      this.logger.error(`[createExpense] Error: ${error.message}`, error.stack);
+      throw new RpcException(error.message || 'Lỗi khi ghi nhận chi phí');
+    }
+  }
+
+  async getExpenses(query: any = {}) {
+    try {
+      const filter: any = {};
+      if (query.branchId && query.branchId !== 'all') {
+        filter.branchId = query.branchId;
+      }
+      if (query.category && query.category !== 'all') {
+        filter.category = query.category;
+      }
+      if (query.year) {
+        const year = Number(query.year);
+        const startDate = new Date(year, 0, 1);
+        const endDate = new Date(year, 11, 31, 23, 59, 59);
+        filter.transactionDate = { $gte: startDate, $lte: endDate };
+      }
+      return await this.expenseModel.find(filter).sort({ transactionDate: -1, createdAt: -1 }).lean().exec();
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi khi lấy danh sách chi phí');
+    }
+  }
+
+  async getCashFlowSummary(query: any = {}) {
+    try {
+      const year = Number(query.year) || new Date().getFullYear();
+      const branchId = query.branchId;
+
+      const orderFilter: any = {};
+      const expenseFilter: any = {};
+
+      if (branchId && branchId !== 'all') {
+        orderFilter.branchId = branchId;
+        expenseFilter.branchId = branchId;
+      }
+
+      const startOfYear = new Date(year, 0, 1);
+      const endOfYear = new Date(year, 11, 31, 23, 59, 59);
+
+      orderFilter.createdAt = { $gte: startOfYear, $lte: endOfYear };
+      expenseFilter.transactionDate = { $gte: startOfYear, $lte: endOfYear };
+
+      const [orders, expenses] = await Promise.all([
+        this.orderModel.find(orderFilter).lean().exec(),
+        this.expenseModel.find(expenseFilter).lean().exec(),
+      ]);
+
+      let totalRevenue = 0;
+      let totalCogs = 0;
+      const monthlyRevenue: number[] = new Array(12).fill(0);
+      const monthlyCogs: number[] = new Array(12).fill(0);
+
+      orders.forEach((o) => {
+        const date = new Date(o.createdAt || Date.now());
+        const m = date.getMonth();
+        const rev = o.totalAmount || o.finalAmount || 0;
+        let cogs = 0;
+        if (Array.isArray(o.items)) {
+          cogs = o.items.reduce((sum: number, item: any) => {
+            const ip = item.importPrice || item.costPrice || (item.price ? item.price * 0.65 : 0);
+            return sum + ip * (item.quantity || 1);
+          }, 0);
+        }
+        if (!cogs || cogs === 0) cogs = Math.round(rev * 0.65);
+
+        totalRevenue += rev;
+        totalCogs += cogs;
+        monthlyRevenue[m] += rev;
+        monthlyCogs[m] += cogs;
+      });
+
+      let totalFixedExpenses = 0;
+      const monthlyExpenses: number[] = new Array(12).fill(0);
+
+      expenses.forEach((e) => {
+        const date = new Date(e.transactionDate || e.createdAt || Date.now());
+        const m = date.getMonth();
+        totalFixedExpenses += e.amount || 0;
+        monthlyExpenses[m] += e.amount || 0;
+      });
+
+      const totalExpense = totalCogs + totalFixedExpenses;
+      const netProfit = totalRevenue - totalExpense;
+
+      const monthlyChart = monthlyRevenue.map((rev, idx) => ({
+        month: `T${idx + 1}`,
+        revenue: Math.round(rev),
+        cogs: Math.round(monthlyCogs[idx]),
+        fixedExpenses: Math.round(monthlyExpenses[idx]),
+        totalExpenses: Math.round(monthlyCogs[idx] + monthlyExpenses[idx]),
+        netProfit: Math.round(rev - (monthlyCogs[idx] + monthlyExpenses[idx])),
+      }));
+
+      return {
+        year,
+        totalRevenue,
+        totalCogs,
+        totalFixedExpenses,
+        totalExpense,
+        netProfit,
+        monthlyChart,
+        expensesCount: expenses.length,
+        ordersCount: orders.length,
+      };
+    } catch (error) {
+      throw new RpcException(error.message || 'Lỗi khi tính toán báo cáo dòng tiền');
+    }
   }
 }

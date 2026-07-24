@@ -20,89 +20,109 @@ export class ReportsService {
   ) {}
 
   async getForecastDataset(periodDays = 30, branchId?: string) {
-    this.logger.log(`Compiling forecast dataset. Period: ${periodDays} days, Branch: ${branchId || 'all'}`);
-    
-    // 1. Lấy tất cả thuốc hoạt động
-    const medicines = await this.medicineModel.find({ status: { $ne: 'INACTIVE' } }).lean().exec();
-    
-    // Thời điểm bắt đầu tính doanh số
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - periodDays);
-    
-    // Query điều kiện doanh số
-    const salesQuery: any = {
-      createdAt: { $gte: startDate }
-    };
-    if (branchId && branchId !== 'all') {
-      salesQuery.branchId = branchId;
-    }
-
-    // 2. Tính tổng số lượng bán của từng thuốc
-    const salesAggregation = await this.saleModel.aggregate([
-      { $match: salesQuery },
-      { $unwind: "$items" },
-      { $group: {
-          _id: "$items.medicineId",
-          totalSold: { $sum: "$items.quantity" }
-        }
-      }
-    ]);
-
-    const salesMap = new Map<string, number>();
-    salesAggregation.forEach(item => {
-      salesMap.set(String(item._id), item.totalSold);
-    });
-
-    // 3. Tính hàng sắp về (Expected Incoming) từ các PO đang treo
-    const poQuery: any = {
-      status: { $in: ['PENDING_APPROVAL', 'SHIPPING', 'RECEIVING', 'PARTIAL_RECEIVED'] }
-    };
-    const activePos = await this.poModel.find(poQuery).lean().exec();
-    const incomingMap = new Map<string, number>();
-    activePos.forEach(po => {
-      po.items.forEach(item => {
-        const pendingQty = Math.max(0, item.quantity - (item.receivedQuantity || 0));
-        if (pendingQty > 0) {
-          incomingMap.set(item.medicineId, (incomingMap.get(item.medicineId) || 0) + pendingQty);
-        }
-      });
-    });
-
-    // 4. Lấy tồn kho chi tiết theo từng thuốc
-    const batchQuery: any = { status: 'ACTIVE' };
-    if (branchId && branchId !== 'all') {
-      batchQuery.branchId = branchId;
-    }
-    const activeBatches = await this.batchModel.find(batchQuery).lean().exec();
-    
-    const stockMap = new Map<string, number>();
-    activeBatches.forEach(batch => {
-      stockMap.set(batch.medicineId, (stockMap.get(batch.medicineId) || 0) + batch.stock);
-    });
-
-    // 5. Kết hợp dữ liệu
-    const dataset = medicines.map(med => {
-      const medId = med._id.toString();
-      const currentStock = stockMap.get(medId) || 0;
-      const totalSold = salesMap.get(medId) || 0;
-      const expectedIncoming = incomingMap.get(medId) || 0;
-      const averageDailySales = Number((totalSold / periodDays).toFixed(2));
+    try {
+      this.logger.log(`Compiling forecast dataset. Period: ${periodDays} days, Branch: ${branchId || 'all'}`);
       
-      return {
-        medicineId: medId,
-        name: med.name,
-        category: med.category || 'Chưa phân loại',
-        unit: med.unit || 'Hộp',
-        price: med.price || 0,
-        currentStock,
-        totalSold,
-        averageDailySales,
-        expectedIncoming,
-        minStock: (med as any).minStock || 50,
-      };
-    });
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - periodDays);
+      
+      const salesQuery: any = { createdAt: { $gte: startDate } };
+      if (branchId && branchId !== 'all') salesQuery.branchId = branchId;
 
-    return dataset;
+      const poQuery: any = { status: { $in: ['PENDING_APPROVAL', 'SHIPPING', 'RECEIVING', 'PARTIAL_RECEIVED'] } };
+      const batchQuery: any = { status: 'ACTIVE' };
+      if (branchId && branchId !== 'all') batchQuery.branchId = branchId;
+
+      // Execute all 4 MongoDB queries concurrently for maximum speed
+      const [medicines, salesAggregation, activePos, activeBatches] = await Promise.all([
+        this.medicineModel.find({ status: { $ne: 'INACTIVE' } }).lean().exec(),
+        this.saleModel.aggregate([
+          { $match: salesQuery },
+          { $unwind: "$items" },
+          { $group: { _id: "$items.medicineId", totalSold: { $sum: "$items.quantity" } } }
+        ]).catch((err) => {
+          this.logger.warn('Sales aggregation warning:', err);
+          return [];
+        }),
+        this.poModel.find(poQuery).lean().exec().catch(() => []),
+        this.batchModel.find(batchQuery).lean().exec().catch(() => []),
+      ]);
+
+      const salesMap = new Map<string, number>();
+      if (Array.isArray(salesAggregation)) {
+        salesAggregation.forEach(item => {
+          if (item && item._id) {
+            salesMap.set(String(item._id), item.totalSold || 0);
+          }
+        });
+      }
+      const incomingMap = new Map<string, number>();
+      if (Array.isArray(activePos)) {
+        activePos.forEach(po => {
+          if (Array.isArray(po.items)) {
+            po.items.forEach(item => {
+              if (item && item.medicineId) {
+                const pendingQty = Math.max(0, (item.quantity || 0) - (item.receivedQuantity || 0));
+                if (pendingQty > 0) {
+                  incomingMap.set(String(item.medicineId), (incomingMap.get(String(item.medicineId)) || 0) + pendingQty);
+                }
+              }
+            });
+          }
+        });
+      }
+
+      const batchQuery: any = { status: 'ACTIVE' };
+      if (branchId && branchId !== 'all') {
+        batchQuery.branchId = branchId;
+      }
+      const activeBatches = await this.batchModel.find(batchQuery).lean().exec();
+      
+      const stockMap = new Map<string, number>();
+      if (Array.isArray(activeBatches)) {
+        activeBatches.forEach(batch => {
+          if (batch && batch.medicineId) {
+            stockMap.set(String(batch.medicineId), (stockMap.get(String(batch.medicineId)) || 0) + (batch.stock || 0));
+          }
+        });
+      }
+
+      const dataset = medicines.map(med => {
+        const medId = med._id.toString();
+        const currentStock = stockMap.has(medId) ? stockMap.get(medId)! : (med.stock || 0);
+        const totalSold = salesMap.get(medId) || 0;
+        const expectedIncoming = incomingMap.get(medId) || 0;
+        const averageDailySales = Number((totalSold / periodDays).toFixed(2));
+        const minStock = (med as any).minStock || med.safetyStock || 30;
+        
+        return {
+          medicineId: medId,
+          name: med.name || 'Dược phẩm',
+          category: med.category || 'Dược phẩm',
+          unit: med.unit || 'Hộp',
+          price: med.price || 0,
+          currentStock,
+          totalSold,
+          averageDailySales,
+          expectedIncoming,
+          minStock,
+          reorderPoint: minStock,
+        };
+      });
+
+      // Sắp xếp ưu tiên: Thuốc sắp hết kho / có bán hàng / có đơn PO đang về
+      dataset.sort((a, b) => {
+        const priorityA = (a.currentStock <= a.minStock ? 100 : 0) + (a.totalSold > 0 ? 50 : 0);
+        const priorityB = (b.currentStock <= b.minStock ? 100 : 0) + (b.totalSold > 0 ? 50 : 0);
+        return priorityB - priorityA;
+      });
+
+      // Lấy top 300 sản phẩm quan trọng nhất để truyền tải siêu nhanh qua Kafka (~50KB)
+      return dataset.slice(0, 300);
+    } catch (error: any) {
+      this.logger.error('Failed to compile forecast dataset:', error);
+      return [];
+    }
   }
 
   async getSeasonalDataset(branchId?: string, monthsCount = 12) {

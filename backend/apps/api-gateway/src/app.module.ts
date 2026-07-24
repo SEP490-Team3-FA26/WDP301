@@ -27,6 +27,8 @@ import { StockTransferController } from './controllers/stock-transfer.controller
 import { AdminEmployeeController } from './controllers/admin-employee.controller';
 import { ReportController } from './controllers/report.controller';
 import { QuotaController } from './controllers/quota.controller';
+import { FinanceController } from './controllers/finance.controller';
+import { subscribeToKafkaTopics } from './common/kafka.helper';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -182,6 +184,7 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
     AdminEmployeeController,
     ReportController,
     QuotaController,
+    FinanceController,
   ],
   providers: [
     JwtAuthGuard,
@@ -191,14 +194,16 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
     ReportService,
   ],
 })
-export class AppGatewayModule {
+export class AppGatewayModule implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
     @Inject('SUPPLIER_SERVICE') private readonly supplierClient: ClientKafka,
     @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
     @Inject('ORDER_SERVICE') private readonly orderClient: ClientKafka,
     @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
-  ) {
+  ) {}
+
+  async onModuleInit() {
     // 1. INVENTORY_SERVICE Reply Topics
     const inventoryTopics = [
       'inventory.medicine.list',
@@ -207,6 +212,13 @@ export class AppGatewayModule {
       'inventory.medicine.get_filters',
       'inventory.medicine.stats',
       'inventory.medicine.expiration_report',
+      'inventory.medicine.handle_expiration_action',
+      'inventory.medicine.low_stock_report',
+      'inventory.medicine.dropdown_list',
+      'inventory.reports.forecast_dataset',
+      'inventory.reports.seasonal_trends',
+      'inventory.report.create',
+      'inventory.report.list',
       'inventory.pr.create',
       'inventory.pr.list',
       'inventory.pr.get_by_id',
@@ -247,18 +259,12 @@ export class AppGatewayModule {
       'quota.get.summary',
       'quota.get.all',
     ];
-    for (const t of inventoryTopics) {
-      this.inventoryClient.subscribeToResponseOf(t);
-    }
 
     // 2. SUPPLIER_SERVICE Reply Topics
     const supplierTopics = [
       'supplier.get_all',
       'supplier.create',
     ];
-    for (const t of supplierTopics) {
-      this.supplierClient.subscribeToResponseOf(t);
-    }
 
     // 3. USER_SERVICE Reply Topics
     const userTopics = [
@@ -279,9 +285,6 @@ export class AppGatewayModule {
       'user.admin.employee.update',
       'user.admin.employee.ban_unban',
     ];
-    for (const t of userTopics) {
-      this.userClient.subscribeToResponseOf(t);
-    }
 
     // 4. ORDER_SERVICE Reply Topics
     const orderTopics = [
@@ -289,10 +292,10 @@ export class AppGatewayModule {
       'orders.check',
       'orders.list',
       'orders.my-orders',
+      'finance.expense.create',
+      'finance.expense.list',
+      'finance.cashflow.summary',
     ];
-    for (const t of orderTopics) {
-      this.orderClient.subscribeToResponseOf(t);
-    }
 
     // 5. KAFKA_SERVICE Reply Topics
     const kafkaTopics = [
@@ -310,10 +313,15 @@ export class AppGatewayModule {
       'auth.verify.email',
       'auth.resend.verification',
     ];
-    for (const t of kafkaTopics) {
-      this.kafkaClient.subscribeToResponseOf(t);
-    }
 
-    console.log('🏁 [API Gateway] All global Kafka reply topics pre-subscribed successfully.');
+    await Promise.all([
+      subscribeToKafkaTopics(this.inventoryClient, inventoryTopics),
+      subscribeToKafkaTopics(this.supplierClient, supplierTopics),
+      subscribeToKafkaTopics(this.userClient, userTopics),
+      subscribeToKafkaTopics(this.orderClient, orderTopics),
+      subscribeToKafkaTopics(this.kafkaClient, kafkaTopics),
+    ]);
+
+    console.log('🏁 [API Gateway] All global Kafka reply topics pre-subscribed & connected successfully.');
   }
 }
