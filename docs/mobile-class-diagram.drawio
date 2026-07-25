@@ -1,0 +1,153 @@
+<mxfile host="Electron">
+  <diagram name="Mobile Package Diagram" id="0">
+    <mxGraphModel dx="3350" dy="1747" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2336" pageHeight="1654" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=43;fontStyle=1;fillColor=none;strokeColor=none;" value="WDP301 — Mobile Package / Class Diagram (Flutter App)" vertex="1">
+          <mxGeometry height="60" width="800" x="741" y="103" as="geometry" />
+        </mxCell>
+        <mxCell id="app_box" parent="1" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f8f9fa;strokeColor=#666666;fontStyle=1;fontSize=17;startSize=32;verticalAlign=top;align=left;spacingLeft=15;strokeWidth=2;" value="Flutter Mobile App (Flutter 3.x + Dart)" vertex="1">
+          <mxGeometry height="1280" width="1540" x="168" y="211" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg_entry" parent="app_box" style="shape=folder;fontStyle=1;tabWidth=140;tabHeight=25;tabPosition=left;html=1;boundedLbl=1;fillColor=#fff2cc;strokeColor=#d6b656;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=35;align=center;" value="[Entry] main.dart + App Router&#xa;&#xa;Initialization: ApiService, SocketService, EnvService&#xa;Route definitions &amp;amp; Role-based Auth Guard" vertex="1">
+          <mxGeometry height="170" width="440" x="260" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg_screens" parent="app_box" style="shape=folder;fontStyle=1;tabWidth=220;tabHeight=28;tabPosition=left;html=1;boundedLbl=1;fillColor=#d5e8d4;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=35;align=left;spacingLeft=20;strokeWidth=2;" value="Pages &amp;amp; Views (by Role)" vertex="1">
+          <mxGeometry height="620" width="1460" x="40" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="sub_auth" parent="pkg_screens" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=28;align=center;" value="auth/&#xa;&#xa;LoginScreen / RegisterScreen /&#xa;ForgotPasswordScreen / GoogleWebviewScreen" vertex="1">
+          <mxGeometry height="180" width="320" x="30" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="sub_customer" parent="pkg_screens" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=28;align=center;" value="customer/&#xa;&#xa;CustomerScreen (Shop &amp;amp; Cart) /&#xa;CheckoutScreen / ProfileScreen /&#xa;AI Consultant (Voice &amp;amp; Text)" vertex="1">
+          <mxGeometry height="170" width="330" x="380" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="sub_pharmacist" parent="pkg_screens" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=28;align=center;" value="pharmacist/&#xa;&#xa;PharmacistScreen (POS Counter) /&#xa;AI Prescription Scan /&#xa;Drug Interactions Check" vertex="1">
+          <mxGeometry height="170" width="330" x="740" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="sub_warehouse" parent="pkg_screens" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=28;align=center;" value="warehouse/&#xa;&#xa;WarehouseScreen /&#xa;Stocktake / AI Package Inspector /&#xa;GRN &amp;amp; Batches Management" vertex="1">
+          <mxGeometry height="170" width="340" x="1090" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="sub_branch" parent="pkg_screens" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=28;align=center;" value="branch/&#xa;&#xa;BranchScreen /&#xa;Requisitions / Transfers /&#xa;Staff Account Management" vertex="1">
+          <mxGeometry height="180" width="320" x="30" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="sub_admin" parent="pkg_screens" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=28;align=center;" value="admin/&#xa;&#xa;AdminScreen / DirectorScreen /&#xa;Revenue Dashboard / Audits /&#xa;PO &amp;amp; GRN Approvals" vertex="1">
+          <mxGeometry height="167.5" width="330" x="380" y="252.5" as="geometry" />
+        </mxCell>
+        <mxCell id="sub_common" parent="pkg_screens" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=28;align=center;" value="common/&#xa;&#xa;NotificationListScreen /&#xa;PaymentWebviewScreen (VNPay) /&#xa;ProfileScreen" vertex="1">
+          <mxGeometry height="167.5" width="330" x="740" y="252.5" as="geometry" />
+        </mxCell>
+        <mxCell id="sub_models" parent="pkg_screens" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=28;align=center;" value="models/&#xa;&#xa;Data Models:&#xa;UserRole / Medicine / CartItem /&#xa;Order / Prescription / Notification" vertex="1">
+          <mxGeometry height="167.5" width="340" x="1090" y="252.5" as="geometry" />
+        </mxCell>
+        <mxCell id="sub_widgets" parent="pkg_screens" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=22;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=28;align=center;" value="widgets/&#xa;&#xa;Shared UI Components:&#xa;CustomCards / Loaders / BottomSheets / CustomDialogs / BadgeIcons" vertex="1">
+          <mxGeometry height="160" width="690" x="385" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg_services" parent="app_box" style="shape=folder;fontStyle=1;tabWidth=140;tabHeight=25;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffe6cc;strokeColor=#d79b00;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=35;align=center;strokeWidth=2;" value="Services Layer&#xa;&#xa;ApiService (HTTP REST Client via Dio)&#xa;SocketService (Real-time Socket.IO Notifications)&#xa;EnvService (Environment &amp;amp; Gateway Base URL)" vertex="1">
+          <mxGeometry height="200" width="680" x="40" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg_native" parent="app_box" style="shape=folder;fontStyle=1;tabWidth=220;tabHeight=25;tabPosition=left;html=1;boundedLbl=1;fillColor=#e1d5e7;strokeColor=#9673a6;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=35;align=center;strokeWidth=2;" value="Native &amp;amp; Hardware Integration&#xa;&#xa;Camera Plugin (AI Prescription Scan &amp;amp; Package Inspector)&#xa;Microphone Plugin (Groq STT Voice Symptoms Recording)&#xa;WebView Plugin (VNPay Gateway &amp;amp; Google OAuth Login)&#xa;SharedPreferences (Local Token &amp;amp; User State Storage)" vertex="1">
+          <mxGeometry height="200" width="740" x="760" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="ed1" edge="1" parent="app_box" source="pkg_entry" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=light-dark(#000000, #996500);strokeWidth=1.5;endArrow=open;endSize=8;labelBackgroundColor=#ffffff;fontSize=17;entryX=0.501;entryY=0.047;entryDx=0;entryDy=0;entryPerimeter=0;" target="pkg_screens" value="«route»">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="261" />
+              <mxPoint x="501" y="261" />
+              <mxPoint x="501" y="280" />
+              <mxPoint x="771" y="280" />
+            </Array>
+            <mxPoint x="480.14285714285734" y="240" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ext_gateway" parent="1" style="shape=folder;fontStyle=1;tabWidth=170;tabHeight=25;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffe6cc;strokeColor=#d79b00;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=35;align=center;strokeWidth=2;" value="API Gateway (NestJS)&#xa;&#xa;NestJS — port 4000&#xa;JWT Auth + Redis Cache + Kafka&#xa;Swagger: /api/docs&#xa;backend/apps/api-gateway/" vertex="1">
+          <mxGeometry height="210" width="360" x="1808" y="391" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_ai" parent="1" style="shape=folder;fontStyle=1;tabWidth=170;tabHeight=25;tabPosition=left;html=1;boundedLbl=1;fillColor=#e1d5e7;strokeColor=#9673a6;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=35;align=center;strokeWidth=2;" value="AI Service (Python)&#xa;&#xa;FastAPI — port 8000&#xa;Groq Whisper STT + Llama-3.3 LLM&#xa;Qdrant Vector DB (Medical RAG)&#xa;backend/apps/ai-service/" vertex="1">
+          <mxGeometry height="210" width="360" x="1808" y="651" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_socket" parent="1" style="shape=folder;fontStyle=1;tabWidth=170;tabHeight=25;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffe6cc;strokeColor=#d79b00;whiteSpace=wrap;fontSize=17;verticalAlign=top;spacingTop=35;align=center;strokeWidth=2;" value="Socket Server (WebSocket)&#xa;&#xa;Socket.IO Gateway — port 4000&#xa;Real-time Notifications&#xa;Stock &amp;amp; Approval Push Alerts" vertex="1">
+          <mxGeometry height="190" width="360" x="1808" y="911" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#666666;verticalAlign=top;fontStyle=1;fontSize=17;container=1;collapsible=0;" value="Legend" vertex="1">
+          <mxGeometry height="240" width="360" x="1808" y="1161" as="geometry" />
+        </mxCell>
+        <mxCell id="lg1_b" parent="legend" style="rounded=1;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=17;" value="" vertex="1">
+          <mxGeometry height="22" width="35" x="15" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="lg1_t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=17;" value="Entry / Routing Layer" vertex="1">
+          <mxGeometry height="24" width="280" x="60" y="33" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2_b" parent="legend" style="rounded=1;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=17;" value="" vertex="1">
+          <mxGeometry height="22" width="35" x="15" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2_t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=17;" value="Screens / UI Package" vertex="1">
+          <mxGeometry height="24" width="280" x="60" y="68" as="geometry" />
+        </mxCell>
+        <mxCell id="lg3_b" parent="legend" style="rounded=1;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=17;" value="" vertex="1">
+          <mxGeometry height="22" width="35" x="15" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="lg3_t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=17;" value="Services (HTTP REST / Socket)" vertex="1">
+          <mxGeometry height="24" width="280" x="60" y="103" as="geometry" />
+        </mxCell>
+        <mxCell id="lg4_b" parent="legend" style="rounded=1;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=17;" value="" vertex="1">
+          <mxGeometry height="22" width="35" x="15" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="lg4_t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=17;" value="Native &amp;amp; AI Hardware Integration" vertex="1">
+          <mxGeometry height="24" width="280" x="60" y="138" as="geometry" />
+        </mxCell>
+        <mxCell id="lg5_b" parent="legend" style="rounded=1;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=17;" value="" vertex="1">
+          <mxGeometry height="22" width="35" x="15" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="lg5_t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=17;" value="Backend Microservices / Gateway" vertex="1">
+          <mxGeometry height="24" width="280" x="60" y="173" as="geometry" />
+        </mxCell>
+        <mxCell id="ed2" edge="1" parent="1" source="pkg_screens" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=light-dark(#000000, #996500);strokeWidth=1.5;endArrow=open;endSize=8;labelBackgroundColor=#ffffff;fontSize=17;" target="pkg_services" value="«use»">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="688" y="1131" />
+              <mxPoint x="548" y="1131" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ed3" edge="1" parent="1" source="pkg_screens" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=light-dark(#000000, #996500);strokeWidth=1.5;endArrow=open;endSize=8;labelBackgroundColor=#ffffff;fontSize=17;" target="pkg_native" value="«integrate»">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1178" y="1131" />
+              <mxPoint x="1298" y="1131" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ed4" edge="1" parent="1" source="pkg_services" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=light-dark(#000000, #996500);strokeWidth=2;endArrow=open;endSize=8;labelBackgroundColor=#ffffff;fontSize=17;fontStyle=1;exitX=0.943;exitY=0.144;exitDx=0;exitDy=0;exitPerimeter=0;" target="ext_gateway" value="«call» HTTP REST /api/*">
+          <mxGeometry relative="1" x="-0.0897" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="848" y="1091" />
+              <mxPoint x="1728" y="1091" />
+              <mxPoint x="1728" y="521" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ed5" edge="1" parent="1" source="pkg_services" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=light-dark(#000000, #996500);strokeWidth=2;endArrow=open;endSize=8;labelBackgroundColor=#ffffff;fontSize=17;fontStyle=1;" target="ext_ai" value="«call» HTTP REST /api/prescription">
+          <mxGeometry relative="1" x="-0.1677" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="848" y="1381" />
+              <mxPoint x="1748" y="1381" />
+              <mxPoint x="1748" y="761" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ed6" edge="1" parent="1" source="pkg_services" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=light-dark(#000000, #996500);strokeWidth=2;endArrow=open;endSize=8;labelBackgroundColor=#ffffff;fontSize=17;fontStyle=1;" target="ext_socket" value="«connect» WSS Socket.IO">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="668" y="1431" />
+              <mxPoint x="1768" y="1431" />
+              <mxPoint x="1768" y="991" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
