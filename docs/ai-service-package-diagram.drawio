@@ -1,0 +1,55 @@
+<mxfile host="Electron">
+  <diagram name="AI Service Package Diagram" id="0">
+    <mxGraphModel dx="2211" dy="1497" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;fillColor=none;strokeColor=none;fontFamily=Helvetica;" value="WDP301 — AI Service Package Diagram (Python FastAPI)" vertex="1">
+          <mxGeometry height="40" width="600" x="537" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg_config" parent="1" style="shape=folder;fontStyle=0;tabWidth=80;tabHeight=24;tabPosition=left;html=1;boundedLbl=1;fillColor=#ffffcc;strokeColor=#d6b656;whiteSpace=wrap;fontSize=18;verticalAlign=top;spacingTop=30;align=center;strokeWidth=2;fontFamily=Helvetica;" value="config&#xa;&#xa;• Dockerfile &amp;amp; docker-compose&#xa;• requirements.txt (FastAPI, Qdrant)&#xa;• .env (GROQ_API_KEY, COHERE_KEY)" vertex="1">
+          <mxGeometry height="214" width="340" x="657" y="187" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg_services" parent="1" style="shape=folder;fontStyle=0;tabWidth=90;tabHeight=24;tabPosition=left;html=1;boundedLbl=1;fillColor=#dae8fc;strokeColor=#6c8ebf;whiteSpace=wrap;fontSize=18;verticalAlign=top;spacingTop=30;align=left;spacingLeft=15;strokeWidth=2;fontFamily=Helvetica;" value="services/ (AI Processing Core)&#xa;&#xa;• stt_service.py (Groq Whisper-v3 STT)&#xa;• rag_service.py (Cohere &amp;amp; Qdrant RAG)&#xa;• llm_service.py (Groq Llama-3.3 LLM)&#xa;• ocr_service.py (Gemini 2.5 Vision)&#xa;• forecaster.py (EOQ Demand Forecast)&#xa;• db_service.py (MongoDB Inventory Bridge)" vertex="1">
+          <mxGeometry height="294" width="360" x="257" y="427" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg_api" parent="1" style="shape=folder;fontStyle=0;tabWidth=60;tabHeight=24;tabPosition=left;html=1;boundedLbl=1;fillColor=#f8cecc;strokeColor=#b85450;whiteSpace=wrap;fontSize=18;verticalAlign=top;spacingTop=30;align=left;spacingLeft=15;strokeWidth=2;fontFamily=Helvetica;" value="api/ (Routers &amp;amp; Endpoints)&#xa;&#xa;• main.py (FastAPI App &amp;amp; Health)&#xa;• routers/prescription.py:&#xa;   - POST /api/prescription&#xa;   - POST /api/drug-interactions&#xa;   - GET /api/ai/medicines&#xa;   - POST /api/ai/inspect-goods" vertex="1">
+          <mxGeometry height="294" width="360" x="1037" y="427" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg_models" parent="1" style="shape=folder;fontStyle=0;tabWidth=110;tabHeight=24;tabPosition=left;html=1;boundedLbl=1;fillColor=#e1d5e7;strokeColor=#9673a6;whiteSpace=wrap;fontSize=18;verticalAlign=top;spacingTop=30;align=left;spacingLeft=15;strokeWidth=2;fontFamily=Helvetica;" value="models &amp;amp; external_dbs/&#xa;&#xa;• Groq Cloud AI (Whisper STT &amp;amp; Llama-3.3-70B)&#xa;• Cohere Embeddings (embed-multilingual-light-v3.0)&#xa;• Qdrant Vector DB (collection: medical_knowledge)&#xa;• MongoDB Database (medicines, batches &amp;amp; stock)" vertex="1">
+          <mxGeometry height="294" width="380" x="647" y="747" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="pkg_config" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;dashPattern=3 3;strokeColor=#333333;strokeWidth=1.5;endArrow=open;endSize=8;fontSize=18;fontStyle=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;entryX=0.494;entryY=0.075;entryDx=0;entryDy=0;entryPerimeter=0;" target="pkg_services" value="« setup »">
+          <mxGeometry relative="1" x="-0.0992" y="7" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="pkg_config" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;dashPattern=3 3;strokeColor=#333333;strokeWidth=1.5;endArrow=open;endSize=8;fontSize=18;fontStyle=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;" value="« setup »">
+          <mxGeometry relative="1" x="-0.1445" y="-7" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="1219" y="457" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="pkg_api" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;dashPattern=3 3;strokeColor=#333333;strokeWidth=1.5;endArrow=open;endSize=8;fontSize=18;fontStyle=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;" target="pkg_services" value="« call »">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="pkg_services" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;dashPattern=3 3;strokeColor=#333333;strokeWidth=1.5;endArrow=open;endSize=8;fontSize=18;fontStyle=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;" target="pkg_models" value="« process »">
+          <mxGeometry relative="1" x="0.0859" y="-4" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="437" y="837" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="pkg_api" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;dashPattern=3 3;strokeColor=#333333;strokeWidth=1.5;endArrow=open;endSize=8;fontSize=18;fontStyle=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;" target="pkg_models" value="« load »">
+          <mxGeometry relative="1" x="0.0784" y="4" as="geometry">
+            <mxPoint x="-1" as="offset" />
+            <Array as="points">
+              <mxPoint x="1217" y="837" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

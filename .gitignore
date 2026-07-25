@@ -43,8 +43,15 @@ next
 
 # Docker Compose personal overrides
 docker-compose.override.yml
+docker-compose.infra.yml
 
 .last_phone_ip
 connect_mobile.ps1
+.playwright-mcp/
+*.lnk
+*.apk
+frontend/public/download/
+
+
 
 
