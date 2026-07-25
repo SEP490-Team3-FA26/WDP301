@@ -11,7 +11,7 @@ export class QuotaController implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await subscribeToKafkaTopics(this.userClient, ['user.branch.list']);
+    await subscribeToKafkaTopics(this.userClient, ['user.branch.list'], 60, 3000);
   }
 
 
