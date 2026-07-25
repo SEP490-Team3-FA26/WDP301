@@ -80,7 +80,10 @@ def main():
         sys.exit(1)
         
     try:
-        qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
+        if "up.railway.app" in QDRANT_HOST:
+            qdrant = QdrantClient(url=f"https://{QDRANT_HOST}:443")
+        else:
+            qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
     except Exception as e:
         print(f"Failed to connect to Qdrant: {e}")
         sys.exit(1)
