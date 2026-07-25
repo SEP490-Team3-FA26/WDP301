@@ -186,7 +186,8 @@ export class GoodsReceiptController implements OnModuleInit {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-      const response = await fetch(`http://ai-service:8000/api/ai/receipts/${id}/items/${itemId}/inspection`, {
+      const aiUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+      const response = await fetch(`${aiUrl}/api/ai/receipts/${id}/items/${itemId}/inspection`, {
         headers: {
           'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
         },

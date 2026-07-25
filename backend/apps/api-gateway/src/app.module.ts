@@ -324,11 +324,11 @@ export class AppGatewayModule implements OnModuleInit {
     ];
 
     await Promise.all([
-      subscribeToKafkaTopics(this.inventoryClient, inventoryTopics),
-      subscribeToKafkaTopics(this.supplierClient, supplierTopics),
-      subscribeToKafkaTopics(this.userClient, userTopics),
-      subscribeToKafkaTopics(this.orderClient, orderTopics),
-      subscribeToKafkaTopics(this.kafkaClient, kafkaTopics),
+      subscribeToKafkaTopics(this.inventoryClient, inventoryTopics, 60, 3000),
+      subscribeToKafkaTopics(this.supplierClient, supplierTopics, 60, 3000),
+      subscribeToKafkaTopics(this.userClient, userTopics, 60, 3000),
+      subscribeToKafkaTopics(this.orderClient, orderTopics, 60, 3000),
+      subscribeToKafkaTopics(this.kafkaClient, kafkaTopics, 60, 3000),
     ]);
 
     console.log('🏁 [API Gateway] All global Kafka reply topics pre-subscribed & connected successfully.');
