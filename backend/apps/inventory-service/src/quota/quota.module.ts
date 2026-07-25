@@ -23,6 +23,7 @@ import { Quota, QuotaSchema } from './schemas/quota.schema';
           consumer: {
             groupId: 'inventory-user-group',
           },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
     ]),
