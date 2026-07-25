@@ -6,6 +6,7 @@ import { lastValueFrom } from 'rxjs';
 import { User } from '../../auth-service/src/auth/user.schema';
 import { Cart } from './schemas/cart.schema';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
+import { Branch, BranchDocument } from './schemas/branch.schema';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as zlib from 'zlib';
@@ -38,6 +39,8 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
     private readonly cartModel: Model<Cart>,
     @InjectModel(AuditLog.name)
     private readonly auditLogModel: Model<AuditLogDocument>,
+    @InjectModel(Branch.name)
+    private readonly branchModel: Model<BranchDocument>,
     @Inject('INVENTORY_SERVICE')
     private readonly inventoryClient: ClientKafka,
   ) { }
@@ -748,6 +751,12 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
     });
 
     await newUser.save();
+
+    // Tự động cập nhật field manager trong Branch khi tạo quản lý chi nhánh
+    if (data.role === 'branch' && data.branchId && !isBranchCreated) {
+      await this.syncManagerToBranch(data.branchId, data.fullName);
+    }
+
     const result = newUser.toObject();
     delete result.passwordHash;
     return result;
@@ -808,14 +817,42 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
       return { error: true, message: 'Nhân viên không tồn tại', statusCode: 404 };
     }
 
+    const oldBranchId = employee.branchId;
     if (data.fullName) employee.fullName = data.fullName;
     if (data.role) employee.role = data.role;
     if (data.branchId !== undefined) employee.branchId = data.branchId;
 
     await employee.save();
+
+    // Tự động cập nhật field manager trong Branch khi assign/thay đổi chi nhánh
+    const finalRole = data.role || employee.role;
+    if (finalRole === 'branch') {
+      const newBranchId = data.branchId !== undefined ? data.branchId : oldBranchId;
+      const managerName = data.fullName || employee.fullName;
+      if (newBranchId) {
+        await this.syncManagerToBranch(newBranchId, managerName);
+      }
+    }
+
     const result = employee.toObject();
     delete result.passwordHash;
     return result;
+  }
+
+  /**
+   * Cập nhật field `manager` trong Branch document khi quản lý chi nhánh thay đổi.
+   * Chỉ cập nhật nếu người dùng là role 'branch' và có branchId hợp lệ.
+   */
+  private async syncManagerToBranch(branchId: string, managerName: string): Promise<void> {
+    try {
+      await this.branchModel.updateOne(
+        { branchCode: branchId },
+        { $set: { manager: managerName } },
+      ).exec();
+      this.logger.log(`✅ Synced manager "${managerName}" → branch [${branchId}]`);
+    } catch (err) {
+      this.logger.error(`❌ Failed to sync manager to branch [${branchId}]:`, err);
+    }
   }
 
   async toggleBanEmployee(id: string) {
