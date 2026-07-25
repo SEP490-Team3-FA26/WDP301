@@ -19,23 +19,30 @@ app = FastAPI(
     version="1.0.0"
 )
 
+import threading
+
 # Initialize Qdrant collection on startup
 @app.on_event("startup")
-def init_qdrant():
-    try:
-        QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
-        if "up.railway.app" in QDRANT_HOST:
-            qdrant = QdrantClient(url=f"https://{QDRANT_HOST}:443")
-        else:
-            qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
-            
-        if not qdrant.collection_exists("medical_knowledge"):
-            print("Collection 'medical_knowledge' not found! Indexing from DB...")
-            index_db()
-        else:
-            print("Collection 'medical_knowledge' already exists.")
-    except Exception as e:
-        print(f"Error checking Qdrant collection on startup: {e}")
+def init_qdrant_async():
+    def _init():
+        try:
+            QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+            if "up.railway.app" in QDRANT_HOST:
+                qdrant = QdrantClient(url=f"https://{QDRANT_HOST}:443")
+            else:
+                qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
+                
+            if not qdrant.collection_exists("medical_knowledge"):
+                print("Collection 'medical_knowledge' not found! Indexing from DB...", flush=True)
+                index_db()
+            else:
+                print("Collection 'medical_knowledge' already exists.", flush=True)
+        except Exception as e:
+            print(f"Error checking Qdrant collection on startup: {e}", flush=True)
+
+    thread = threading.Thread(target=_init)
+    thread.daemon = True
+    thread.start()
 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
@@ -58,6 +65,10 @@ if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 else:
     print(f"Warning: static directory {static_dir} not found!")
+
+@app.get("/")
+def read_root():
+    return {"status": "ok", "service": "ai-service"}
 
 @app.get("/health")
 def health_check():

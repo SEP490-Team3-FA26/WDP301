@@ -14,11 +14,14 @@ EMBEDDING_SIZE = 384
 class RAGServiceUnavailable(RuntimeError):
     """Raised when vector retrieval is not configured or unavailable."""
 
-
-try:
-    qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
-except Exception:
-    qdrant = None
+def get_qdrant_client():
+    try:
+        if "up.railway.app" in QDRANT_HOST:
+            return QdrantClient(url=f"https://{QDRANT_HOST}:443", timeout=3.0)
+        else:
+            return QdrantClient(host=QDRANT_HOST, port=6333, timeout=3.0)
+    except Exception:
+        return None
 
 
 async def get_embedding(text: str) -> list[float]:

@@ -11,7 +11,7 @@ from services.rag_service import (
     RAGServiceUnavailable,
     retrieve_medical_context,
     get_embedding,
-    qdrant,
+    get_qdrant_client,
 )
 from services.db_service import validate_drugs_in_inventory
 import time
@@ -326,6 +326,7 @@ async def get_medicines_ai(
 
         if search:
             # 1. Semantic Vector Search via Qdrant
+            qdrant = get_qdrant_client()
             if not qdrant:
                 raise HTTPException(status_code=503, detail="Qdrant client not initialized")
             
@@ -393,6 +394,7 @@ async def get_medicines_ai(
             
             query_filter = Filter(must=must_conditions) if must_conditions else None
 
+            qdrant = get_qdrant_client()
             results = qdrant.search(
                 collection_name="medical_knowledge",
                 query_vector=query_vector,
