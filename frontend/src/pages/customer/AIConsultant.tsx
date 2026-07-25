@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Mic, Square, Sparkles, AlertTriangle, CheckCircle, ShoppingCart, Volume2, Info, ArrowRight, HeartPulse, Brain, RotateCcw, LoaderCircle, X } from "lucide-react";
+import { Mic, Square, Sparkles, AlertTriangle, CheckCircle, ShoppingCart, Volume2, Info, ArrowRight, HeartPulse, Brain, RotateCcw, LoaderCircle, X, Send } from "lucide-react";
 import { prescriptionService } from "../../services/sales/prescription.service";
 import { cartService } from "../../services/sales/cart.service";
 
@@ -9,7 +9,11 @@ export function AIConsultant() {
   const [timer, setTimer] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);``
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  
+  // Text Input
+  const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
+  const [symptomsText, setSymptomsText] = useState("");
   
   // Results
   const [result, setResult] = useState<any>(null);
@@ -137,16 +141,22 @@ export function AIConsultant() {
   };
 
   const sendToAI = async () => {
-    if (!audioBlob) return;
+    if (inputMode === "voice" && !audioBlob) return;
+    if (inputMode === "text" && !symptomsText.trim()) return;
+    
     setLoading(true);
     setError("");
     setResult(null);
 
     try {
-      const formData = new FormData();
-      formData.append("audio", audioBlob, "consultation_voice.webm");
-
-      const data = await prescriptionService.recommendPrescription(formData);
+      let data;
+      if (inputMode === "voice") {
+        const formData = new FormData();
+        formData.append("audio", audioBlob!, "consultation_voice.webm");
+        data = await prescriptionService.recommendPrescription(formData);
+      } else {
+        data = await prescriptionService.textConsult(symptomsText);
+      }
 
       setResult(data);
     } catch (err: any) {
@@ -274,9 +284,27 @@ export function AIConsultant() {
         <div className="lg:col-span-5 bg-gradient-to-b from-slate-900 to-slate-950 text-white border border-slate-800 rounded-[28px] p-8 shadow-xl flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full filter blur-3xl pointer-events-none"></div>
           
-          <div className="w-12 h-12 bg-slate-800 text-blue-400 rounded-xl flex items-center justify-center border border-slate-700/50 shadow-inner">
-            <Volume2 size={22} />
+          {/* Tabs */}
+          <div className="flex w-full max-w-xs bg-slate-800/80 rounded-xl p-1 border border-slate-700/50 z-10">
+            <button 
+              onClick={() => { setInputMode("voice"); setError(""); }}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${inputMode === "voice" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-white"}`}
+            >
+              🎙️ Ghi Âm
+            </button>
+            <button 
+              onClick={() => { setInputMode("text"); setError(""); }}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${inputMode === "text" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-white"}`}
+            >
+              ⌨️ Nhập Chữ
+            </button>
           </div>
+
+          {inputMode === "voice" ? (
+            <>
+              <div className="w-12 h-12 bg-slate-800 text-blue-400 rounded-xl flex items-center justify-center border border-slate-700/50 shadow-inner">
+                <Volume2 size={22} />
+              </div>
 
           <div className="flex flex-col gap-2">
             <h4 className="font-black text-white text-md tracking-tight">Ghi Âm Triệu Chứng Của Bạn</h4>
@@ -382,6 +410,33 @@ export function AIConsultant() {
               </button>
             </div>
           )}
+            </>
+          ) : (
+            <div className="w-full flex flex-col items-center gap-4 z-10 animate-fade-in">
+              <div className="flex flex-col gap-2 w-full text-center mb-2">
+                <h4 className="font-black text-white text-md tracking-tight">Kể Triệu Chứng Cho Trợ Lý</h4>
+                <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+                  Mô tả chi tiết các triệu chứng mà bạn đang gặp phải.
+                </p>
+              </div>
+              <textarea
+                value={symptomsText}
+                onChange={(e) => setSymptomsText(e.target.value)}
+                placeholder="Ví dụ: Tôi bị đau đầu dữ dội, sốt 39 độ và ho khan kéo dài 3 ngày nay..."
+                className="w-full bg-slate-800/80 border border-slate-700 rounded-2xl p-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[160px] resize-none"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={sendToAI}
+                disabled={loading || !symptomsText.trim()}
+                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white py-3.5 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0"
+              >
+                {loading ? <LoaderCircle size={14} className="animate-spin" /> : <Send size={14} />}
+                {loading ? "Đang gửi..." : "Gửi tin nhắn"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right: AI suggestion display */}
@@ -442,10 +497,12 @@ export function AIConsultant() {
               
               {/* Box A: Transcript */}
               <div className="bg-white border border-slate-200 rounded-[24px] p-6 shadow-sm hover:shadow-md transition-shadow">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Lời khai triệu chứng gốc</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                  {inputMode === "voice" ? "Lời khai triệu chứng gốc (STT)" : "Nội dung khai báo"}
+                </span>
                 <div className="relative bg-slate-50 p-4 rounded-2xl border border-slate-100/80 font-sans italic text-slate-700 text-xs leading-relaxed">
                   <span className="text-2xl text-blue-200 absolute top-0 left-2 font-serif">“</span>
-                  <p className="pl-5 pr-2">{result.transcribed_text}</p>
+                  <p className="pl-5 pr-2">{result.transcribed_text || symptomsText}</p>
                 </div>
               </div>
 
