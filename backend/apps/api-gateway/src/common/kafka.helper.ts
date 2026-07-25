@@ -1,6 +1,6 @@
 import { ClientKafka } from '@nestjs/microservices';
 import { lastValueFrom, timeout } from 'rxjs';
-import { HttpException } from '@nestjs/common';
+import { HttpException, HttpStatus } from '@nestjs/common';
 
 
 
