@@ -12,10 +12,15 @@ export class PrescriptionController implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await subscribeToKafkaTopics(this.inventoryClient, [
+    const topics = [
       'inventory.prescription.get',
+      'inventory.prescription.get_by_code',
       'inventory.prescription.list',
-    ]);
+    ];
+    for (const topic of topics) {
+      this.inventoryClient.subscribeToResponseOf(topic);
+    }
+    await this.inventoryClient.connect();
   }
 
   private getAiServiceHost(): string {
@@ -185,13 +190,17 @@ export class PrescriptionController implements OnModuleInit {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   async listPrescriptions() {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.list', {});
+    try {
+      return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.list', {});
+    } catch (error) {
+      return [];
+    }
   }
 
   @Get(':code')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   async getPrescriptionByCode(@Param('code') code: string) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.get', { code });
   }

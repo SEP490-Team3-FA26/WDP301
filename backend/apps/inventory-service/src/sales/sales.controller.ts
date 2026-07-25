@@ -17,7 +17,7 @@ export class SalesController {
   }
 
   @MessagePattern('inventory.prescription.list')
-  async listPrescriptions() {
+  async listPrescriptions(@Payload() data?: any) {
     try {
       return await this.salesService.listPrescriptions();
     } catch (error) {

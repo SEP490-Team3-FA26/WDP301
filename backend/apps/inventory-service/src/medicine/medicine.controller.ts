@@ -39,8 +39,8 @@ export class MedicineController {
   @MessagePattern('inventory.medicine.branch_list')
   async listBranchMedicines(@Payload() query: any) {
     try {
-      if (!query.branchId) {
-        throw new RpcException('Branch ID is required for branch inventory API');
+      if (!query?.branchId) {
+        return await this.medicineService.listMedicines(query);
       }
       return await this.medicineService.getBranchMedicines(query);
     } catch (error) {
@@ -90,7 +90,7 @@ export class MedicineController {
   }
 
   @MessagePattern('inventory.medicine.get_filters')
-  async getMedicineFilters() {
+  async getMedicineFilters(@Payload() data?: any) {
     try {
       return await this.medicineService.getMedicineFilters();
     } catch (error) {
@@ -110,7 +110,7 @@ export class MedicineController {
   }
 
   @MessagePattern('inventory.medicine.expiration_report')
-  async getExpirationReport() {
+  async getExpirationReport(@Payload() data?: any) {
     try {
       return await this.medicineService.getExpirationReport();
     } catch (error) {
@@ -150,7 +150,7 @@ export class MedicineController {
   }
 
   @MessagePattern('inventory.check.list')
-  async listInventoryChecks() {
+  async listInventoryChecks(@Payload() data?: any) {
     try {
       return await this.medicineService.listInventoryChecks();
     } catch (error) {
@@ -180,7 +180,7 @@ export class MedicineController {
   }
 
   @MessagePattern('inventory.medicine.low_stock_report')
-  async getLowStockReport() {
+  async getLowStockReport(@Payload() data?: any) {
     try {
       return await this.medicineService.getLowStockReport();
     } catch (error) {
@@ -190,7 +190,7 @@ export class MedicineController {
   }
 
   @MessagePattern('inventory.medicine.dropdown_list')
-  async getMedicinesDropdown() {
+  async getMedicinesDropdown(@Payload() data?: any) {
     try {
       return await this.medicineService.getMedicinesDropdown();
     } catch (error) {
