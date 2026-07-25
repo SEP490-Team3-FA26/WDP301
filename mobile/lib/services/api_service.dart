@@ -23,7 +23,7 @@ class ApiService {
   static String get aiBaseUrl {
     final envUrl = EnvService.get('AI_URL') ?? EnvService.get('AI_BASE_URL');
     if (envUrl != null && envUrl.isNotEmpty) {
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android && (envUrl.contains('localhost') || envUrl.contains('127.0.0.1'))) {
         return envUrl.replaceAll('127.0.0.1', '10.0.2.2').replaceAll('localhost', '10.0.2.2');
       }
       return envUrl;
