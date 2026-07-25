@@ -6,9 +6,14 @@ import time
 from pymongo import MongoClient
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv()
+# Try to find .env in current or parent directories
+env_path = find_dotenv()
+if env_path:
+    load_dotenv(env_path)
+else:
+    load_dotenv()
 
 import httpx
 
@@ -80,7 +85,10 @@ def main():
         sys.exit(1)
         
     try:
-        qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
+        if "up.railway.app" in QDRANT_HOST:
+            qdrant = QdrantClient(url=f"https://{QDRANT_HOST}:443")
+        else:
+            qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
     except Exception as e:
         print(f"Failed to connect to Qdrant: {e}")
         sys.exit(1)
