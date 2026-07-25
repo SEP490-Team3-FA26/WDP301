@@ -1,12 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import prescription, symptoms
+from routers import prescription
 from scripts.index_from_mongo import main as index_db
 from qdrant_client import QdrantClient
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv()
+# Try to find .env in current or parent directories (like backend/.env)
+env_path = find_dotenv()
+if env_path:
+    load_dotenv(env_path)
+else:
+    load_dotenv()
 
 app = FastAPI(
     title="AI Prescription Service",

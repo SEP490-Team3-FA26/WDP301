@@ -71,7 +71,7 @@ export class UserService implements OnModuleInit, OnApplicationShutdown {
     await subscribeToKafkaTopics(
       this.inventoryClient,
       ['inventory.medicine.get_by_id', 'inventory.medicine.get_by_ids'],
-      20,
+      60,
       3000,
     );
     this.logger.log('Successfully connected ClientKafka for INVENTORY_SERVICE');

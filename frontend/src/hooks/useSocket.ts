@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { AUTH_TOKEN_CHANGED_EVENT } from '../utils/authEvents';
 
-const API_GATEWAY_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:4000';
+// @ts-ignore
+const API_GATEWAY_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 // Global cache để dùng chung kết nối Socket, tránh mỗi component tạo 1 connection mới gây spam log backend
 const globalSockets: Record<string, Socket> = {};

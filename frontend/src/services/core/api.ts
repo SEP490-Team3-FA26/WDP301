@@ -2,6 +2,7 @@ import axios from 'axios';
 import { notifyAuthTokenChanged } from '../../utils/authEvents';
 
 const api = axios.create({
+  // @ts-ignore
   baseURL: import.meta.env.VITE_API_URL || '', // Resolves to backend URL in prod, or relative in dev
 });
 
