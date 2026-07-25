@@ -19,7 +19,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY backend/ .
 
 # Build tất cả services (nest build sẽ output vào ./dist)
-RUN npm run build:all || true
+RUN npm run build:all
 
 # ============================================================
 # Stage 3: Runner – chỉ chứa file JS đã compiled (ít RAM hơn nhiều)

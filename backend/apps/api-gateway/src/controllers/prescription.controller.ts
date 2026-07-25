@@ -54,7 +54,8 @@ export class PrescriptionController implements OnModuleInit {
         signal: controller.signal,
       }).catch(async () => {
         // Fallback for docker container naming if localhost fails
-        return await fetch('http://ai-service:8000/api/ai/scan-prescription-v2', {
+        const aiUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+        return await fetch(`${aiUrl}/api/ai/scan-prescription-v2`, {
           method: 'POST',
           headers: {
             'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
@@ -117,7 +118,8 @@ export class PrescriptionController implements OnModuleInit {
         body: formData,
         signal: controller.signal,
       }).catch(async () => {
-        return await fetch('http://ai-service:8000/api/prescription', {
+        const aiUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+        return await fetch(`${aiUrl}/api/prescription`, {
           method: 'POST',
           headers: {
             'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
@@ -161,7 +163,8 @@ export class PrescriptionController implements OnModuleInit {
         },
         body: JSON.stringify({ symptoms }),
       }).catch(async () => {
-        return await fetch('http://ai-service:8000/api/ai/symptom-consult', {
+        const aiUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+        return await fetch(`${aiUrl}/api/ai/symptom-consult`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

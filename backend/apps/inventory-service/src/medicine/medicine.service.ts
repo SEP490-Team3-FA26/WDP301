@@ -342,7 +342,7 @@ export class MedicineService implements OnModuleInit {
     bypassAiSearch?: boolean;
   }) {
     try {
-      console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', query);
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', JSON.stringify(query));
       const page = query.page || 1;
       const limit = query.limit || 10;
       const search = query.search || '';
