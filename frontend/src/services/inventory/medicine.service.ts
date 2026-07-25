@@ -130,6 +130,16 @@ export const medicineService = {
   }) {
     const response = await api.post('/api/medicines/expiration-action', payload);
     return response.data;
+  },
+
+  async createMedicine(payload: Partial<Medicine> & Record<string, any>) {
+    const response = await api.post('/api/medicines', payload);
+    return response.data;
+  },
+
+  async updateMedicine(id: string, payload: Partial<Medicine> & Record<string, any>) {
+    const response = await api.put(`/api/medicines/${id}`, payload);
+    return response.data;
   }
 };
 

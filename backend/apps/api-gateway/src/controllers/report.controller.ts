@@ -440,7 +440,38 @@ export class ReportController implements OnModuleInit {
         });
 
         if (response.ok) {
-          return await response.json();
+          const aiResult = await response.json();
+          if (Array.isArray(aiResult.recommendations)) {
+            aiResult.recommendations = aiResult.recommendations.map((item: any) => {
+              const stock = item.currentStock || 0;
+              const sales = item.averageDailySales || 0;
+              const incoming = item.expectedIncoming || 0;
+              const unitStr = item.unit || 'Hộp';
+              const reorderPoint = item.minStock || item.reorderPoint || 30;
+
+              const needed = Math.round(sales * days + reorderPoint);
+              const available = stock + incoming;
+              const suggestedRaw = Math.max(0, needed - available);
+
+              if (suggestedRaw <= 0) {
+                return {
+                  ...item,
+                  suggestedOrderQty: 0,
+                  urgency: 'LOW',
+                  reason: `Tồn kho hiện tại (${stock} ${unitStr}) và hàng đang về (+${incoming}) đáp ứng đủ nhu cầu tiêu thụ trong ${days} ngày tới. Không cần nhập thêm.`,
+                };
+              } else {
+                const suggestedOrderQty = Math.max(10, Math.ceil(suggestedRaw / 10) * 10);
+                return {
+                  ...item,
+                  suggestedOrderQty,
+                  urgency: stock <= 10 ? 'HIGH' : 'MEDIUM',
+                  reason: `Tồn kho hiện tại (${stock} ${unitStr}) sắp chạm ngưỡng an toàn ROP (${reorderPoint}). Khuyên dùng nhập bổ sung ${suggestedOrderQty} ${unitStr}.`,
+                };
+              }
+            });
+          }
+          return aiResult;
         }
       } catch (err) {
         try {
@@ -464,54 +495,50 @@ export class ReportController implements OnModuleInit {
         const currentStock = med.currentStock || 0;
         const totalSold = med.totalSold || 0;
 
-        // Tính toán tốc độ bán cố định từ dữ liệu DB thực tế (loại bỏ hoàn toàn ngẫu nhiên)
         let avgDailySales = 0;
-        if (med.averageDailySales && med.averageDailySales > 0) {
+        if (typeof med.averageDailySales === 'number' && med.averageDailySales >= 0) {
           avgDailySales = med.averageDailySales;
         } else if (totalSold > 0) {
-          avgDailySales = Number((totalSold / days).toFixed(1));
-        } else {
-          // Tính hằng số dựa trên mã ID thuốc để ổn định 100% khi refresh
-          const medCode = String(med.medicineId || med._id || '1');
-          const charSum = medCode.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-          avgDailySales = Number(((charSum % 15) / 10 + 0.5).toFixed(1));
+          avgDailySales = Number((totalSold / days).toFixed(2));
         }
         const expectedIncoming = med.expectedIncoming || 0;
         const reorderPoint = med.reorderPoint || 30;
 
         const neededForPeriod = Math.round(avgDailySales * days + reorderPoint);
         const available = currentStock + expectedIncoming;
-        const suggestedQty = Math.max(0, neededForPeriod - available);
+        const suggestedRaw = Math.max(0, neededForPeriod - available);
+        const suggestedOrderQty = suggestedRaw > 0 ? Math.max(10, Math.ceil(suggestedRaw / 10) * 10) : 0;
+        const unitStr = med.unit || 'Hộp';
 
         let urgency: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
-        let reason = `Tồn kho đáp ứng đủ nhu cầu tiêu thụ dự kiến trong ${days} ngày tới.`;
+        let reason = `Tồn kho hiện tại (${currentStock} ${unitStr}) và hàng đang về (+${expectedIncoming}) đáp ứng đủ nhu cầu tiêu thụ dự kiến trong ${days} ngày tới. Không cần nhập thêm.`;
 
         if (currentStock === 0) {
           if (expectedIncoming > 0) {
             urgency = 'MEDIUM';
-            reason = `Tồn kho tại quầy bằng 0, nhưng đã có đơn mua PO đang trên đường giao về (+${expectedIncoming} ${med.unit || 'Hộp'}). Đang chờ nhập kho.`;
+            reason = `Tồn kho tại quầy bằng 0, nhưng đã có đơn mua PO đang trên đường giao về (+${expectedIncoming} ${unitStr}). Đang chờ nhập kho.`;
           } else {
             urgency = 'HIGH';
-            reason = `Tồn kho cạn kiệt (0 ${med.unit || 'Hộp'}) và chưa có đơn hàng nào đang về. Cần đặt hàng gấp!`;
+            reason = `Tồn kho cạn kiệt (0 ${unitStr}) và chưa có đơn hàng nào đang về. Cần đặt hàng gấp!`;
           }
         } else if (currentStock <= Math.max(5, Math.round(reorderPoint * 0.3))) {
           urgency = 'HIGH';
-          reason = `Tồn kho chạm mức báo động (${currentStock} ${med.unit || 'Hộp'}), chỉ còn đủ dùng khoảng ${Math.max(1, Math.round(currentStock / (avgDailySales || 1)))} ngày. Cần nhập khẩn cấp.`;
-        } else if (currentStock <= reorderPoint || suggestedQty > 0) {
+          reason = `Tồn kho chạm mức báo động (${currentStock} ${unitStr}), chỉ còn đủ dùng khoảng ${Math.max(1, Math.round(currentStock / (avgDailySales || 1)))} ngày. Cần nhập khẩn cấp ${suggestedOrderQty} ${unitStr}.`;
+        } else if (suggestedOrderQty > 0 || currentStock <= reorderPoint) {
           urgency = 'MEDIUM';
-          reason = `Tồn kho hiện tại (${currentStock} ${med.unit || 'Hộp'}) sắp chạm ngưỡng an toàn ROP (${reorderPoint}). Khuyên dùng nhập bổ sung ${suggestedQty > 0 ? suggestedQty : 50} ${med.unit || 'Hộp'}.`;
+          reason = `Tồn kho hiện tại (${currentStock} ${unitStr}) sắp chạm ngưỡng an toàn ROP (${reorderPoint}). Khuyên dùng nhập bổ sung ${suggestedOrderQty > 0 ? suggestedOrderQty : 50} ${unitStr}.`;
         }
 
         return {
-          medicineId: med.medicineId || med._id || 'med-001',
-          name: med.name || 'Thuốc dược phẩm',
+          medicineId: String(med.medicineId || med._id || 'med-001'),
+          name: med.name || 'Dược phẩm',
           category: med.category || 'Dược phẩm',
-          unit: med.unit || 'Hộp',
+          unit: unitStr,
           currentStock,
           totalSold: totalSold > 0 ? totalSold : Math.round(avgDailySales * days),
           averageDailySales: avgDailySales,
           expectedIncoming,
-          suggestedOrderQty: Math.max(50, suggestedQty),
+          suggestedOrderQty,
           urgency,
           reason
         };
