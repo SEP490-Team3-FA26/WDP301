@@ -3,18 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { AUTH_TOKEN_CHANGED_EVENT } from '../utils/authEvents';
 
 // @ts-ignore
-const getApiGatewayUrl = () => {
-  // @ts-ignore
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && envUrl.trim() !== '') return envUrl;
-
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
-  }
-  return 'http://localhost:4000';
-};
-
-const API_GATEWAY_URL = getApiGatewayUrl();
+const API_GATEWAY_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 // Global cache để dùng chung kết nối Socket, tránh mỗi component tạo 1 connection mới gây spam log backend
 const globalSockets: Record<string, Socket> = {};
