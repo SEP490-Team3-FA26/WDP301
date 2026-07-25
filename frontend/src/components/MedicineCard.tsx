@@ -6,9 +6,10 @@ interface MedicineCardProps {
   added: boolean;
   onAddToCart: (med: any, quantity: number, unit: string) => void;
   onClick: () => void;
+  allowOutOfStock?: boolean;
 }
 
-export const MedicineCard: React.FC<MedicineCardProps> = ({ med, added, onAddToCart, onClick }) => {
+export const MedicineCard: React.FC<MedicineCardProps> = ({ med, added, onAddToCart, onClick, allowOutOfStock = false }) => {
   const isOutOfStock = med.stock <= 0;
   const isLowStock = med.stock > 0 && med.stock <= 50;
 
@@ -75,8 +76,12 @@ export const MedicineCard: React.FC<MedicineCardProps> = ({ med, added, onAddToC
 
         {/* Badge: Stock status */}
         {isOutOfStock && (
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center">
-            <span className="px-3 py-1 bg-slate-800/80 text-white text-[10px] font-black rounded-full uppercase tracking-wider">Hết hàng</span>
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+            <span className={`px-3 py-1 text-white text-[10px] font-black rounded-full uppercase tracking-wider ${
+              allowOutOfStock ? "bg-amber-600/90 shadow-sm" : "bg-slate-800/80"
+            }`}>
+              {allowOutOfStock ? "Hết hàng (Cho phép nhập)" : "Hết hàng"}
+            </span>
           </div>
         )}
         {isLowStock && !isOutOfStock && (
@@ -132,13 +137,15 @@ export const MedicineCard: React.FC<MedicineCardProps> = ({ med, added, onAddToC
 
           <button
             onClick={(e) => { e.stopPropagation(); onAddToCart(med, currentMultiplier, selectedUnit); }}
-            disabled={isOutOfStock}
+            disabled={isOutOfStock && !allowOutOfStock}
             className={`shrink-0 h-9 w-9 rounded-xl flex items-center justify-center transition-all ${
-              isOutOfStock
+              isOutOfStock && !allowOutOfStock
                 ? "bg-slate-100 text-slate-300 cursor-not-allowed"
                 : added
                   ? "bg-emerald-500 text-white shadow-md shadow-emerald-200"
-                  : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-200 active:scale-90"
+                  : isOutOfStock
+                    ? "bg-amber-600 text-white hover:bg-amber-700 shadow-md shadow-amber-200 active:scale-90"
+                    : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-200 active:scale-90"
             }`}
           >
             {added ? <CheckCircle2 size={16} /> : <Plus size={16} />}

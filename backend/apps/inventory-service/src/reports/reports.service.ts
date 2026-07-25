@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Report } from './schemas/report.schema';
@@ -71,7 +71,6 @@ export class ReportsService {
           }
         });
       }
-
       
       const stockMap = new Map<string, number>();
       if (Array.isArray(activeBatches)) {

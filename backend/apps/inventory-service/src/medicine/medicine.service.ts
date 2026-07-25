@@ -78,15 +78,19 @@ export class MedicineService implements OnModuleInit {
 
   async getMedicineFilters() {
     try {
-      console.log('📨 [Inventory MS] Nhận yêu cầu lấy bộ lọc thuốc');
+      this.logger.log('📨 [Inventory MS] Nhận yêu cầu lấy bộ lọc thuốc');
       const categories = await this.medicineModel.distinct('category').exec();
       const classifications = await this.medicineModel.distinct('drug_classification').exec();
       return {
-        categories: categories.filter(c => c),
-        classifications: classifications.filter(c => c)
+        categories: (categories || []).filter(c => Boolean(c) && typeof c === 'string'),
+        classifications: (classifications || []).filter(c => Boolean(c) && typeof c === 'string')
       };
     } catch (error) {
-      throw new RpcException(error.message || 'Lỗi lấy bộ lọc thuốc');
+      this.logger.error('Lỗi lấy bộ lọc thuốc, trả về bộ lọc mặc định:', error);
+      return {
+        categories: ['Kháng sinh', 'Hạ sốt & Giảm đau', 'Tim mạch', 'Tiêu hóa', 'Thực phẩm chức năng', 'Vật tư y tế'],
+        classifications: ['PRESCRIPTION', 'NON_PRESCRIPTION', 'SUPPLEMENT']
+      };
     }
   }
 
@@ -181,6 +185,10 @@ export class MedicineService implements OnModuleInit {
 
   async getMedicineById(id: string) {
     try {
+      if (!id || typeof id !== 'string' || !id.match(/^[0-9a-fA-F]{24}$/)) {
+        this.logger.warn(`[getMedicineById] Invalid ObjectId string provided: "${id}"`);
+        throw new RpcException(`Mã thuốc "${id}" không hợp lệ`);
+      }
       this.logger.log(`[getMedicineById] Querying medicine by ID from MongoDB: "${id}"`);
       const medicine = await this.medicineModel.findById(id).exec();
       if (!medicine) {
@@ -546,10 +554,13 @@ export class MedicineService implements OnModuleInit {
           this.logger.log(`Executing fallback Mongoose regex search for "${search}"`);
           const filterQuery: any = {};
           const conditionsCopy = [...conditions];
+          const safeSearch = search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
           conditionsCopy.push({
             $or: [
-              { name: { $regex: search, $options: 'i' } },
-              { active_ingredient: { $regex: search, $options: 'i' } }
+              { name: { $regex: safeSearch, $options: 'i' } },
+              { active_ingredient: { $regex: safeSearch, $options: 'i' } },
+              { sku: { $regex: safeSearch, $options: 'i' } },
+              { barcode: { $regex: safeSearch, $options: 'i' } }
             ]
           });
           filterQuery.$and = conditionsCopy;
