@@ -24,19 +24,21 @@ import threading
 # Initialize Qdrant collection on startup
 @app.on_event("startup")
 def init_qdrant_async():
-    def _init():
+    def qdrant_thread():
         try:
-            QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
-            if "up.railway.app" in QDRANT_HOST:
-                qdrant = QdrantClient(url=f"https://{QDRANT_HOST}:443")
-            else:
-                qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
-                
-            if not qdrant.collection_exists("medical_knowledge"):
-                print("Collection 'medical_knowledge' not found! Indexing from DB...", flush=True)
-                index_db()
-            else:
-                print("Collection 'medical_knowledge' already exists.", flush=True)
+            from services.rag_service import get_qdrant_client, init_qdrant
+            import time
+            # wait a bit for server to fully start
+            time.sleep(5)
+            
+            qdrant = get_qdrant_client()
+            # Check if collection exists before re-indexing
+            if qdrant:
+                if not qdrant.collection_exists("medical_knowledge"):
+                    print("Collection 'medical_knowledge' not found! Indexing from DB...", flush=True)
+                    index_db()
+                else:
+                    print("Collection 'medical_knowledge' already exists.", flush=True)
         except Exception as e:
             print(f"Error checking Qdrant collection on startup: {e}", flush=True)
 
