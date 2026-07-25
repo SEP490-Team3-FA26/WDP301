@@ -96,4 +96,34 @@ export class OrdersServiceController {
       throw new RpcException(error.message || 'Lỗi hệ thống khi kiểm tra voucher');
     }
   }
+
+  @MessagePattern('finance.expense.create')
+  async createExpense(@Payload() data: any) {
+    try {
+      return await this.ordersServiceService.createExpense(data);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tạo chi phí');
+    }
+  }
+
+  @MessagePattern('finance.expense.list')
+  async listExpenses(@Payload() query: any) {
+    try {
+      return await this.ordersServiceService.getExpenses(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi lấy danh sách chi phí');
+    }
+  }
+
+  @MessagePattern('finance.cashflow.summary')
+  async getCashFlowSummary(@Payload() query: any) {
+    try {
+      return await this.ordersServiceService.getCashFlowSummary(query);
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message || 'Lỗi hệ thống khi tổng hợp dòng tiền');
+    }
+  }
 }

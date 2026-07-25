@@ -1,0 +1,141 @@
+<mxfile>
+  <diagram id="seqlayout" name="Sequence Diagram - UC: Sign In with Google">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="user" value="User / Client" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;participant=umlActor;verticalAlign=bottom;spacingBottom=-14;labelBackgroundColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="100" height="1360" as="geometry"/>
+        </mxCell>
+        <mxCell id="ui" value="Web Application (React UI)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="400" y="40" width="100" height="1360" as="geometry"/>
+        </mxCell>
+        <mxCell id="gw" value="API Gateway (AuthController &amp; Passport)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="760" y="40" width="100" height="1360" as="geometry"/>
+        </mxCell>
+        <mxCell id="google" value="Google OAuth 2.0 Server" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="40" width="100" height="1360" as="geometry"/>
+        </mxCell>
+        <mxCell id="kafka" value="Kafka Event Bus (Topics)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="40" width="100" height="1360" as="geometry"/>
+        </mxCell>
+        <mxCell id="ms" value="Auth Microservice (AuthMsController)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="1840" y="40" width="100" height="1360" as="geometry"/>
+        </mxCell>
+        <mxCell id="svc" value="AuthService" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="2200" y="40" width="100" height="1360" as="geometry"/>
+        </mxCell>
+        <mxCell id="db" value="MongoDB (User Collection)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="2560" y="40" width="100" height="1360" as="geometry"/>
+        </mxCell>
+        <mxCell id="jwt" value="JwtService" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;" vertex="1" parent="1">
+          <mxGeometry x="2920" y="40" width="100" height="1360" as="geometry"/>
+        </mxCell>
+        <mxCell id="act0" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="google">
+          <mxGeometry x="45" y="190" width="10" height="250" as="geometry"/>
+        </mxCell>
+        <mxCell id="act1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="db">
+          <mxGeometry x="45" y="640" width="10" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="act2" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="db">
+          <mxGeometry x="45" y="800" width="10" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="act3" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="jwt">
+          <mxGeometry x="45" y="900" width="10" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="act4" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="svc">
+          <mxGeometry x="45" y="590" width="10" height="410" as="geometry"/>
+        </mxCell>
+        <mxCell id="act5" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="ms">
+          <mxGeometry x="45" y="540" width="10" height="510" as="geometry"/>
+        </mxCell>
+        <mxCell id="act6" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="kafka">
+          <mxGeometry x="45" y="490" width="10" height="610" as="geometry"/>
+        </mxCell>
+        <mxCell id="act7" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="gw">
+          <mxGeometry x="45" y="140" width="10" height="1010" as="geometry"/>
+        </mxCell>
+        <mxCell id="act8" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="ui">
+          <mxGeometry x="45" y="90" width="10" height="1180" as="geometry"/>
+        </mxCell>
+        <mxCell id="act9" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;" vertex="1" parent="user">
+          <mxGeometry x="45" y="240" width="10" height="1080" as="geometry"/>
+        </mxCell>
+        <mxCell id="m0" value="1. Click 'Sign In with Google' button" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.0662;entryX=0;entryY=0.0;" edge="1" parent="1" source="user" target="act8">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m1" value="2. Redirect URL: GET /api/auth/google" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.0424;entryX=0;entryY=0.0;" edge="1" parent="1" source="act8" target="act7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m2" value="3. Passport GoogleStrategy redirects to Google Auth URL" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.0495;entryX=0;entryY=0.0;" edge="1" parent="1" source="act7" target="act0">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m3" value="4. Display Google Login Page &amp; Consent Screen" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0;exitY=0.2;entryX=1;entryY=0.0;" edge="1" parent="1" source="act0" target="act9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m4" value="5. Select Google Account &amp; grant permissions" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.0463;entryX=0;entryY=0.4;" edge="1" parent="1" source="act9" target="act0">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m5" value="6. Callback redirect: GET /api/auth/google/callback?code=..." style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0;exitY=0.6;entryX=1;entryY=0.198;" edge="1" parent="1" source="act0" target="act7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m6" value="7. Exchange Authorization Code for Google User Profile" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.2475;entryX=0;entryY=0.8;" edge="1" parent="1" source="act7" target="act0">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m7" value="8. Return Google User Profile (email, fullName, picture)" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.297;" edge="1" parent="1" source="act0" target="act7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m8" value="9. sendKafkaMessage('auth.google.login', req.user)" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.3465;entryX=0;entryY=0.0;" edge="1" parent="1" source="act7" target="act6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m9" value="10. Consume topic 'auth.google.login'" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.082;entryX=0;entryY=0.0;" edge="1" parent="1" source="act6" target="act5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m10" value="11. authService.googleLogin(profile)" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.098;entryX=0;entryY=0.0;" edge="1" parent="1" source="act5" target="act4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m11" value="12. findOne({email: profile.email})" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.122;entryX=0;entryY=0.0;" edge="1" parent="1" source="act4" target="act1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m12" value="13. Return User search result" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.2439;" edge="1" parent="1" source="act1" target="act4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="note13" value="IF USER DOES NOT EXIST: Create new User(email, fullName, role='USER', isActive=true, randomPasswordHash)" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="2270" y="760" width="300" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="m14" value="14. new User(...).save() (if new user)" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.5122;entryX=0;entryY=0.0;" edge="1" parent="1" source="act4" target="act2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m15" value="15. User saved successfully" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.6341;" edge="1" parent="1" source="act2" target="act4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m16" value="16. sign({sub: userId, email, role, fullName})" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.7561;entryX=0;entryY=0.0;" edge="1" parent="1" source="act4" target="act3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m17" value="17. Return JWT access_token" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.878;" edge="1" parent="1" source="act3" target="act4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m18" value="18. Return {access_token, user}" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.902;" edge="1" parent="1" source="act4" target="act5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m19" value="19. Send result to Kafka Reply Topic" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.918;" edge="1" parent="1" source="act5" target="act6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m20" value="20. Gateway receives {access_token, user}" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.9505;" edge="1" parent="1" source="act6" target="act7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m21" value="21. res.redirect('http://localhost:3000/login?token=' + access_token)" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.8983;" edge="1" parent="1" source="act7" target="act8">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m22" value="22. Extract token from URL &amp; store in localStorage/Cookies" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0.9407;entryX=1;entryY=0.9661;" edge="1" parent="1" source="act8" target="act8">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="510" y="1240"/><mxPoint x="510" y="1270"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m23" value="23. Redirect to Main Dashboard page" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.9537;" edge="1" parent="1" source="act8" target="act9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
