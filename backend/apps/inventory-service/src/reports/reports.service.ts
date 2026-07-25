@@ -72,11 +72,6 @@ export class ReportsService {
         });
       }
 
-      const batchQuery: any = { status: 'ACTIVE' };
-      if (branchId && branchId !== 'all') {
-        batchQuery.branchId = branchId;
-      }
-      const activeBatches = await this.batchModel.find(batchQuery).lean().exec();
       
       const stockMap = new Map<string, number>();
       if (Array.isArray(activeBatches)) {

@@ -853,7 +853,8 @@ export class OrdersServiceService implements OnModuleInit {
       const monthlyRevenue: number[] = new Array(12).fill(0);
       const monthlyCogs: number[] = new Array(12).fill(0);
 
-      orders.forEach((o) => {
+      orders.forEach((raw_o) => {
+        const o: any = raw_o;
         const date = new Date(o.createdAt || Date.now());
         const m = date.getMonth();
         const rev = o.totalAmount || o.finalAmount || 0;
@@ -875,7 +876,8 @@ export class OrdersServiceService implements OnModuleInit {
       let totalFixedExpenses = 0;
       const monthlyExpenses: number[] = new Array(12).fill(0);
 
-      expenses.forEach((e) => {
+      expenses.forEach((raw_e) => {
+        const e: any = raw_e;
         const date = new Date(e.transactionDate || e.createdAt || Date.now());
         const m = date.getMonth();
         totalFixedExpenses += e.amount || 0;
