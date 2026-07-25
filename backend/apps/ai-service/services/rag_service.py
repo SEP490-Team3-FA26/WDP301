@@ -23,6 +23,7 @@ def get_qdrant_client():
     except Exception:
         return None
 
+qdrant = get_qdrant_client()
 
 async def get_embedding(text: str) -> list[float]:
     """Create a Cohere query vector compatible with the indexed documents."""

@@ -26,7 +26,7 @@ import threading
 def init_qdrant_async():
     def qdrant_thread():
         try:
-            from services.rag_service import get_qdrant_client, init_qdrant
+            from services.rag_service import get_qdrant_client
             import time
             # wait a bit for server to fully start
             time.sleep(5)
