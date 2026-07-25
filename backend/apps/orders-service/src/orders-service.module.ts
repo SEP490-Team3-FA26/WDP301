@@ -6,6 +6,7 @@ import { OrdersServiceController } from './orders-service.controller';
 import { OrdersServiceService } from './orders-service.service';
 import { Order, OrderSchema } from './schemas/order.schema';
 import { Voucher, VoucherSchema } from './schemas/voucher.schema';
+import { Expense, ExpenseSchema } from './schemas/expense.schema';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { Voucher, VoucherSchema } from './schemas/voucher.schema';
     MongooseModule.forFeature([
       { name: Order.name, schema: OrderSchema },
       { name: Voucher.name, schema: VoucherSchema },
+      { name: Expense.name, schema: ExpenseSchema },
     ]),
     ClientsModule.registerAsync([
       {
