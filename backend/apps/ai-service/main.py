@@ -42,7 +42,7 @@ def init_qdrant_async():
         except Exception as e:
             print(f"Error checking Qdrant collection on startup: {e}", flush=True)
 
-    thread = threading.Thread(target=_init)
+    thread = threading.Thread(target=qdrant_thread)
     thread.daemon = True
     thread.start()
 
