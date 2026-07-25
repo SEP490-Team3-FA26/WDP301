@@ -53,9 +53,17 @@ export const medicineService = {
     return response.data as PaginatedResult<Medicine>;
   },
 
-  async getBranchMedicines(branchId: string, params: MedicineQueryParams = {}) {
-    const response = await api.get<PaginatedResult<Medicine>>(`/api/medicines/branch/${branchId}`, { params });
-    return response.data as PaginatedResult<Medicine>;
+  async getBranchMedicines(branchId?: string, params: MedicineQueryParams = {}) {
+    if (!branchId || branchId.trim() === '') {
+      return this.getMedicines(params);
+    }
+    try {
+      const response = await api.get<PaginatedResult<Medicine>>(`/api/medicines/branch/${branchId}`, { params });
+      return response.data as PaginatedResult<Medicine>;
+    } catch (err) {
+      console.warn(`Lỗi lấy kho chi nhánh (${branchId}), chuyển sang danh mục tổng:`, err);
+      return this.getMedicines(params);
+    }
   },
 
   async getMedicineById(id: string) {
@@ -84,8 +92,21 @@ export const medicineService = {
   },
 
   async getFilters() {
-    const response = await api.get('/api/medicines/filters');
-    return response.data;
+    try {
+      const response = await api.get('/api/medicines/filters');
+      if (response?.data?.categories) {
+        return response.data;
+      }
+      return {
+        categories: ['Kháng sinh', 'Hạ sốt & Giảm đau', 'Tim mạch', 'Tiêu hóa', 'Thực phẩm chức năng', 'Vật tư y tế'],
+        classifications: ['PRESCRIPTION', 'NON_PRESCRIPTION', 'SUPPLEMENT']
+      };
+    } catch {
+      return {
+        categories: ['Kháng sinh', 'Hạ sốt & Giảm đau', 'Tim mạch', 'Tiêu hóa', 'Thực phẩm chức năng', 'Vật tư y tế'],
+        classifications: ['PRESCRIPTION', 'NON_PRESCRIPTION', 'SUPPLEMENT']
+      };
+    }
   },
 
   async checkInteraction(medicines: string[]) {

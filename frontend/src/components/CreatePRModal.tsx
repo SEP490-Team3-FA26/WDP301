@@ -218,11 +218,19 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems, e
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Tìm kiếm thuốc (tên, mã)..."
+                placeholder="Tìm kiếm thuốc theo tên, hoạt chất, số đăng ký, mã vạch..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                className="w-full pl-9 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-max">
@@ -239,6 +247,7 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems, e
                     added={items.some(i => i.medicineId === (med.id || med._id))} 
                     onAddToCart={(m, q, _unit) => { addItem(m.id || m._id, q); }} 
                     onClick={() => {}} 
+                    allowOutOfStock={true}
                   />
                 ))
               )}

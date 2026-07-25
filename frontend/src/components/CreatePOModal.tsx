@@ -102,9 +102,24 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
     });
 
     const uniqueIds = [...itemMap.keys()];
-    Promise.all(uniqueIds.map(id => fetchMedicineById(id)))
+    const medMap = new Map<string, any>();
+    const missingIds: string[] = [];
+
+    uniqueIds.forEach(id => {
+      const existingMed = medicines.find(m => (m.id || m._id) === id);
+      if (existingMed) {
+        medMap.set(id, existingMed);
+      } else {
+        missingIds.push(id);
+      }
+    });
+
+    const fetchPromise = missingIds.length > 0
+      ? Promise.all(missingIds.map(id => fetchMedicineById(id)))
+      : Promise.resolve([]);
+
+    fetchPromise
       .then(results => {
-        const medMap = new Map<string, any>();
         results.forEach(med => {
           if (med) {
             const id = med.id || med._id;
@@ -288,8 +303,21 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
           <div className="flex-1 bg-slate-50 overflow-y-auto p-5 flex flex-col min-h-0">
             <div className="mb-4 relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="text" placeholder="Tìm kiếm thuốc (tên, mã)..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm" />
+              <input
+                type="text"
+                placeholder="Tìm kiếm thuốc theo tên, hoạt chất, số đăng ký, mã vạch..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-max">
@@ -306,6 +334,7 @@ export function CreatePOModal({ prefillPrItems, onClose, onSuccess }: { prefillP
                     added={cart.some(i => i.id === (med.id || med._id))}
                     onAddToCart={(m, q, _unit) => { handleAddMedicine(m, q); }}
                     onClick={() => { }}
+                    allowOutOfStock={true}
                   />
                 ))
               )}

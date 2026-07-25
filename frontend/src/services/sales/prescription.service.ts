@@ -2,8 +2,12 @@ import api from '../core/api';
 
 export const prescriptionService = {
   async getPrescriptions() {
-    const response = await api.get('/api/prescriptions');
-    return response.data;
+    try {
+      const response = await api.get('/api/prescriptions');
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch {
+      return [];
+    }
   },
 
   async getPrescriptionByCode(code: string) {

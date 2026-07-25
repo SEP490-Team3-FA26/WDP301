@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   ShoppingCart, Minus, Plus, SearchIcon, Sparkles, XCircle, AlertTriangle, ShieldAlert,
-  Banknote, QrCode, Printer, CheckCircle2, Mic, Square, Check
+  Banknote, QrCode, Printer, CheckCircle2, Mic, Square, Check, Loader2, X, Filter
 } from "lucide-react";
 import { medicineService } from "../../../services/inventory/medicine.service";
 import { orderService } from "../../../services/sales/order.service";
@@ -24,13 +24,14 @@ function getBranchInfoFromToken() {
         .join('')
     );
     const decoded = JSON.parse(jsonPayload);
+    const savedBranch = localStorage.getItem("branchId") || "";
     return {
-      branchId: decoded.branchId || null,
-      fullName: decoded.fullName || "Dược sĩ Trần Thị A"
+      branchId: decoded.branchId || savedBranch || "",
+      fullName: decoded.fullName || "Dược sĩ"
     };
   } catch (e) {
     console.error("Lỗi giải mã token:", e);
-    return { branchId: null, fullName: "Dược sĩ Trần Thị A" };
+    return { branchId: localStorage.getItem("branchId") || "", fullName: "Dược sĩ" };
   }
 }
 
@@ -45,6 +46,23 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [remarks, setRemarks] = useState("");
+
+  // Pharmacist Filter States
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedClassification, setSelectedClassification] = useState("");
+  const [stockFilter, setStockFilter] = useState("ALL");
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
+  const [classificationsList, setClassificationsList] = useState<string[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    medicineService.getFilters().then((res: any) => {
+      if (res) {
+        if (Array.isArray(res.categories)) setCategoriesList(res.categories);
+        if (Array.isArray(res.classifications)) setClassificationsList(res.classifications);
+      }
+    }).catch(err => console.error("Lỗi lấy bộ lọc thuốc:", err));
+  }, []);
 
   const [voucherCode, setVoucherCode] = useState("");
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
@@ -298,24 +316,35 @@ export default function RetailView({ showToast }: RetailViewProps) {
     }
   };
 
-  // Debounce search query
+  // Debounce search query & filters
   useEffect(() => {
-    if (!searchQuery) {
+    if (!searchQuery && !selectedCategory && !selectedClassification && stockFilter === "ALL") {
       setSearchResults([]);
+      setIsDropdownOpen(false);
       return;
     }
     const delay = setTimeout(() => {
       searchMedicines(searchQuery);
     }, 300);
     return () => clearTimeout(delay);
-  }, [searchQuery]);
+  }, [searchQuery, selectedCategory, selectedClassification, stockFilter]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsDropdownOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const { onEvent, offEvent } = useSocket();
 
   useEffect(() => {
     const handleInventoryUpdate = (data: any) => {
       console.log('Inventory updated event received in RetailView:', data);
-      if (searchQuery) {
+      if (searchQuery || selectedCategory || selectedClassification) {
         searchMedicines(searchQuery);
       }
     };
@@ -325,14 +354,29 @@ export default function RetailView({ showToast }: RetailViewProps) {
     return () => {
       offEvent('broadcast.inventory_updated', handleInventoryUpdate);
     };
-  }, [onEvent, offEvent, searchQuery]);
+  }, [onEvent, offEvent, searchQuery, selectedCategory, selectedClassification]);
 
-  const searchMedicines = async (query: string) => {
+  const searchMedicines = async (query: string, cat?: string, cls?: string, stockF?: string) => {
     setLoading(true);
     try {
       const { branchId } = getBranchInfoFromToken();
-      const data = await medicineService.getBranchMedicines(branchId || '', { limit: 10, search: query });
-      setSearchResults(data.data || []);
+      const catParam = cat !== undefined ? cat : selectedCategory;
+      const clsParam = cls !== undefined ? cls : selectedClassification;
+      const data = await medicineService.getBranchMedicines(branchId || '', {
+        limit: 20,
+        search: query,
+        category: catParam || undefined,
+        classification: clsParam || undefined,
+      });
+      let res = data.data || [];
+      const currentStockF = stockF !== undefined ? stockF : stockFilter;
+      if (currentStockF === "IN_STOCK") {
+        res = res.filter((m: any) => m.stock > 0);
+      } else if (currentStockF === "OUT_OF_STOCK") {
+        res = res.filter((m: any) => m.stock <= 0);
+      }
+      setSearchResults(res);
+      setIsDropdownOpen(true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -483,19 +527,28 @@ export default function RetailView({ showToast }: RetailViewProps) {
       <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-6 pb-6">
 
         {/* Tìm kiếm & Tư vấn bằng giọng nói AI */}
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 flex flex-col gap-3">
           <div className="flex gap-3 items-center">
             <div className="relative flex-1">
               <div className="absolute inset-y-0 left-0 pl-4.5 flex items-center pointer-events-none text-slate-400">
-                <SearchIcon size={18} />
+                {loading ? <Loader2 size={18} className="animate-spin text-[#0057cd]" /> : <SearchIcon size={18} />}
               </div>
               <input
                 type="text"
-                placeholder="Tìm kiếm nhanh theo tên thuốc hoặc hoạt chất để thêm vào giỏ hàng..."
+                placeholder="Tìm kiếm nhanh theo tên thuốc, hoạt chất, số đăng ký, mã vạch..."
                 value={searchQuery}
+                onFocus={() => { if (searchResults.length > 0) setIsDropdownOpen(true); }}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all shadow-sm"
+                className="w-full pl-11 pr-10 py-3.5 bg-white border border-slate-200 rounded-[12px] text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#0057cd] transition-all shadow-sm text-sm"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => { setSearchQuery(""); }}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
             <button
               onClick={() => setVoiceModalOpen(true)}
@@ -505,21 +558,109 @@ export default function RetailView({ showToast }: RetailViewProps) {
             </button>
           </div>
 
+          {/* Thanh Bộ Lọc Thuốc Nâng Cao */}
+          <div className="flex flex-wrap items-center gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mr-1">
+              <Filter size={14} className="text-[#0057cd]" /> Bộ lọc:
+            </div>
+
+            {/* Select Nhóm Thuốc */}
+            <select
+              value={selectedCategory}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedCategory(val);
+                searchMedicines(searchQuery, val, selectedClassification, stockFilter);
+              }}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#0057cd] cursor-pointer"
+            >
+              <option value="">Tất cả Nhóm thuốc</option>
+              {categoriesList.length > 0 ? (
+                categoriesList.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))
+              ) : (
+                <>
+                  <option value="Kháng sinh">Thuốc kháng sinh</option>
+                  <option value="Giảm đau - Hạ sốt">Giảm đau - Hạ sốt</option>
+                  <option value="Tim mạch">Tim mạch</option>
+                  <option value="Tiêu hóa">Tiêu hóa</option>
+                  <option value="Thực phẩm chức năng">Thực phẩm chức năng</option>
+                  <option value="Dược mỹ phẩm">Dược mỹ phẩm</option>
+                  <option value="Vật tư y tế">Vật tư y tế</option>
+                </>
+              )}
+            </select>
+
+            {/* Select Phân loại thuốc */}
+            <select
+              value={selectedClassification}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedClassification(val);
+                searchMedicines(searchQuery, selectedCategory, val, stockFilter);
+              }}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#0057cd] cursor-pointer"
+            >
+              <option value="">Tất cả Phân loại</option>
+              <option value="PRESCRIPTION">Thuốc kê đơn (Rx)</option>
+              <option value="NON_PRESCRIPTION">Thuốc không kê đơn (OTC)</option>
+              <option value="SUPPLEMENT">Thực phẩm chức năng</option>
+              <option value="MEDICAL_EQUIPMENT">Vật tư y tế</option>
+            </select>
+
+            {/* Select Tồn kho */}
+            <select
+              value={stockFilter}
+              onChange={(e) => {
+                const val = e.target.value;
+                setStockFilter(val);
+                searchMedicines(searchQuery, selectedCategory, selectedClassification, val);
+              }}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#0057cd] cursor-pointer"
+            >
+              <option value="ALL">Tất cả tồn kho</option>
+              <option value="IN_STOCK">Còn hàng (Tồn &gt; 0)</option>
+              <option value="OUT_OF_STOCK">Hết hàng (Tồn = 0)</option>
+            </select>
+
+            {/* Nút Reset Lọc */}
+            {(selectedCategory || selectedClassification || stockFilter !== "ALL" || searchQuery) && (
+              <button
+                onClick={() => {
+                  setSelectedCategory("");
+                  setSelectedClassification("");
+                  setStockFilter("ALL");
+                  setSearchQuery("");
+                  setSearchResults([]);
+                  setIsDropdownOpen(false);
+                }}
+                className="px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors flex items-center gap-1 ml-auto cursor-pointer"
+              >
+                <X size={12} /> Đặt lại
+              </button>
+            )}
+          </div>
+
           {/* Kết quả tìm kiếm dropdown */}
-          {searchResults.length > 0 && (
-            <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl border border-slate-200 shadow-xl max-h-72 overflow-y-auto z-40 divide-y divide-slate-100">
+          {isDropdownOpen && searchResults.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl border border-slate-200 shadow-xl max-h-80 overflow-y-auto z-40 divide-y divide-slate-100">
+              <div className="p-2 bg-slate-50 text-[11px] font-bold text-slate-500 flex justify-between items-center sticky top-0 border-b border-slate-100">
+                <span>Tìm thấy {searchResults.length} kết quả</span>
+                <span className="text-[10px] text-slate-400">Nhấn Esc để đóng</span>
+              </div>
               {searchResults.map((med) => (
                 <button
-                  key={med.id}
-                  onClick={() => addToCart(med)}
-                  className="w-full p-4 text-left hover:bg-slate-50 transition-colors flex items-center justify-between"
+                  key={med.id || med._id}
+                  onClick={() => { addToCart(med); setIsDropdownOpen(false); }}
+                  className="w-full p-3.5 text-left hover:bg-slate-50 transition-colors flex items-center justify-between group"
                 >
                   <div>
-                    <div className="font-bold text-slate-900 text-[14px]">{med.name}</div>
+                    <div className="font-bold text-slate-900 text-[14px] group-hover:text-[#0057cd] transition-colors">{med.name}</div>
                     <div className="text-[11px] text-slate-500 mt-0.5">{med.category} | Hoạt chất: {med.active_ingredient || "N/A"}</div>
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end">
-                    <div className="font-bold text-[#0057cd]">{med.price.toLocaleString()}₫</div>
+                    <div className="font-bold text-[#0057cd]">{med.price?.toLocaleString()}₫</div>
                     <div className="text-[10px] text-slate-500 mt-0.5 font-semibold">Tồn kho khả dụng: {med.stock} {med.unit}</div>
                     {med.stock <= 0 && (
                       <span className="text-[9px] font-bold text-rose-500 mt-1 uppercase border border-rose-200 bg-rose-50 px-1.5 py-0.5 rounded">Hết hàng - Tìm thay thế</span>
