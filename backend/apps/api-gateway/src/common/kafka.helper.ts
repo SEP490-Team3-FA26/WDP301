@@ -11,7 +11,7 @@ import { HttpException } from '@nestjs/common';
  * @param client The ClientKafka instance
  * @param topics Array of topic names
  */
-export async function subscribeToKafkaTopics(client: ClientKafka, topics: string[], retries = 20, delay = 3000) {
+export async function subscribeToKafkaTopics(client: ClientKafka, topics: string[], retries = 60, delay = 3000) {
   for (const topic of topics) {
     client.subscribeToResponseOf(topic);
   }
