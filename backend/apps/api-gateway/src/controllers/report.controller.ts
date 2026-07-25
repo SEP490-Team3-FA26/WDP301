@@ -431,7 +431,8 @@ export class ReportController implements OnModuleInit {
         console.warn('Kafka dataset query failed for AI forecast:', kafkaErr);
       }
 
-      let aiUrl = 'http://ai-service:8000/api/ai/forecast';
+      const baseUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+      let aiUrl = `${baseUrl}/api/ai/forecast`;
       try {
         const response = await fetch(aiUrl, {
           method: 'POST',
@@ -663,7 +664,8 @@ export class ReportController implements OnModuleInit {
       // 4. Gọi Python AI Service để thực hiện dự báo và phân tích
       let aiResult: any = null;
       try {
-        let aiUrl = 'http://ai-service:8000/api/ai/seasonal-analysis';
+        const baseUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+        let aiUrl = `${baseUrl}/api/ai/seasonal-analysis`;
         let aiResponse;
         try {
           aiResponse = await fetch(aiUrl, {
