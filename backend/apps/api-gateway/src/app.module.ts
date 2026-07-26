@@ -27,6 +27,8 @@ import { StockTransferController } from './controllers/stock-transfer.controller
 import { AdminEmployeeController } from './controllers/admin-employee.controller';
 import { ReportController } from './controllers/report.controller';
 import { QuotaController } from './controllers/quota.controller';
+import { FinanceController } from './controllers/finance.controller';
+import { subscribeToKafkaTopics } from './common/kafka.helper';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -70,7 +72,7 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
+        secret: process.env.JWT_SECRET || config.get<string>('JWT_SECRET') || 'wdp301-super-secret-key-change-in-production',
         signOptions: { expiresIn: config.get<string>('JWT_EXPIRES_IN', '3600s') },
       }),
       inject: [ConfigService],
@@ -182,6 +184,7 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
     AdminEmployeeController,
     ReportController,
     QuotaController,
+    FinanceController,
   ],
   providers: [
     JwtAuthGuard,
@@ -191,22 +194,39 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
     ReportService,
   ],
 })
-export class AppGatewayModule {
+export class AppGatewayModule implements OnModuleInit {
   constructor(
     @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientKafka,
     @Inject('SUPPLIER_SERVICE') private readonly supplierClient: ClientKafka,
     @Inject('USER_SERVICE') private readonly userClient: ClientKafka,
     @Inject('ORDER_SERVICE') private readonly orderClient: ClientKafka,
     @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
-  ) {
+  ) {}
+
+  async onModuleInit() {
     // 1. INVENTORY_SERVICE Reply Topics
     const inventoryTopics = [
       'inventory.medicine.list',
       'inventory.medicine.get_by_id',
       'inventory.medicine.update_status',
+      'inventory.medicine.update_price_tiers',
       'inventory.medicine.get_filters',
       'inventory.medicine.stats',
       'inventory.medicine.expiration_report',
+      'inventory.medicine.handle_expiration_action',
+      'inventory.medicine.low_stock_report',
+      'inventory.medicine.dropdown_list',
+      'inventory.medicine.get_alternatives',
+      'inventory.medicine.update_price',
+      'inventory.medicine.safe_stock_chain',
+      'inventory.medicine.detect_anomalies',
+      'inventory.medicine.branch_list',
+      'inventory.medicine.create',
+      'inventory.medicine.update',
+      'inventory.reports.forecast_dataset',
+      'inventory.reports.seasonal_trends',
+      'inventory.report.create',
+      'inventory.report.list',
       'inventory.pr.create',
       'inventory.pr.list',
       'inventory.pr.get_by_id',
@@ -228,6 +248,7 @@ export class AppGatewayModule {
       'inventory.inspection.submit',
       'inventory.inspection.list',
       'inventory.transactions.list',
+      'inventory.prescription.get',
       'inventory.prescription.get_by_code',
       'inventory.prescription.list',
       'inventory.sales.create',
@@ -247,18 +268,12 @@ export class AppGatewayModule {
       'quota.get.summary',
       'quota.get.all',
     ];
-    for (const t of inventoryTopics) {
-      this.inventoryClient.subscribeToResponseOf(t);
-    }
 
     // 2. SUPPLIER_SERVICE Reply Topics
     const supplierTopics = [
       'supplier.get_all',
       'supplier.create',
     ];
-    for (const t of supplierTopics) {
-      this.supplierClient.subscribeToResponseOf(t);
-    }
 
     // 3. USER_SERVICE Reply Topics
     const userTopics = [
@@ -279,9 +294,6 @@ export class AppGatewayModule {
       'user.admin.employee.update',
       'user.admin.employee.ban_unban',
     ];
-    for (const t of userTopics) {
-      this.userClient.subscribeToResponseOf(t);
-    }
 
     // 4. ORDER_SERVICE Reply Topics
     const orderTopics = [
@@ -289,10 +301,10 @@ export class AppGatewayModule {
       'orders.check',
       'orders.list',
       'orders.my-orders',
+      'finance.expense.create',
+      'finance.expense.list',
+      'finance.cashflow.summary',
     ];
-    for (const t of orderTopics) {
-      this.orderClient.subscribeToResponseOf(t);
-    }
 
     // 5. KAFKA_SERVICE Reply Topics
     const kafkaTopics = [
@@ -310,10 +322,15 @@ export class AppGatewayModule {
       'auth.verify.email',
       'auth.resend.verification',
     ];
-    for (const t of kafkaTopics) {
-      this.kafkaClient.subscribeToResponseOf(t);
-    }
 
-    console.log('🏁 [API Gateway] All global Kafka reply topics pre-subscribed successfully.');
+    await Promise.all([
+      subscribeToKafkaTopics(this.inventoryClient, inventoryTopics, 60, 3000),
+      subscribeToKafkaTopics(this.supplierClient, supplierTopics, 60, 3000),
+      subscribeToKafkaTopics(this.userClient, userTopics, 60, 3000),
+      subscribeToKafkaTopics(this.orderClient, orderTopics, 60, 3000),
+      subscribeToKafkaTopics(this.kafkaClient, kafkaTopics, 60, 3000),
+    ]);
+
+    console.log('🏁 [API Gateway] All global Kafka reply topics pre-subscribed & connected successfully.');
   }
 }

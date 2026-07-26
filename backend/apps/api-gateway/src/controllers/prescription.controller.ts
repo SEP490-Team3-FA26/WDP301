@@ -12,10 +12,15 @@ export class PrescriptionController implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await subscribeToKafkaTopics(this.inventoryClient, [
+    const topics = [
       'inventory.prescription.get',
+      'inventory.prescription.get_by_code',
       'inventory.prescription.list',
-    ]);
+    ];
+    for (const topic of topics) {
+      this.inventoryClient.subscribeToResponseOf(topic);
+    }
+    await this.inventoryClient.connect();
   }
 
   private getAiServiceHost(): string {
@@ -54,7 +59,8 @@ export class PrescriptionController implements OnModuleInit {
         signal: controller.signal,
       }).catch(async () => {
         // Fallback for docker container naming if localhost fails
-        return await fetch('http://ai-service:8000/api/ai/scan-prescription-v2', {
+        const aiUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+        return await fetch(`${aiUrl}/api/ai/scan-prescription-v2`, {
           method: 'POST',
           headers: {
             'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
@@ -117,7 +123,8 @@ export class PrescriptionController implements OnModuleInit {
         body: formData,
         signal: controller.signal,
       }).catch(async () => {
-        return await fetch('http://ai-service:8000/api/prescription', {
+        const aiUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+        return await fetch(`${aiUrl}/api/prescription`, {
           method: 'POST',
           headers: {
             'X-Internal-Token': process.env.JWT_SECRET || 'wdp301-super-secret-key-change-in-production',
@@ -161,7 +168,8 @@ export class PrescriptionController implements OnModuleInit {
         },
         body: JSON.stringify({ symptoms }),
       }).catch(async () => {
-        return await fetch('http://ai-service:8000/api/ai/symptom-consult', {
+        const aiUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
+        return await fetch(`${aiUrl}/api/ai/symptom-consult`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -185,13 +193,17 @@ export class PrescriptionController implements OnModuleInit {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   async listPrescriptions() {
-    return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.list', {});
+    try {
+      return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.list', {});
+    } catch (error) {
+      return [];
+    }
   }
 
   @Get(':code')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   async getPrescriptionByCode(@Param('code') code: string) {
     return await sendKafkaMessage(this.inventoryClient, 'inventory.prescription.get', { code });
   }

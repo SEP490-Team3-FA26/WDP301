@@ -61,7 +61,7 @@ export class PurchaseService {
         'supplier.credit.check_limit',
         'supplier.credit.record_grn',
       ],
-      20,
+      60,
       3000,
     );
   }

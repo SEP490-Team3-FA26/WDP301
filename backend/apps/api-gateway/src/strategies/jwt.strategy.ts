@@ -16,7 +16,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       // Từ chối token đã hết hạn
       ignoreExpiration: false,
       // Secret key để xác minh chữ ký của token
-      secretOrKey: config.get<string>('JWT_SECRET'),
+      secretOrKey: process.env.JWT_SECRET || config.get<string>('JWT_SECRET') || 'wdp301-super-secret-key-change-in-production',
     });
   }
 

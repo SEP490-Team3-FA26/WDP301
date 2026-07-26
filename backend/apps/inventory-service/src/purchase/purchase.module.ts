@@ -39,6 +39,7 @@ import { QuotaModule } from '../quota/quota.module';
           consumer: {
             groupId: 'inventory-supplier-group',
           },
+          producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
     ]),

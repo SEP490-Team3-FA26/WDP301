@@ -78,20 +78,117 @@ export class MedicineService implements OnModuleInit {
 
   async getMedicineFilters() {
     try {
-      console.log('📨 [Inventory MS] Nhận yêu cầu lấy bộ lọc thuốc');
+      this.logger.log('📨 [Inventory MS] Nhận yêu cầu lấy bộ lọc thuốc');
       const categories = await this.medicineModel.distinct('category').exec();
       const classifications = await this.medicineModel.distinct('drug_classification').exec();
       return {
-        categories: categories.filter(c => c),
-        classifications: classifications.filter(c => c)
+        categories: (categories || []).filter(c => Boolean(c) && typeof c === 'string'),
+        classifications: (classifications || []).filter(c => Boolean(c) && typeof c === 'string')
       };
     } catch (error) {
-      throw new RpcException(error.message || 'Lỗi lấy bộ lọc thuốc');
+      this.logger.error('Lỗi lấy bộ lọc thuốc, trả về bộ lọc mặc định:', error);
+      return {
+        categories: ['Kháng sinh', 'Hạ sốt & Giảm đau', 'Tim mạch', 'Tiêu hóa', 'Thực phẩm chức năng', 'Vật tư y tế'],
+        classifications: ['PRESCRIPTION', 'NON_PRESCRIPTION', 'SUPPLEMENT']
+      };
+    }
+  }
+
+  async createMedicine(data: any) {
+    try {
+      this.logger.log(`[createMedicine] Creating new medicine: ${data?.name}`);
+      if (!data?.name) {
+        throw new RpcException('Tên dược phẩm không được để trống');
+      }
+
+      const sku = data.sku || Math.floor(100000 + Math.random() * 900000).toString();
+      const barcode = data.barcode || sku;
+      const drug_classification = data.drug_classification || 'NORMAL';
+      const category = data.category || 'Thuốc thường';
+      const unit = data.unit || 'Hộp';
+      const price = Number(data.price) || 0;
+      const safetyStock = Number(data.safetyStock) || 50;
+      const reorderPoint = Number(data.reorderPoint) || 100;
+      const initialStock = Number(data.stock) || 0;
+
+      const newMedicine = new this.medicineModel({
+        ...data,
+        sku,
+        barcode,
+        drug_classification,
+        category,
+        unit,
+        price,
+        safetyStock,
+        reorderPoint,
+        stock: initialStock,
+        status: data.status || 'ACTIVE',
+      });
+
+      const saved = await newMedicine.save();
+
+      // If initial stock > 0, create an initial batch
+      if (initialStock > 0) {
+        const expDate = data.expiry_date ? new Date(data.expiry_date) : new Date('2027-12-31');
+        await this.batchModel.create({
+          medicineId: saved._id.toString(),
+          batchNo: `INIT-${saved.sku || saved._id.toString().substring(0, 6)}`,
+          expDate,
+          mfgDate: new Date(),
+          stock: initialStock,
+          importPrice: Math.round(price * 0.7),
+          supplierId: data.supplierId || null,
+          status: 'ACTIVE',
+        });
+      }
+
+      this.logger.log(`[createMedicine] Successfully created medicine with ID: ${saved._id}`);
+      return {
+        ...saved.toObject(),
+        id: saved._id.toString(),
+      };
+    } catch (error) {
+      this.logger.error(`[createMedicine] Error creating medicine: ${error.message}`, error.stack);
+      throw new RpcException(error.message || 'Lỗi khi tạo dược phẩm mới');
+    }
+  }
+
+  async updateMedicine(id: string, updateData: any) {
+    try {
+      this.logger.log(`[updateMedicine] Updating medicine with ID: "${id}"`);
+      const existing = await this.medicineModel.findById(id).exec();
+      if (!existing) {
+        throw new RpcException(`Không tìm thấy dược phẩm với ID: ${id}`);
+      }
+
+      const { _id, id: medId, ...cleanData } = updateData;
+      if (cleanData.price !== undefined) cleanData.price = Number(cleanData.price);
+      if (cleanData.safetyStock !== undefined) cleanData.safetyStock = Number(cleanData.safetyStock);
+      if (cleanData.reorderPoint !== undefined) cleanData.reorderPoint = Number(cleanData.reorderPoint);
+
+      const updated = await this.medicineModel.findByIdAndUpdate(
+        id,
+        { $set: cleanData },
+        { new: true }
+      ).exec();
+
+      this.logger.log(`[updateMedicine] Successfully updated medicine "${updated?.name}"`);
+      return {
+        ...updated?.toObject(),
+        id: updated?._id.toString(),
+      };
+    } catch (error) {
+      this.logger.error(`[updateMedicine] Error updating medicine "${id}": ${error.message}`, error.stack);
+      throw new RpcException(error.message || 'Lỗi khi cập nhật thông tin dược phẩm');
     }
   }
 
   async getMedicineById(id: string) {
     try {
+      if (!id || typeof id !== 'string' || !id.match(/^[0-9a-fA-F]{24}$/)) {
+        this.logger.warn(`[getMedicineById] Invalid ObjectId string provided: "${id}"`);
+        throw new RpcException(`Mã thuốc "${id}" không hợp lệ`);
+      }
       this.logger.log(`[getMedicineById] Querying medicine by ID from MongoDB: "${id}"`);
       const medicine = await this.medicineModel.findById(id).exec();
       if (!medicine) {
@@ -253,7 +350,7 @@ export class MedicineService implements OnModuleInit {
     bypassAiSearch?: boolean;
   }) {
     try {
-      console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', query);
+      console.log('📨 [Inventory MS] Nhận yêu cầu lấy danh sách thuốc:', JSON.stringify(query));
       const page = query.page || 1;
       const limit = query.limit || 10;
       const search = query.search || '';
@@ -457,10 +554,13 @@ export class MedicineService implements OnModuleInit {
           this.logger.log(`Executing fallback Mongoose regex search for "${search}"`);
           const filterQuery: any = {};
           const conditionsCopy = [...conditions];
+          const safeSearch = search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
           conditionsCopy.push({
             $or: [
-              { name: { $regex: search, $options: 'i' } },
-              { active_ingredient: { $regex: search, $options: 'i' } }
+              { name: { $regex: safeSearch, $options: 'i' } },
+              { active_ingredient: { $regex: safeSearch, $options: 'i' } },
+              { sku: { $regex: safeSearch, $options: 'i' } },
+              { barcode: { $regex: safeSearch, $options: 'i' } }
             ]
           });
           filterQuery.$and = conditionsCopy;
@@ -1627,5 +1727,3 @@ export class MedicineService implements OnModuleInit {
     }
   }
 }
-
-

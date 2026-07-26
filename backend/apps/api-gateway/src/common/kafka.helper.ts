@@ -13,7 +13,11 @@ import { HttpException } from '@nestjs/common';
  */
 export async function subscribeToKafkaTopics(client: ClientKafka, topics: string[], retries = 20, delay = 3000) {
   for (const topic of topics) {
-    client.subscribeToResponseOf(topic);
+    try {
+      client.subscribeToResponseOf(topic);
+    } catch (e: any) {
+      // Ignore if topic response subscription already registered or client connected
+    }
   }
   for (let i = 0; i < retries; i++) {
     try {
@@ -24,11 +28,8 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
       const isLastAttempt = i === retries - 1;
       if (isLastAttempt) {
         console.error(`❌ Kafka client failed to connect to topics: ${topics.join(', ')} after ${retries} attempts.`, error);
-        try { await client.close(); } catch(e) {}
         throw error;
       }
-      // Xoá cache connection cũ để NestJS ClientKafka thử kết nối lại thực sự từ đầu
-      try { await client.close(); } catch(e) {}
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -47,11 +48,11 @@ export async function sendKafkaMessage(client: ClientKafka, topic: string, data:
     const payload = (data && typeof data === 'object') ? JSON.parse(JSON.stringify(data)) : data;
     console.log(`[API-Gateway][sendKafkaMessage] Sending to topic "${topic}"`);
     const result: any = await lastValueFrom(
-      client.send(topic, payload).pipe(timeout(15000))
+      client.send(topic, payload).pipe(timeout(30000))
     );
     console.log(`[API-Gateway][sendKafkaMessage] Received response from topic "${topic}"`);
     if (result?.error) {
-      throw new HttpException(result.message || 'Internal Microservice Error', result.statusCode || 400);
+      throw new HttpException(result.message || 'Internal Microservice Error', result.statusCode || 500);
     }
     return result;
   } catch (err: any) {
@@ -64,16 +65,30 @@ export async function sendKafkaMessage(client: ClientKafka, topic: string, data:
       throw err;
     }
 
+    console.error(`[API-Gateway][sendKafkaMessage] Exception on topic "${topic}":`, err?.message || err);
+
+    if (err?.name === 'TimeoutError') {
+      throw new HttpException(`Microservice timeout on topic "${topic}"`, HttpStatus.GATEWAY_TIMEOUT);
+    }
+
     let message = 'Lỗi hệ thống từ microservice';
     let statusCode = 500;
 
     try {
-      // RpcException message thường là JSON: { message, statusCode } hoặc plain string
-      const parsed = typeof err.message === 'string' ? JSON.parse(err.message) : err.message;
-      message = parsed?.message || parsed || err.message;
-      statusCode = parsed?.statusCode || 400;
+      if (typeof err?.message === 'string' && err.message.trim().startsWith('{')) {
+        const parsed = JSON.parse(err.message);
+        message = parsed?.message || message;
+        statusCode = parsed?.statusCode || 500;
+      } else if (typeof err?.message === 'string' && err.message.length > 0) {
+        message = err.message;
+        statusCode = err?.statusCode || 500;
+      } else if (err?.error && typeof err.error === 'string') {
+        message = err.error;
+        statusCode = 500;
+      }
     } catch {
-      message = err.message || message;
+      message = err?.message || message;
+      statusCode = 500;
     }
 
     throw new HttpException(message, statusCode);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Search, RotateCcw, ArrowLeftRight, CheckCircle2, XCircle, AlertTriangle, Printer,
-  Plus, Minus, Trash2, User, Phone, Calendar, DollarSign, X, RefreshCw, FileText, ChevronRight
+  Plus, Minus, Trash2, User, Phone, Calendar, DollarSign, X, RefreshCw, FileText, ChevronRight, Loader2, Filter
 } from "lucide-react";
 import { orderService } from "../../../services/sales/order.service";
 import { medicineService } from "../../../services/inventory/medicine.service";
@@ -18,12 +18,13 @@ function getBranchInfoFromToken() {
         .join('')
     );
     const decoded = JSON.parse(jsonPayload);
+    const savedBranch = localStorage.getItem("branchId") || "";
     return {
-      branchId: decoded.branchId,
-      fullName: decoded.fullName
+      branchId: decoded.branchId || savedBranch || "",
+      fullName: decoded.fullName || "Dược sĩ"
     };
   } catch (err) {
-    return { branchId: null, fullName: null };
+    return { branchId: localStorage.getItem("branchId") || "", fullName: "Dược sĩ" };
   }
 }
 
@@ -54,6 +55,17 @@ export default function ReturnsView({ showToast }: ReturnsViewProps) {
   const [medicineSearchResults, setMedicineSearchResults] = useState<any[]>([]);
   const [loadingMedicines, setLoadingMedicines] = useState(false);
   const [isSubmittingExchange, setIsSubmittingExchange] = useState(false);
+  const [selectedExchangeCategory, setSelectedExchangeCategory] = useState("");
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
+  const [isExchangeDropdownOpen, setIsExchangeDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    medicineService.getFilters().then((res: any) => {
+      if (res && Array.isArray(res.categories)) {
+        setCategoriesList(res.categories);
+      }
+    }).catch(err => console.error("Lỗi lấy bộ lọc thuốc:", err));
+  }, []);
 
   // --- Invoice & Printing Modal States ---
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -81,6 +93,43 @@ export default function ReturnsView({ showToast }: ReturnsViewProps) {
     }, 300);
     return () => clearTimeout(delay);
   }, [searchQuery, selectedType]);
+
+  // Search medicine for exchange with filters & debounce
+  useEffect(() => {
+    if (medicineSearchQuery.trim().length === 0 && !selectedExchangeCategory) {
+      setMedicineSearchResults([]);
+      setIsExchangeDropdownOpen(false);
+      return;
+    }
+    const delay = setTimeout(async () => {
+      setLoadingMedicines(true);
+      try {
+        const { branchId } = getBranchInfoFromToken();
+        const data = await medicineService.getBranchMedicines(branchId || '', {
+          limit: 15,
+          search: medicineSearchQuery,
+          category: selectedExchangeCategory || undefined
+        });
+        setMedicineSearchResults(data.data || []);
+        setIsExchangeDropdownOpen(true);
+      } catch (err) {
+        console.error("Lỗi khi tìm kiếm thuốc đổi:", err);
+      } finally {
+        setLoadingMedicines(false);
+      }
+    }, 300);
+    return () => clearTimeout(delay);
+  }, [medicineSearchQuery, selectedExchangeCategory]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsExchangeDropdownOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Reset forms when selected order changes
   useEffect(() => {
@@ -291,14 +340,24 @@ export default function ReturnsView({ showToast }: ReturnsViewProps) {
 
         {/* Search Input */}
         <div className="relative mb-4">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+            {loadingOrders ? <Loader2 size={16} className="animate-spin text-[#0057cd]" /> : <Search size={16} />}
+          </div>
           <input
             type="text"
-            placeholder="Tìm theo ID hóa đơn, SĐT hoặc Tên..."
+            placeholder="Tìm theo Mã hóa đơn, SĐT hoặc Tên khách..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0057cd] transition-all"
+            className="w-full pl-10 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0057cd] transition-all"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         {/* Sales Type Filters */}
@@ -824,46 +883,72 @@ export default function ReturnsView({ showToast }: ReturnsViewProps) {
                   {/* Step 2: Search and add replacement medicines */}
                   <div className="space-y-3 pt-3 border-t border-slate-100 relative">
                     <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">Bước 2: Chọn sản phẩm đổi lấy mới</h5>
-                    <div className="relative">
-                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                      <input
-                        type="text"
-                        placeholder="Tìm thuốc thay thế..."
-                        value={medicineSearchQuery}
-                        onChange={(e) => setMedicineSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold placeholder-slate-400 focus:outline-none focus:border-[#0057cd]"
-                      />
+                    <div className="relative flex flex-col gap-2">
+                      <div className="relative">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                          {loadingMedicines ? <Loader2 size={14} className="animate-spin text-[#0057cd]" /> : <Search size={14} />}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Tìm thuốc thay thế theo tên, hoạt chất, số đăng ký..."
+                          value={medicineSearchQuery}
+                          onFocus={() => { if (medicineSearchResults.length > 0) setIsExchangeDropdownOpen(true); }}
+                          onChange={(e) => setMedicineSearchQuery(e.target.value)}
+                          className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold placeholder-slate-400 focus:outline-none focus:border-[#0057cd]"
+                        />
+                        {medicineSearchQuery && (
+                          <button
+                            onClick={() => setMedicineSearchQuery("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Category filter for Exchange */}
+                      {categoriesList.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                            <Filter size={11} className="text-[#0057cd]" /> Nhóm:
+                          </span>
+                          <select
+                            value={selectedExchangeCategory}
+                            onChange={(e) => setSelectedExchangeCategory(e.target.value)}
+                            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 outline-none focus:border-[#0057cd] cursor-pointer"
+                          >
+                            <option value="">Tất cả Nhóm thuốc</option>
+                            {categoriesList.map((cat) => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
                       {/* Search dropdown */}
-                      {medicineSearchQuery && (
-                        <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 mt-1 max-h-56 overflow-y-auto custom-scrollbar">
-                          {loadingMedicines ? (
-                            <div className="p-4 text-center text-xs font-bold text-slate-400 gap-1.5 flex items-center justify-center">
-                              <RefreshCw className="animate-spin" size={12} /> Đang tìm kiếm...
-                            </div>
-                          ) : medicineSearchResults.length === 0 ? (
-                            <div className="p-4 text-center text-xs font-bold text-slate-400">
-                              Không tìm thấy thuốc nào
-                            </div>
-                          ) : (
-                            medicineSearchResults.map((med) => (
-                              <div
-                                key={med.id || med._id}
-                                onClick={() => addToExchangeCart(med)}
-                                className="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-50 last:border-0"
-                              >
-                                <div>
-                                  <div className="text-xs font-black text-slate-800">{med.name}</div>
-                                  <div className="text-[10px] text-slate-400 font-bold mt-0.5">
-                                    Tồn kho: {med.stock} {med.unit} | Giá sỉ/lẻ: {med.price.toLocaleString()}₫
-                                  </div>
+                      {isExchangeDropdownOpen && medicineSearchResults.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 mt-1 max-h-60 overflow-y-auto custom-scrollbar divide-y divide-slate-100">
+                          <div className="p-2 bg-slate-50 text-[10px] font-bold text-slate-400 flex justify-between items-center sticky top-0 border-b border-slate-100">
+                            <span>Tìm thấy {medicineSearchResults.length} thuốc</span>
+                            <span>Esc để đóng</span>
+                          </div>
+                          {medicineSearchResults.map((med) => (
+                            <div
+                              key={med.id || med._id}
+                              onClick={() => { addToExchangeCart(med); setIsExchangeDropdownOpen(false); }}
+                              className="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center group transition-colors"
+                            >
+                              <div>
+                                <div className="text-xs font-black text-slate-800 group-hover:text-[#0057cd] transition-colors">{med.name}</div>
+                                <div className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                  Tồn kho: {med.stock} {med.unit} | Đơn giá: {med.price?.toLocaleString()}₫
                                 </div>
-                                <button className="p-1.5 bg-blue-50 hover:bg-blue-100 text-[#0057cd] rounded-lg text-[10px] font-black uppercase">
-                                  Chọn
-                                </button>
                               </div>
-                            ))
-                          )}
+                              <button className="p-1.5 bg-blue-50 hover:bg-blue-100 text-[#0057cd] rounded-lg text-[10px] font-black uppercase">
+                                Chọn
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>

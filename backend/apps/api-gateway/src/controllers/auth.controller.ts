@@ -125,13 +125,21 @@ export class AuthController implements OnModuleInit {
       this.kafkaClient.send('auth.google.login', req.user)
     );
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const role = result.user?.role;
+    let targetUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    if (role === 'pharmacist' || role === 'admin' || role === 'head_branch' || role === 'warehouse') {
+      targetUrl = process.env.FRONTEND_STAFF_URL || 'http://localhost:3001'; // Thay đổi port/domain cho staff
+    } else {
+      targetUrl = process.env.FRONTEND_CUSTOMER_URL || process.env.FRONTEND_URL || 'http://localhost:3000'; // Dành cho customer
+    }
+
     if (result.error) {
-      return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(result.message)}`);
+      return res.redirect(`${targetUrl}/login?error=${encodeURIComponent(result.message)}`);
     }
 
     // Redirect về Frontend kèm JWT Token
-    return res.redirect(`${frontendUrl}/login?token=${result.access_token}`);
+    return res.redirect(`${targetUrl}/login?token=${result.access_token}`);
   }
 
   // ============================================================

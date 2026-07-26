@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck, Tag, TrendingDown, Trash2, RotateCcw } from "lucide-react";
+import { Plus, Search, Filter, MoreHorizontal, AlertCircle, CheckCircle2, Loader2, Eye, X, Package, TrendingUp, Calendar, Truck, Tag, TrendingDown, Trash2, RotateCcw, Edit2 } from "lucide-react";
 import { medicineService } from "../../services/inventory/medicine.service";
+import { CreateMedicineModal } from "../../components/CreateMedicineModal";
+import { EditMedicineModal } from "../../components/EditMedicineModal";
 
 export function Inventory() {
   const navigate = useNavigate();
@@ -18,6 +20,9 @@ export function Inventory() {
   const [total, setTotal] = useState(0);
 
   // New States
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingMedicine, setEditingMedicine] = useState<any>(null);
   const [selectedMedicine, setSelectedMedicine] = useState<any>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [fetchingDetails, setFetchingDetails] = useState(false);
@@ -244,27 +249,27 @@ export function Inventory() {
     setPage(1);
   }, [selectedCategory, selectedClassification]);
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const result = await medicineService.getMedicines({
+        search: debouncedSearch || undefined,
+        page,
+        limit,
+        category: selectedCategory || undefined,
+        classification: selectedClassification || undefined
+      });
+      setInventory(result.data);
+      setTotal(result.pagination?.total || 0);
+    } catch (error) {
+      console.error("Error fetching inventory:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch data from backend
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const result = await medicineService.getMedicines({
-          search: debouncedSearch || undefined,
-          page,
-          limit,
-          category: selectedCategory || undefined,
-          classification: selectedClassification || undefined
-        });
-        setInventory(result.data);
-        setTotal(result.pagination?.total || 0);
-      } catch (error) {
-        console.error("Error fetching inventory:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, [debouncedSearch, page, limit, selectedCategory, selectedClassification]);
 
@@ -334,7 +339,10 @@ export function Inventory() {
     <div className="flex flex-col gap-2 h-full bg-[#faf8ff] px-6 pt-4 pb-3 lg:px-8 overflow-hidden">
       <div className="flex flex-row justify-between items-center">
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">Tổng Quan Kho</h1>
-        <button className="px-4 py-1.5 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap text-sm">
+        <button 
+          onClick={() => setShowCreateModal(true)}
+          className="px-4 py-1.5 bg-[#0057cd] text-white font-bold rounded-xl hover:bg-[#00419e] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap text-sm"
+        >
           <Plus size={16} />
           Thêm thuốc
         </button>
@@ -669,6 +677,16 @@ export function Inventory() {
                         title="Cấu hình giá bán sỉ"
                       >
                         <Tag size={15} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingMedicine(item);
+                          setEditModalOpen(true);
+                        }}
+                        className="text-amber-600 hover:text-amber-800 transition-colors p-1.5 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-100"
+                        title="Sửa thông tin dược phẩm"
+                      >
+                        <Edit2 size={15} />
                       </button>
                       <button
                         onClick={() => fetchMedicineDetails(item.id)}
@@ -1218,10 +1236,22 @@ export function Inventory() {
               )}
             </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  if (selectedMedicine) {
+                    setEditingMedicine(selectedMedicine);
+                    setEditModalOpen(true);
+                  }
+                }}
+                className="px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 font-bold rounded-lg hover:bg-amber-100 transition-colors shadow-sm flex items-center gap-1.5 text-sm"
+              >
+                <Edit2 size={15} />
+                Sửa thông tin
+              </button>
               <button
                 onClick={() => setDetailModalOpen(false)}
-                className="px-5 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+                className="px-5 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-sm"
               >
                 Đóng
               </button>
@@ -1525,6 +1555,31 @@ export function Inventory() {
           </div>
         </div>
       )}
+      {/* Create Medicine Modal */}
+      <CreateMedicineModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          fetchData();
+          fetchStats();
+        }}
+      />
+      {/* Edit Medicine Modal */}
+      <EditMedicineModal
+        isOpen={editModalOpen}
+        product={editingMedicine}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditingMedicine(null);
+        }}
+        onSuccess={() => {
+          fetchData();
+          fetchStats();
+          if (selectedMedicine?.id) {
+            fetchMedicineDetails(selectedMedicine.id);
+          }
+        }}
+      />
     </div>
   );
 }

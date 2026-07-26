@@ -1,15 +1,41 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import prescription
+from scripts.index_from_mongo import main as index_db
+from qdrant_client import QdrantClient
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv()
+# Try to find .env in current or parent directories (like backend/.env)
+env_path = find_dotenv()
+if env_path:
+    load_dotenv(env_path)
+else:
+    load_dotenv()
 
-# Initialize basic tracing later if needed
-# Phoenix is currently disabled due to dependency conflicts
+app = FastAPI(
+    title="AI Prescription Service",
+    description="Microservice for handling symptom checking and AI prescription via LLMs",
+    version="1.0.0"
+)
 
-app = FastAPI(title="AI Prescription Service", version="1.0.0")
+# Initialize Qdrant collection on startup
+@app.on_event("startup")
+def init_qdrant():
+    try:
+        QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+        if "up.railway.app" in QDRANT_HOST:
+            qdrant = QdrantClient(url=f"https://{QDRANT_HOST}:443")
+        else:
+            qdrant = QdrantClient(host=QDRANT_HOST, port=6333)
+            
+        if not qdrant.collection_exists("medical_knowledge"):
+            print("Collection 'medical_knowledge' not found! Indexing from DB...")
+            index_db()
+        else:
+            print("Collection 'medical_knowledge' already exists.")
+    except Exception as e:
+        print(f"Error checking Qdrant collection on startup: {e}")
 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(

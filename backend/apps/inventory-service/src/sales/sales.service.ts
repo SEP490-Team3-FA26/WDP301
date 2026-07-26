@@ -102,23 +102,28 @@ export class SalesService implements OnModuleInit {
   }
 
   async listPrescriptions() {
-    this.logger.log('Listing all prescriptions from database');
-    const prescriptions = await this.prescriptionModel.find().sort({ createdAt: -1 }).exec();
-    return prescriptions.map(p => ({
-      id: p._id.toString(),
-      prescriptionCode: p.prescriptionCode,
-      patientName: p.patientName,
-      patientAge: p.patientAge,
-      patientGender: p.patientGender,
-      patientPhone: p.patientPhone,
-      doctorName: p.doctorName,
-      doctorSpecialty: p.doctorSpecialty,
-      hospitalName: p.hospitalName,
-      hospitalCode: p.hospitalCode,
-      items: p.items,
-      status: p.status,
-      createdAt: (p as any).createdAt
-    }));
+    try {
+      this.logger.log('Listing all prescriptions from database');
+      const prescriptions = await this.prescriptionModel.find().sort({ createdAt: -1 }).exec();
+      return (prescriptions || []).map(p => ({
+        id: p._id.toString(),
+        prescriptionCode: p.prescriptionCode,
+        patientName: p.patientName,
+        patientAge: p.patientAge,
+        patientGender: p.patientGender,
+        patientPhone: p.patientPhone,
+        doctorName: p.doctorName,
+        doctorSpecialty: p.doctorSpecialty,
+        hospitalName: p.hospitalName,
+        hospitalCode: p.hospitalCode,
+        items: p.items || [],
+        status: p.status,
+        createdAt: (p as any).createdAt
+      }));
+    } catch (error) {
+      this.logger.error('Lỗi khi truy vấn danh sách đơn thuốc từ database:', error);
+      return [];
+    }
   }
 
   private getTieredPrice(medicine: any, quantity: number): number {
