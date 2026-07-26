@@ -31,6 +31,11 @@ export const prescriptionService = {
       },
     });
     return response.data;
+  },
+
+  async textConsult(symptoms: string) {
+    const response = await api.post('/api/prescriptions/symptom-consult', { symptoms });
+    return response.data;
   }
 };
 

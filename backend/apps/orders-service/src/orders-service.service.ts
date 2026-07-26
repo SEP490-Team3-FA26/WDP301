@@ -37,15 +37,24 @@ export class OrdersServiceService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    this.inventoryClient.subscribeToResponseOf('inventory.sale.create');
-    this.inventoryClient.subscribeToResponseOf('inventory.sale.revert');
-    this.userClient.subscribeToResponseOf('user.loyalty.get');
-    this.userClient.subscribeToResponseOf('user.loyalty.lookup');
-    this.userClient.subscribeToResponseOf('user.loyalty.update_points');
-    this.authClient.subscribeToResponseOf('auth.get.user.by.id');
-    await this.inventoryClient.connect();
-    await this.userClient.connect();
-    await this.authClient.connect();
+    await subscribeToKafkaTopics(
+      this.inventoryClient,
+      ['inventory.sale.create', 'inventory.sale.revert'],
+      60,
+      3000,
+    );
+    await subscribeToKafkaTopics(
+      this.userClient,
+      ['user.loyalty.get', 'user.loyalty.lookup', 'user.loyalty.update_points'],
+      60,
+      3000,
+    );
+    await subscribeToKafkaTopics(
+      this.authClient,
+      ['auth.get.user.by.id'],
+      60,
+      3000,
+    );
 
     // Background job to cancel PENDING orders older than 15 minutes
     setInterval(() => {

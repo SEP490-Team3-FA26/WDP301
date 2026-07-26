@@ -5,7 +5,7 @@ FROM node:20-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-COPY backend/package.json backend/package-lock.json* ./
+COPY package.json package-lock.json* ./
 RUN npm install --legacy-peer-deps
 
 # ============================================================
@@ -16,7 +16,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY backend/ .
+COPY . .
 
 # Build tất cả services (nest build sẽ output vào ./dist)
 RUN npm run build:all
@@ -29,7 +29,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Chỉ copy production dependencies (không có devDeps)
-COPY backend/package.json backend/package-lock.json* ./
+COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --legacy-peer-deps
 
 # Copy source để ts-node không cần thiết – chỉ dùng dist
