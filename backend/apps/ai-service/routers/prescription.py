@@ -489,19 +489,189 @@ from pydantic import BaseModel
 class InteractionRequest(BaseModel):
     medicines: list[str]
 
+BANNED_SUBSTANCE_KEYWORDS = [
+    "thuốc lá", "thuoc la", "cần sa", "can sa", "420", "cannabis", "marijuana",
+    "heroin", "ma túy", "ma tuy", "cocaine", "methamphetamine", "ecstasy", "lsd",
+    "ketamine", "rượu", "ruou", "bia", "cồn", "thuốc lắc", "thuoc lac",
+    "cỏ mỹ", "co my", "bóng cười", "khí cười", "ma túy đá"
+]
+
+def check_banned_substances(medicines: list[str]) -> tuple[bool, list[dict]]:
+    """
+    Tầng 1: Bộ lọc Chất cấm & Chất kích thích.
+    """
+    detected = []
+    for med in medicines:
+        med_lower = (med or "").lower().strip()
+        for banned in BANNED_SUBSTANCE_KEYWORDS:
+            if banned == med_lower or (len(banned) > 2 and banned in med_lower):
+                detected.append(med)
+                break
+    
+    if not detected:
+        return False, []
+    
+    interactions = []
+    for d in detected:
+        desc = f"Phát hiện '{d}' thuộc danh mục chất cấm, ma túy, chất kích thích hoặc cồn nguy hại. Tự ý sử dụng hoặc phối hợp với thuốc gây hậu quả nghiêm trọng đến hệ thần kinh, tim mạch và tính mạng."
+        if "420" in d.lower():
+            desc = f"Phát hiện '{d}' (Thuật ngữ lóng của Cần sa / Ma túy) thuộc danh mục chất cấm bất hợp pháp. Tự ý sử dụng hoặc phối hợp với thuốc gây hậu quả nghiêm trọng đến hệ thần kinh và tính mạng."
+            
+        interactions.append({
+            "drug_a": d,
+            "drug_b": "Chất kích thích / Chất cấm / Độc chất",
+            "description": desc,
+            "recommendation": "CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI! Ngừng sử dụng ngay lập tức và tham vấn bác sĩ/dược sĩ."
+        })
+    return True, interactions
+
+def lookup_medicines_db(medicines: list[str]) -> tuple[dict, list[dict]]:
+    """
+    Tầng 2 & Tầng 3: Tra cứu MongoDB để lấy hoạt chất thực tế và phát hiện trùng lặp hoạt chất gây quá liều.
+    """
+    db_info = {}
+    ingredient_to_meds = {}
+    overdose_interactions = []
+
+    try:
+        collection = get_mongo_collection()
+    except Exception as exc:
+        print(f"[WARNING] Could not connect to Mongo for interaction lookup: {exc}")
+        return db_info, overdose_interactions
+
+    for med_name in medicines:
+        med_clean = (med_name or "").strip()
+        if not med_clean:
+            continue
+        
+        tokens = [t for t in re.split(r"\s+", med_clean) if len(t) >= 3]
+        search_terms = [med_clean] + tokens
+        
+        doc = None
+        for term in search_terms:
+            doc = collection.find_one({
+                "$or": [
+                    {"name": {"$regex": re.escape(term), "$options": "i"}},
+                    {"active_ingredient": {"$regex": re.escape(term), "$options": "i"}},
+                    {"thong_tin_chi_tiet.Thành phần": {"$regex": re.escape(term), "$options": "i"}},
+                ]
+            })
+            if doc:
+                break
+
+        if doc:
+            details = doc.get("thong_tin_chi_tiet") or {}
+            act = doc.get("active_ingredient") or details.get("Thành phần") or details.get("active_ingredient") or ""
+            contra = doc.get("contraindications") or details.get("Chống chỉ định") or details.get("Tác dụng phụ") or ""
+            inter = doc.get("drug_interactions") or details.get("Tương tác thuốc") or ""
+            
+            doc_name = doc.get("name") or med_clean
+            display_name = med_clean if med_clean.lower() == doc_name.lower() else f"{med_clean} (Tham khảo DB: {doc_name})"
+            
+            db_info[med_clean] = {
+                "name": display_name,
+                "active_ingredient": act,
+                "contraindications": contra,
+                "drug_interactions": inter
+            }
+            
+            if act and act != "Không rõ":
+                act_norm = _normalize_medicine_text(act)
+                ingredient_to_meds.setdefault(act_norm, []).append((med_clean, doc.get("name") or med_clean, act))
+
+    # Tầng 3: Kiểm tra trùng lặp hoạt chất gây quá liều
+    for act_norm, med_list in ingredient_to_meds.items():
+        if len(med_list) > 1:
+            names = [item[0] for item in med_list]
+            act_display = med_list[0][2]
+            overdose_interactions.append({
+                "drug_a": names[0],
+                "drug_b": names[1],
+                "description": f"Cả 2 sản phẩm '{names[0]}' và '{names[1]}' đều chứa cùng hoạt chất chính '{act_display}'. Việc dùng đồng thời hai sản phẩm này gây nguy cơ CỰC KỲ NGUY HIỂM về QUÁ LIỀU và NGỘ ĐỘC (VD: suy gan cấp tính với Paracetamol).",
+                "recommendation": "CHỐNG CHỈ ĐỊNH DÙNG CÙNG LÚC: Chỉ được chọn 1 trong 2 loại thuốc, tuyệt đối không dùng song song."
+            })
+
+    return db_info, overdose_interactions
+
 @router.post("/api/ai/interactions")
 async def check_interactions(req: InteractionRequest):
     try:
-        # Get context from Qdrant by querying each medicine
+        valid_medicines = [m.strip() for m in req.medicines if m and m.strip()]
+        if not valid_medicines or len(valid_medicines) < 2:
+            raise HTTPException(status_code=400, detail="Vui lòng nhập ít nhất 2 loại thuốc để kiểm tra tương tác.")
+
+        # TẦNG 0: Bộ lọc từ vô nghĩa / từ không liên quan Y tế
+        NON_MEDICAL_NOISE = {"ok", "uh", "um", "ah", "ha", "haha", "huhu", "test", "abc", "xyz", "123", "hello", "hi", "xin chao", "xin chào"}
+        noisy_count = sum(1 for m in valid_medicines if m.lower().strip() in NON_MEDICAL_NOISE)
+        if noisy_count > 0 and len(valid_medicines) - noisy_count < 2:
+            return {
+                "has_interactions": False,
+                "severity": "Không xác định",
+                "interactions": [],
+                "general_advice": f"Không thể xác định tương tác vì một hoặc nhiều tên nhập không khớp với danh mục Y tế/Dược phẩm ({', '.join(valid_medicines)}). Vui lòng cung cấp tên thuốc chính xác để được phân tích."
+            }
+
+        # TẦNG 1: Bộ lọc chất cấm / chất kích thích (Substance Safety Filter)
+        has_banned, banned_interactions = check_banned_substances(valid_medicines)
+        if has_banned:
+            return {
+                "has_interactions": True,
+                "severity": "Cực kỳ nguy hiểm",
+                "interactions": banned_interactions,
+                "general_advice": "CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI: Danh sách chứa chất cấm, chất kích thích hoặc độc chất nguy hiểm. Dược sĩ tuyệt đối không phân phối hoặc kê đơn hỗn hợp này."
+            }
+
+        # TẦNG 2 & TẦNG 3: Tra cứu MongoDB hoạt chất thực tế & Động cơ kiểm tra trùng lặp hoạt chất
+        db_info, overdose_interactions = lookup_medicines_db(valid_medicines)
+
+        # Lấy Context từ MongoDB
         context_parts = []
-        for medicine in req.medicines:
-            context = await retrieve_medical_context(medicine, top_k=1)
-            if context:
-                context_parts.append(context)
-        
+        for medicine in valid_medicines:
+            
+            if medicine in db_info:
+                info = db_info[medicine]
+                context_parts.append(
+                    f"**Thuốc trong DB**: {info['name']} | **Hoạt chất**: {info['active_ingredient']}\n"
+                    f"- Chống chỉ định: {info['contraindications']}\n"
+                    f"- Tương tác đã ghi nhận: {info['drug_interactions']}"
+                )
+
         full_context = "\n\n".join(context_parts)
-        result = await check_drug_interactions(req.medicines, full_context)
-        return result
+
+        # TẦNG 4: Lập luận Dược lý Lâm sàng qua DeepSeek V4 Flash (hoặc Groq Llama 3 fallback)
+        llm_result = await check_drug_interactions(valid_medicines, full_context)
+
+        # Hợp nhất tương tác quá liều Tầng 3 vào kết quả LLM
+        if overdose_interactions:
+            existing_interactions = llm_result.get("interactions", [])
+            llm_result["interactions"] = overdose_interactions + existing_interactions
+            llm_result["has_interactions"] = True
+            if llm_result.get("severity") != "Cực kỳ nguy hiểm":
+                llm_result["severity"] = "Cao"
+            advice_prefix = "CẢNH BÁO NGUY CƠ QUÁ LIỀU HOẠT CHẤT: "
+            current_advice = str(llm_result.get("general_advice") or "")
+            if advice_prefix not in current_advice:
+                llm_result["general_advice"] = advice_prefix + current_advice
+
+        # Lọc trùng lặp cặp thuốc tương tác trong mảng interactions
+        all_interactions = llm_result.get("interactions", [])
+        if all_interactions:
+            seen_pairs = set()
+            unique_interactions = []
+            for inter in all_interactions:
+                if not isinstance(inter, dict):
+                    continue
+                da = (inter.get("drug_a") or "").strip().lower()
+                db = (inter.get("drug_b") or "").strip().lower()
+                pair_key = tuple(sorted([da, db]))
+                if pair_key not in seen_pairs:
+                    seen_pairs.add(pair_key)
+                    unique_interactions.append(inter)
+            llm_result["interactions"] = unique_interactions
+
+        return llm_result
+    except HTTPException:
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

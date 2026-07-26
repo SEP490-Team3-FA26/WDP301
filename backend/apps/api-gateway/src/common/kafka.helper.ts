@@ -1,10 +1,42 @@
 import { ClientKafka } from '@nestjs/microservices';
 import { lastValueFrom, timeout } from 'rxjs';
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { Kafka } from 'kafkajs';
 
+//File này chứa các hàm tiện ích để xử lý việc đăng ký Kafka Topic, tự động khởi tạo Topic và gửi Message/Bắt lỗi chuẩn.
 
+/**
+ * Tự động tạo trước các Kafka Topic (và topic .reply tương ứng) trên Kafka Broker nếu chưa tồn tại.
+ * Giúp tránh lỗi UNKNOWN_TOPIC_OR_PARTITION khi ClientKafka kết nối.
+ */
+export async function ensureKafkaTopicsExist(topics: string[]) {
+  if (!topics || topics.length === 0) return;
+  try {
+    const brokers = (process.env.KAFKA_BROKERS || 'localhost:9092').split(',');
+    const kafka = new Kafka({
+      clientId: 'kafka-topic-admin',
+      brokers,
+      retry: { initialRetryTime: 500, retries: 5 },
+      logLevel: 0,
+    });
+    const admin = kafka.admin();
+    await admin.connect();
 
-//File này chứa 2 hàm gọn nhẹ để xử lý việc đăng ký Kafka Topic và gửi Message/Bắt lỗi chuẩn.
+    const topicsToCreate = [];
+    for (const t of topics) {
+      topicsToCreate.push({ topic: t }, { topic: `${t}.reply` });
+    }
+
+    await admin.createTopics({
+      topics: topicsToCreate,
+      waitForLeaders: true,
+    });
+
+    await admin.disconnect();
+  } catch (err: any) {
+    console.warn(`[subscribeToKafkaTopics] Warning ensuring topics exist via Kafka Admin: ${err.message}`);
+  }
+}
 
 /**
  * Subscribes to an array of topics and connects the Kafka client.
@@ -12,6 +44,9 @@ import { HttpException, HttpStatus } from '@nestjs/common';
  * @param topics Array of topic names
  */
 export async function subscribeToKafkaTopics(client: ClientKafka, topics: string[], retries = 20, delay = 3000) {
+  // Đảm bảo topic và reply topic đã tồn tại trên Kafka trước khi Client đăng ký
+  await ensureKafkaTopicsExist(topics);
+
   for (const topic of topics) {
     try {
       client.subscribeToResponseOf(topic);
@@ -19,18 +54,22 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
       // Ignore if topic response subscription already registered or client connected
     }
   }
+
   for (let i = 0; i < retries; i++) {
     try {
       await client.connect();
       return;
     } catch (error: any) {
-      const isRetriable = error?.retriable === true || error?.type === 'UNKNOWN_TOPIC_OR_PARTITION';
       const isLastAttempt = i === retries - 1;
       if (isLastAttempt) {
         console.error(`❌ Kafka client failed to connect to topics: ${topics.join(', ')} after ${retries} attempts.`, error);
         throw error;
       }
+      try {
+        await client.close();
+      } catch (e) {}
       await new Promise(resolve => setTimeout(resolve, delay));
+      await ensureKafkaTopicsExist(topics);
     }
   }
 }
