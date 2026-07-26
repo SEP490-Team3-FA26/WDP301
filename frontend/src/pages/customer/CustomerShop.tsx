@@ -225,25 +225,12 @@ export function CustomerShop() {
     }
 
     try {
-      const response = await fetch("/api/users/cart", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ medicineId: medId, quantity: customQty })
-      });
+      const response = await api.post("/api/users/cart", 
+        { medicineId: medId, quantity: customQty },
+        { headers: { "Authorization": `Bearer ${token}` } }
+      );
 
-      const resData = await response.json();
-      if (!response.ok) {
-        // Nếu thuốc không tìm thấy trên hệ thống → ẩn sản phẩm khỏi danh sách, không hiện alert
-        if (response.status === 404) {
-          setMedicines((prev) => prev.filter((m) => (m.id || m._id) !== medId));
-          return;
-        }
-        throw new Error(resData.message || "Không thể thêm thuốc vào giỏ hàng.");
-      }
-
+      const resData = response.data;
       window.dispatchEvent(new Event("cartUpdated"));
 
       setAddedItems((prev) => ({ ...prev, [medId]: true }));
@@ -252,7 +239,10 @@ export function CustomerShop() {
       }, 1500);
 
     } catch (err: any) {
-      alert(err.message || "Lỗi kết nối máy chủ");
+      if (err.response && err.response.status === 404) {
+        setMedicines((prev) => prev.filter((m) => (m.id || m._id) !== medId));
+        return;
+      }
       console.error("Error adding to cart:", err);
     }
   };
