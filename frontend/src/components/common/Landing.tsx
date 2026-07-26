@@ -11,6 +11,7 @@ import {
   ShieldAlert, XCircle, User, LogOut
 } from "lucide-react";
 import { notifyAuthTokenChanged } from "../../utils/authEvents";
+import api from "../../services/core/api";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -69,10 +70,18 @@ export function Landing() {
         setCartCount(count);
         return;
       }
-      const res = await fetch("/api/users/cart", {
+      const res = await api.get("/api/users/cart", {
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (res.status === 401) {
+      if (res.status === 200) {
+        const data = res.data;
+        if (data && data.items) {
+          const count = data.items.reduce((acc: number, item: any) => acc + item.quantity, 0);
+          setCartCount(count);
+        }
+      }
+    } catch (err: any) {
+      if (err.response && err.response.status === 401) {
         localStorage.removeItem("token");
         notifyAuthTokenChanged();
         // Fallback to guest cart immediately
@@ -82,14 +91,7 @@ export function Landing() {
         setCartCount(count);
         return;
       }
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.items) {
-          const count = data.items.reduce((acc: number, item: any) => acc + item.quantity, 0);
-          setCartCount(count);
-        }
-      }
-    } catch (err) {
+      console.error(err);
       console.error(err);
     }
   };
@@ -99,9 +101,9 @@ export function Landing() {
     setLoadingProducts(true);
     try {
       const catParam = activeCategory ? `&category=${encodeURIComponent(activeCategory)}` : "";
-      const res = await fetch(`/api/medicines?page=1&limit=8${catParam}`);
-      if (res.ok) {
-        const result = await res.json();
+      const res = await api.get(`/api/medicines?page=1&limit=8${catParam}`);
+      if (res.status === 200) {
+        const result = res.data;
         setMedicines(result.data || []);
       }
     } catch (err) {
@@ -450,19 +452,12 @@ export function Landing() {
     }
 
     try {
-      const response = await fetch("/api/users/cart", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ medicineId: medId, quantity: customQty })
-      });
+      const response = await api.post("/api/users/cart", 
+        { medicineId: medId, quantity: customQty },
+        { headers: { "Authorization": `Bearer ${token}` } }
+      );
 
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.message || "Lỗi thêm vào giỏ hàng.");
-      }
+      const resData = response.data;
 
       window.dispatchEvent(new Event("cartUpdated"));
       setAddedItems((prev) => ({ ...prev, [medId]: true }));
