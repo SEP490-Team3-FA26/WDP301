@@ -52,6 +52,8 @@ connect_mobile.ps1
 *.apk
 frontend/public/download/
 
-
-
-
+# Local Quick-Start Scripts
+start-dev.bat
+start-dev.ps1
+stop-dev.bat
+stop-dev.ps1

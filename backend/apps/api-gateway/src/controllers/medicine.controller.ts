@@ -357,7 +357,7 @@ export class MedicineController implements OnModuleInit {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout
 
       const aiUrl = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
       const response = await fetch(`${aiUrl}/api/ai/interactions`, {

@@ -6,7 +6,7 @@ import { medicineService } from "../../services/inventory/medicine.service";
 
 interface InteractionResult {
   has_interactions: boolean;
-  severity: "Cao" | "Trung bình" | "Thấp" | "An toàn";
+  severity: "Cực kỳ nguy hiểm" | "Cao" | "Trung bình" | "Thấp" | "An toàn";
   interactions: Array<{
     drug_a: string;
     drug_b: string;
@@ -39,10 +39,20 @@ export function DrugInteractions() {
   };
 
   const checkInteractions = async () => {
-    const validMedicines = medicines.filter(m => m.trim().length > 0);
+    const trimmed = medicines.map(m => m.trim()).filter(m => m.length > 0);
+    const uniqueMedicines: string[] = [];
+    const seen = new Set<string>();
+
+    for (const med of trimmed) {
+      const lower = med.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        uniqueMedicines.push(med);
+      }
+    }
     
-    if (validMedicines.length < 2) {
-      setError("Vui lòng nhập ít nhất 2 loại thuốc để kiểm tra tương tác.");
+    if (uniqueMedicines.length < 2) {
+      setError("Vui lòng nhập ít nhất 2 loại thuốc khác nhau để kiểm tra tương tác.");
       return;
     }
 
@@ -50,9 +60,12 @@ export function DrugInteractions() {
     setLoading(true);
 
     try {
-      const data = await medicineService.checkInteraction(validMedicines);
+      console.log('📤 [Request] Gửi đi:', { medicines: uniqueMedicines });
+      const data = await medicineService.checkInteraction(uniqueMedicines);
+      console.log('📥 [Response] Nhận về:', data);
       setResult(data);
     } catch (err: any) {
+      console.error('❌ [Error] Lỗi API tương tác thuốc:', err);
       setError(err.message || "Đã xảy ra lỗi không xác định.");
     } finally {
       setLoading(false);
@@ -180,17 +193,31 @@ export function DrugInteractions() {
             <div className="space-y-6 h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Header Badge */}
               <div className={`p-4 rounded-xl flex items-center gap-4 ${
-                result.has_interactions 
-                  ? "bg-red-50 border border-red-200 text-red-800"
-                  : "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                result.severity === "Cực kỳ nguy hiểm"
+                  ? "bg-red-100 border-2 border-red-600 text-red-950 font-bold"
+                  : result.severity === "Không xác định"
+                    ? "bg-amber-50 border border-amber-200 text-amber-900"
+                    : result.has_interactions 
+                      ? "bg-red-50 border border-red-200 text-red-800"
+                      : "bg-emerald-50 border border-emerald-200 text-emerald-800"
               }`}>
-                {result.has_interactions ? <ShieldAlert size={32} className="text-red-500" /> : <ShieldCheck size={32} className="text-emerald-500" />}
+                {result.severity === "Không xác định" ? (
+                  <AlertTriangle size={34} className="text-amber-500 shrink-0" />
+                ) : result.has_interactions ? (
+                  <ShieldAlert size={36} className={result.severity === "Cực kỳ nguy hiểm" ? "text-red-700 animate-bounce" : "text-red-500"} />
+                ) : (
+                  <ShieldCheck size={32} className="text-emerald-500" />
+                )}
                 <div>
                   <h3 className="font-bold text-lg">
-                    {result.has_interactions ? "Cảnh báo Tương tác!" : "An toàn"}
+                    {result.severity === "Cực kỳ nguy hiểm" 
+                      ? "🚨 CẢNH BÁO CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI!" 
+                      : result.severity === "Không xác định"
+                        ? "⚠️ Nhập liệu không xác định"
+                        : (result.has_interactions ? "Cảnh báo Tương tác!" : "An toàn")}
                   </h3>
                   <p className="text-sm opacity-90">
-                    Mức độ nghiêm trọng: <span className="font-bold">{result.severity}</span>
+                    Mức độ nghiêm trọng: <span className="font-extrabold underline">{result.severity}</span>
                   </p>
                 </div>
               </div>
