@@ -590,6 +590,36 @@ class _PharmacistScreenState extends State<PharmacistScreen>
       }, orElse: () => null);
     }
 
+    final items = (result?['items'] as List?) ?? [];
+    if (items.isNotEmpty) {
+      for (final item in items) {
+        if (item is! Map) continue;
+        final selectedSku = item['selected_sku'] as Map?;
+        final extracted = item['extracted'] as Map?;
+
+        final name = (selectedSku?['product_name'] ?? extracted?['brand_name'] ?? extracted?['name'] ?? '').toString().trim();
+        final id = selectedSku?['product_id'];
+        final price = selectedSku?['retail_price'] ?? 0;
+        final unit = selectedSku?['unit'] ?? extracted?['unit'] ?? 'Hộp';
+        final quantity = extracted?['quantity'] ?? 1;
+
+        if (name.isNotEmpty && name != 'Không tìm thấy') {
+          final cleanName = name;
+          final medicine = findMedicine(cleanName);
+          final qty = int.tryParse(quantity.toString()) ?? 1;
+
+          generated.add({
+            'id': medicine?['id'] ?? id ?? 'AI-${generated.length + 1}',
+            'name': medicine?['name'] ?? cleanName,
+            'price': medicine?['price'] ?? price ?? 0,
+            'unit': medicine?['unit'] ?? unit ?? 'Hộp',
+            'qty': qty < 1 ? 1 : qty,
+          });
+        }
+      }
+      return generated;
+    }
+
     void addCartItem({
       required String name,
       Object? id,

@@ -1482,7 +1482,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> with SingleTickerProv
                           child: Image.network(
                             item['image'].toString().startsWith('http')
                                 ? item['image']
-                                : 'http://10.0.2.2:8000${item['image']}',
+                                : '${ApiService.aiBaseUrl}${item['image']}',
                             fit: BoxFit.cover,
                             errorBuilder: (c, e, s) => const Center(child: Icon(Icons.broken_image, size: 48)),
                           ),
