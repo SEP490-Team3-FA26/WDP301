@@ -476,6 +476,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
           patientPhone,
           patientEmail: patientEmail || undefined,
           totalAmount: total,
+          paymentMethod: "QR_PAY",
           voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
           redeemedPoints: usePoints ? redeemedPoints : 0,
           items: cart.map(it => ({

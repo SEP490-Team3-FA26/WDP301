@@ -547,6 +547,7 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
           patientName,
           patientPhone: patientPhone || "0900000000",
           totalAmount: total,
+          paymentMethod: "QR_PAY",
           items: prescriptionItems.map(it => ({
             medicineId: it.medicineId,
             name: it.name,
@@ -1770,4 +1771,3 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
     </div>
   );
 }
-

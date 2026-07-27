@@ -3,7 +3,7 @@ import { ClientKafka } from '@nestjs/microservices';
 import { sendKafkaMessage, subscribeToKafkaTopics } from '../common/kafka.helper';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../guards/optional-jwt-auth.guard';
-import { CreateOrderDto } from '../dto/create-order.dto';
+import { CreateOrderDto, CreatePayOSLinkDto } from '../dto/create-order.dto';
 
 @Controller('api/orders')
 export class OrderController implements OnModuleInit {
@@ -102,7 +102,7 @@ export class OrderController implements OnModuleInit {
 
   @Post('payos-link')
   @UseGuards(OptionalJwtAuthGuard)
-  async createPayOSLink(@Body() data: CreateOrderDto, @Req() req: any) {
+  async createPayOSLink(@Body() data: CreatePayOSLinkDto, @Req() req: any) {
     if (req.user) {
       if (req.user.sub) data.userId = req.user.sub;
       if (req.user.branchId && !data.branchId) data.branchId = req.user.branchId;
@@ -111,7 +111,7 @@ export class OrderController implements OnModuleInit {
     return await sendKafkaMessage(this.orderClient, 'orders.create', {
       ...data,
       paymentMethod: 'QR_PAY',
-      userId: req.user?.sub,
+      userId: req.user?.sub || data.userId,
     });
   }
 
@@ -130,5 +130,3 @@ export class OrderController implements OnModuleInit {
     return await sendKafkaMessage(this.orderClient, 'orders.my-orders', { userId, fullName, phone });
   }
 }
-
-
