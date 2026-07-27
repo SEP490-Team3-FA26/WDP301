@@ -1275,12 +1275,13 @@ export class PurchaseService {
     try {
       const pr = await this.prModel.findById(data.prId).session(session).exec();
       if (!pr) {
-        throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${data.prId}` });
+        throw new RpcException({ message: `Không tìm thấy phiếu yêu cầu PR: ${data.prId}`, statusCode: 404 });
       }
 
-      if (['APPROVED', 'REJECTED', 'CANCELLED'].includes(pr.status)) {
+      if (['APPROVED', 'SHIPPING', 'COMPLETED', 'REJECTED', 'CANCELLED'].includes(pr.status)) {
         throw new RpcException({
           message: `Phiếu yêu cầu PR đang ở trạng thái "${pr.status}", không thể tạo phiếu chuyển kho.`,
+          statusCode: 409,
         });
       }
 
@@ -1300,6 +1301,7 @@ export class PurchaseService {
         if (totalAvailable < item.requestedQuantity) {
           throw new RpcException({
             message: `Không đủ tồn kho tại ${sourceName} cho thuốc "${item.medicineName}" (Yêu cầu: ${item.requestedQuantity}, Khả dụng: ${totalAvailable})`,
+            statusCode: 400,
           });
         }
 
@@ -1325,6 +1327,7 @@ export class PurchaseService {
           if (!updatedBatch) {
             throw new RpcException({
               message: `Lỗi tranh chấp tồn kho (Race Condition) khi trừ kho thuốc "${item.medicineName}" tại lô ${batch.batchNo}. Vui lòng thử lại.`,
+              statusCode: 409,
             });
           }
 
@@ -1385,8 +1388,8 @@ export class PurchaseService {
         await new this.txnModel(txn).save({ session });
       }
 
-      // Cập nhật trạng thái PR sang APPROVED
-      pr.status = 'APPROVED';
+      // Cập nhật trạng thái PR sang SHIPPING để khớp tab "Đang giao" của warehouse.
+      pr.status = 'SHIPPING';
       await pr.save({ session });
 
       await session.commitTransaction();
@@ -1438,12 +1441,13 @@ export class PurchaseService {
     try {
       const transfer = await this.transferModel.findById(data.transferId).session(session).exec();
       if (!transfer) {
-        throw new RpcException({ message: `Không tìm thấy phiếu chuyển kho: ${data.transferId}` });
+        throw new RpcException({ message: `Không tìm thấy phiếu chuyển kho: ${data.transferId}`, statusCode: 404 });
       }
 
       if (transfer.status !== 'SHIPPING') {
         throw new RpcException({
           message: `Phiếu chuyển kho đang ở trạng thái "${transfer.status}", không thể xác nhận nhận hàng.`,
+          statusCode: 409,
         });
       }
 
@@ -1594,6 +1598,14 @@ export class PurchaseService {
         data.inspectionNote ? `Kiểm hàng: ${data.inspectionNote}` : undefined,
       ].filter(Boolean).join('\n');
       await transfer.save({ session });
+
+      if (transfer.prId && transfer.prId !== 'DIRECT') {
+        await this.prModel.findByIdAndUpdate(
+          transfer.prId,
+          { status: 'COMPLETED' },
+          { session },
+        ).exec();
+      }
 
       await session.commitTransaction();
 
