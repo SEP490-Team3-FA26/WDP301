@@ -37,6 +37,12 @@ export function IncomingOrdersTab({
 
   const getSupplierName = (id: string) => suppliers.find(s => (s._id || s.id) === id)?.name || id?.slice(-6) || "N/A";
   const getLinkedPo = (grn: any) => poList.find(po => po._id === grn.poId);
+  const getActiveGrnForPo = (poId: string) => grnList.find(
+    (grn: any) => grn.poId === poId && ["INSPECTING", "PENDING_APPROVAL", "COMPLETED"].includes(grn.status)
+  );
+  const hasGrnDiscrepancy = (grn: any) => (grn?.items || []).some(
+    (item: any) => Number(item.actualQty) !== Number(item.quantity)
+  );
   const getGrnSupplierName = (grn: any) => {
     const linkedPo = getLinkedPo(grn);
     return getSupplierName(grn.supplierId || linkedPo?.supplierId);
@@ -263,17 +269,21 @@ export function IncomingOrdersTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredPo.map(po => (
+                {filteredPo.map(po => {
+                  const activeGrn = getActiveGrnForPo(po._id);
+                  return (
                   <tr key={po._id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 font-bold text-slate-900 font-mono text-xs">PO-{po._id.slice(-6).toUpperCase()}</td>
                     <td className="px-4 py-3 text-slate-600"><Calendar size={12} className="inline mr-1 text-slate-400" />{new Date(po.createdAt).toLocaleDateString("vi-VN")}</td>
                     <td className="px-4 py-3 font-medium text-slate-800">{getSupplierName(po.supplierId)}</td>
                     <td className="px-4 py-3 text-center font-bold">{po.items?.length || 0}</td>
                     <td className="px-4 py-3 text-right font-black text-emerald-700">{po.totalAmount?.toLocaleString("vi-VN")}đ</td>
-                    <td className="px-4 py-3 text-center"><StatusBadge map={PO_STATUS} status={po.status} /></td>
+                    <td className="px-4 py-3 text-center">
+                      {activeGrn ? <StatusBadge map={GRN_STATUS} status={activeGrn.status} /> : <StatusBadge map={PO_STATUS} status={po.status} />}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1.5 items-center">
-                        {(po.status === "SHIPPING" || po.status === "PARTIAL_RECEIVED") && (
+                        {(po.status === "SHIPPING" || po.status === "PARTIAL_RECEIVED") && !activeGrn && (
                           <div className="flex gap-2">
                             <button onClick={async () => {
                               try {
@@ -312,7 +322,7 @@ export function IncomingOrdersTab({
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           )
@@ -366,6 +376,15 @@ export function IncomingOrdersTab({
       {/* Receive PO Modal */}
       <AnimatePresence>
         {selectedPo && (
+          (() => {
+            const activeGrn = getActiveGrnForPo(selectedPo._id);
+            const activeGrnHasDiscrepancy = hasGrnDiscrepancy(activeGrn);
+            const isLockedGrn = activeGrn && activeGrn.status !== "INSPECTING";
+            const canContinueManualReceipt = !activeGrn || activeGrn.status === "INSPECTING";
+            const canFastApproveExistingGrn = activeGrn?.status === "PENDING_APPROVAL" && !activeGrnHasDiscrepancy;
+            const itemsToDisplay = isLockedGrn ? activeGrn.items : (selectedPo.items || []);
+
+            return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedPo(null)} />
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
@@ -373,7 +392,7 @@ export function IncomingOrdersTab({
               <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-emerald-50 shrink-0">
                 <div>
                   <h3 className="font-black text-slate-900 font-mono">PO-{selectedPo._id.slice(-6).toUpperCase()}</h3>
-                  <p className="text-xs mt-0.5"><StatusBadge map={PO_STATUS} status={selectedPo.status} /></p>
+                  <p className="text-xs mt-0.5">{activeGrn ? <StatusBadge map={GRN_STATUS} status={activeGrn.status} /> : <StatusBadge map={PO_STATUS} status={selectedPo.status} />}</p>
                 </div>
                 <button onClick={() => setSelectedPo(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"><X size={18} /></button>
               </div>
@@ -384,17 +403,19 @@ export function IncomingOrdersTab({
                 </div>
                 <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><Package size={14} className="text-emerald-600" />Sản phẩm kiểm đếm ({selectedPo.items?.length || 0})</h4>
                 <div className="space-y-3">
-                  {selectedPo.items?.map((it: any) => {
+                  {itemsToDisplay?.map((it: any) => {
                     const mId = it.medicineId || it.id;
                     const isScanning = aiScanning === mId;
+                    const remainingQuantity = Number(it.quantity) - Number(it.receivedQuantity || 0);
+                    const displayedActualQty = isLockedGrn ? it.actualQty : inspectionData[mId]?.actualQty;
                     return (
                       <div key={mId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
                         <div className="flex justify-between items-start">
                           <div>
                             <span className="font-bold text-slate-900 text-sm">{it.medicineName || mId}</span>
-                            <span className="text-xs text-slate-500 block">Số lượng còn lại: <span className="font-bold text-emerald-700">{Number(it.quantity) - Number(it.receivedQuantity || 0)}</span></span>
+                            <span className="text-xs text-slate-500 block">Số lượng chứng từ: <span className="font-bold text-emerald-700">{Number(it.quantity)}</span></span>
                           </div>
-                          {isScanning ? (
+                          {!isLockedGrn && (isScanning ? (
                             <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-bold flex items-center gap-1 animate-pulse"><Scan size={12} /> Đang quét...</span>
                           ) : (
                             <button onClick={() => {
@@ -402,7 +423,7 @@ export function IncomingOrdersTab({
                               setTimeout(() => {
                                 setInspectionData(prev => ({
                                   ...prev,
-                                  [mId]: { ...prev[mId], actualQty: Number(it.quantity) - Number(it.receivedQuantity || 0) } // Giả lập AI đếm đúng số lượng còn lại
+                                  [mId]: { ...prev[mId], actualQty: remainingQuantity } // Giả lập AI đếm đúng số lượng còn lại
                                 }));
                                 setInspectionErrors(prev => ({
                                   ...prev,
@@ -414,12 +435,13 @@ export function IncomingOrdersTab({
                             }} className="px-2 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-xs font-bold border border-blue-200 flex items-center gap-1 transition-colors">
                               <Camera size={12} /> Quét AI
                             </button>
-                          )}
+                          ))}
                         </div>
                         <div className="grid grid-cols-3 gap-3">
                           <div>
                             <label className="text-[10px] font-bold text-slate-500 mb-1 block">SỐ LÔ (BATCH NO.)</label>
-                            <input type="text" value={inspectionData[mId]?.batchNo || ""}
+                            <input type="text" value={isLockedGrn ? (it.batchNo || "") : (inspectionData[mId]?.batchNo || "")}
+                              disabled={!!isLockedGrn}
                               onChange={e => {
                                 setInspectionData(prev => ({ ...prev, [mId]: { ...prev[mId], batchNo: e.target.value } }));
                                 setInspectionErrors(prev => ({ ...prev, [mId]: { ...prev[mId], batchNo: undefined } }));
@@ -430,7 +452,8 @@ export function IncomingOrdersTab({
                           </div>
                           <div>
                             <label className="text-[10px] font-bold text-slate-500 mb-1 block">HẠN SỬ DỤNG</label>
-                            <input type="date" value={inspectionData[mId]?.expDate || ""}
+                            <input type="date" value={isLockedGrn ? (it.expDate ? new Date(it.expDate).toISOString().slice(0, 10) : "") : (inspectionData[mId]?.expDate || "")}
+                              disabled={!!isLockedGrn}
                               onChange={e => {
                                 setInspectionData(prev => ({ ...prev, [mId]: { ...prev[mId], expDate: e.target.value } }));
                                 setInspectionErrors(prev => ({ ...prev, [mId]: { ...prev[mId], expDate: undefined } }));
@@ -441,7 +464,8 @@ export function IncomingOrdersTab({
                           </div>
                           <div>
                             <label className="text-[10px] font-bold text-slate-500 mb-1 block">THỰC TẾ (ACTUAL QTY)</label>
-                            <input type="number" min={0} value={inspectionData[mId]?.actualQty ?? ""}
+                            <input type="number" min={0} value={displayedActualQty ?? ""}
+                              disabled={!!isLockedGrn}
                               onChange={e => {
                                 setInspectionData(prev => ({ ...prev, [mId]: { ...prev[mId], actualQty: e.target.value } }));
                                 setInspectionErrors(prev => ({ ...prev, [mId]: { ...prev[mId], actualQty: undefined } }));
@@ -462,9 +486,19 @@ export function IncomingOrdersTab({
                   <p className="text-xs font-semibold">{modalError}</p>
                 </div>
               )}
+              {activeGrn?.status === "PENDING_APPROVAL" && (
+                <div className={`mx-5 mb-4 flex items-start gap-2 rounded-xl border px-3 py-2.5 ${activeGrnHasDiscrepancy ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                  <p className="text-xs font-semibold">
+                    {activeGrnHasDiscrepancy
+                      ? "Phiếu kiểm đếm có chênh lệch và đang chờ Admin phê duyệt. Thủ kho không thể nhập kho lại phiếu này."
+                      : "Phiếu kiểm đếm đủ số lượng, có thể hoàn tất nhập kho."}
+                  </p>
+                </div>
+              )}
               {(["SHIPPING", "RECEIVING", "PARTIAL_RECEIVED"].includes(selectedPo.status)) && (
                 <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
-                  <button onClick={() => handleReceiveAndInspect(selectedPo._id)} disabled={actionLoading}
+                  <button onClick={() => handleReceiveAndInspect(selectedPo._id)} disabled={actionLoading || (!canContinueManualReceipt && !canFastApproveExistingGrn)}
                     className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5 shadow-sm disabled:opacity-50 transition-colors">
                     {actionLoading ? <Loader2 size={16} className="animate-spin" /> : <ClipboardCheck size={16} />}
                     Hoàn tất Nhập Kho & Gửi Báo Cáo
@@ -473,6 +507,8 @@ export function IncomingOrdersTab({
               )}
             </motion.div>
           </div>
+            );
+          })()
         )}
       </AnimatePresence>
 
