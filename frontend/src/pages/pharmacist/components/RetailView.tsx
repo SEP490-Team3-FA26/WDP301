@@ -82,6 +82,18 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const [payosPolling, setPayosPolling] = useState(false);
   const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
 
+  const normalizeInvoiceResult = (result: any) => {
+    const source = result?.saleResult || result;
+    if (source?.data) return source;
+    const order = source?.order || result?.order || source;
+    return {
+      success: source?.success ?? result?.success ?? true,
+      message: source?.message || result?.message || "Thanh toán thành công!",
+      warnings: source?.warnings || result?.warnings || [],
+      data: order || {},
+    };
+  };
+
   // Alternatives Modal (UC-36)
   const [showAlternativesModal, setShowAlternativesModal] = useState(false);
   const [selectedOutOfStockMed, setSelectedOutOfStockMed] = useState<any>(null);
@@ -135,7 +147,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
     try {
       const result = await orderService.createSale(payload);
 
-      setInvoiceData(result);
+      setInvoiceData(normalizeInvoiceResult(result));
       setShowInvoiceModal(true);
       setCart([]); // Clear cart
 
@@ -166,7 +178,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
             setPayosPolling(false);
             setShowPayOSModal(false);
             showToast("Thanh toán PayOS thành công!", "success");
-            setInvoiceData(data.saleResult || data);
+            setInvoiceData(normalizeInvoiceResult(data));
             setShowInvoiceModal(true);
             setCart([]); // Clear cart
           }
@@ -186,7 +198,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
         setPayosPolling(false);
         setShowPayOSModal(false);
         showToast("Thanh toán PayOS thành công!", "success");
-        setInvoiceData(data.saleResult || data);
+        setInvoiceData(normalizeInvoiceResult(data));
         setShowInvoiceModal(true);
         setCart([]); // Clear cart
       } else {
@@ -1086,19 +1098,19 @@ export default function RetailView({ showToast }: RetailViewProps) {
                 <div className="flex flex-col gap-1 border-b border-slate-200 pb-3">
                   <div className="flex justify-between">
                     <span>Mã hóa đơn:</span>
-                    <span className="font-bold">{invoiceData.data._id}</span>
+                    <span className="font-bold">{invoiceData.data?._id || invoiceData.data?.orderCode || payosOrderCode || "N/A"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Ngày lập:</span>
-                    <span>{new Date(invoiceData.data.createdAt).toLocaleString()}</span>
+                    <span>{invoiceData.data?.createdAt ? new Date(invoiceData.data.createdAt).toLocaleString() : new Date().toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Kiểu bán:</span>
-                    <span className="font-bold uppercase text-[#0057cd]">{invoiceData.data.type}</span>
+                    <span className="font-bold uppercase text-[#0057cd]">{invoiceData.data?.type || "RETAIL"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Khách hàng:</span>
-                    <span>{invoiceData.data.patientName || "Khách lẻ vãng lai"}</span>
+                    <span>{invoiceData.data?.patientName || "Khách lẻ vãng lai"}</span>
                   </div>
                 </div>
 
@@ -1106,7 +1118,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
                 <div>
                   <div className="font-bold border-b border-slate-200 pb-1.5 mb-2 uppercase">Chi tiết xuất kho (FIFO)</div>
                   <div className="space-y-3">
-                    {invoiceData.data.items.map((it: any) => (
+                    {(invoiceData.data?.items || []).map((it: any) => (
                       <div key={it.medicineId} className="flex flex-col">
                         <div className="flex justify-between font-bold text-slate-900">
                           <span>{it.name}</span>
@@ -1123,15 +1135,15 @@ export default function RetailView({ showToast }: RetailViewProps) {
                 <div className="border-t border-slate-200 pt-3 flex flex-col gap-1.5">
                   <div className="flex justify-between text-slate-600">
                     <span>Tổng tiền thanh toán:</span>
-                    <span className="font-bold">{invoiceData.data.totalAmount.toLocaleString()}₫</span>
+                    <span className="font-bold">{(invoiceData.data?.totalAmount || total).toLocaleString()}₫</span>
                   </div>
-                  {invoiceData.data.redeemedPoints > 0 && (
+                  {(invoiceData.data?.redeemedPoints || 0) > 0 && (
                     <div className="flex justify-between text-[#ba1a1a]">
                       <span>Tiêu điểm tích lũy:</span>
                       <span>-{invoiceData.data.redeemedPoints.toLocaleString()}₫</span>
                     </div>
                   )}
-                  {invoiceData.data.earnedPoints > 0 && (
+                  {(invoiceData.data?.earnedPoints || 0) > 0 && (
                     <div className="flex justify-between text-emerald-600 font-bold">
                       <span>Tích lũy từ đơn này:</span>
                       <span>+{invoiceData.data.earnedPoints.toLocaleString()} điểm</span>
