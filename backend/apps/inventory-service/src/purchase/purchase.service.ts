@@ -876,6 +876,16 @@ export class PurchaseService {
     const warnings: string[] = [];
 
     for (const item of grn.items) {
+      if ((item.actualQty || 0) > 0) {
+        if (!item.batchNo || !String(item.batchNo).trim()) {
+          throw new RpcException({ message: `Phiếu nhập thiếu số lô cho sản phẩm ${item.medicineId}. Vui lòng yêu cầu kiểm lại và nhập số lô trước khi phê duyệt.` });
+        }
+        const itemExpDate = item.expDate ? new Date(item.expDate) : null;
+        if (!itemExpDate || Number.isNaN(itemExpDate.getTime())) {
+          throw new RpcException({ message: `Phiếu nhập thiếu hạn sử dụng hợp lệ cho sản phẩm ${item.medicineId}. Vui lòng yêu cầu kiểm lại và nhập hạn sử dụng trước khi phê duyệt.` });
+        }
+      }
+
       const poItem = po.items.find(i => i.medicineId === item.medicineId);
       if (!poItem) {
         throw new RpcException({ message: `Sản phẩm ${item.medicineId} không có trong đơn đặt hàng PO` });
@@ -2139,6 +2149,8 @@ export class PurchaseService {
         expectedQty: item.quantity,
         aiCountedQty: aiCount,
         actualQty: 0, // Chờ user nhập tay
+        batchNo: item.batchNo,
+        expDate: item.expDate,
         label: label,
         images: []
       });
@@ -2159,14 +2171,28 @@ export class PurchaseService {
     };
   }
 
-  async verifyInspectionItem(recordId: string, itemId: string, actualQty: number) {
+  async verifyInspectionItem(recordId: string, itemId: string, actualQty: number, batchNo?: string, expDate?: string) {
     const record = await this.inspectionModel.findById(recordId).exec();
     if (!record) throw new RpcException({ message: 'Không tìm thấy phiên kiểm đếm' });
 
     const item = record.items.find(i => (i as any)._id.toString() === itemId);
     if (!item) throw new RpcException({ message: 'Item không tồn tại' });
+    if (!Number.isFinite(actualQty) || actualQty < 0) {
+      throw new RpcException({ message: 'Số lượng thực nhận không hợp lệ' });
+    }
+
+    const normalizedBatchNo = String(batchNo || '').trim();
+    const normalizedExpDate = expDate ? new Date(expDate) : null;
+    if (actualQty > 0 && !normalizedBatchNo) {
+      throw new RpcException({ message: 'Vui lòng nhập số lô trước khi xác nhận kiểm đếm' });
+    }
+    if (actualQty > 0 && (!normalizedExpDate || Number.isNaN(normalizedExpDate.getTime()))) {
+      throw new RpcException({ message: 'Vui lòng nhập hạn sử dụng hợp lệ trước khi xác nhận kiểm đếm' });
+    }
 
     item.actualQty = actualQty;
+    item.batchNo = normalizedBatchNo || undefined;
+    item.expDate = normalizedExpDate || undefined;
     // Tự động xác định lại label
     if (actualQty === item.expectedQty) item.label = 'MATCH';
     else item.label = 'MISMATCH';
@@ -2177,6 +2203,8 @@ export class PurchaseService {
       const grnItem = grn.items.find(i => i.medicineId === item.medicineId);
       if (grnItem) {
         grnItem.actualQty = actualQty;
+        if (normalizedBatchNo) grnItem.batchNo = normalizedBatchNo;
+        if (normalizedExpDate && !Number.isNaN(normalizedExpDate.getTime())) grnItem.expDate = normalizedExpDate;
         grnItem.status = 'VERIFIED';
       }
       await grn.save();

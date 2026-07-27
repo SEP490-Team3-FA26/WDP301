@@ -18,6 +18,8 @@ export function MobileAIInspection() {
   const [inspectionRecord, setInspectionRecord] = useState<any>(null);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [actualQty, setActualQty] = useState<number | "">("");
+  const [batchNo, setBatchNo] = useState("");
+  const [expDate, setExpDate] = useState("");
 
   // Simulated AI Scanner state
   const [isScanning, setIsScanning] = useState(false);
@@ -46,6 +48,9 @@ export function MobileAIInspection() {
   const handleScanAI = (item: any) => {
     setIsScanning(true);
     setSelectedItem(item);
+    setBatchNo(item.batchNo || "");
+    const parsedExpDate = item.expDate ? new Date(item.expDate) : null;
+    setExpDate(parsedExpDate && !Number.isNaN(parsedExpDate.getTime()) ? parsedExpDate.toISOString().slice(0, 10) : "");
     
     // Simulate AI scanning delay
     setTimeout(() => {
@@ -56,16 +61,28 @@ export function MobileAIInspection() {
 
   const handleVerify = async () => {
     if (!selectedItem || actualQty === "") return;
+    if (Number(actualQty) > 0 && !batchNo.trim()) {
+      setMsg({ type: "error", text: "Vui lòng nhập số lô trước khi chốt kiểm đếm" });
+      return;
+    }
+    if (Number(actualQty) > 0 && !expDate) {
+      setMsg({ type: "error", text: "Vui lòng chọn hạn sử dụng trước khi chốt kiểm đếm" });
+      return;
+    }
     setLoading(true);
     try {
       const data = await goodsReceiptService.verifyInspectionItem(
         inspectionRecord._id,
         selectedItem._id,
-        Number(actualQty)
+        Number(actualQty),
+        batchNo.trim(),
+        expDate
       );
       setInspectionRecord(data.data);
       setSelectedItem(null);
       setActualQty("");
+      setBatchNo("");
+      setExpDate("");
       setMsg({ type: "success", text: "Đã cập nhật số lượng thực tế" });
     } catch (err: any) {
       setMsg({ type: "error", text: err.response?.data?.message || err.message || "Lỗi xác nhận" });
@@ -90,7 +107,8 @@ export function MobileAIInspection() {
 
   if (!grnId) return <div className="p-4">Loading...</div>;
 
-  const isAllVerified = inspectionRecord?.items?.every((it: any) => it.actualQty > 0 || it.label === 'MATCH');
+  const isItemVerified = (item: any) => Number(item.actualQty) > 0 && !!item.batchNo && !!item.expDate;
+  const isAllVerified = inspectionRecord?.items?.every(isItemVerified);
 
   return (
     <div className="flex flex-col h-full bg-[#f8f8ff] overflow-y-auto">
@@ -147,7 +165,7 @@ export function MobileAIInspection() {
                 <div key={item._id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="font-bold text-sm text-slate-800 leading-tight pr-2">{item.medicineName}</h4>
-                    {item.actualQty > 0 ? (
+                    {isItemVerified(item) ? (
                       <span className="shrink-0 bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold">Đã chốt</span>
                     ) : (
                       <span className="shrink-0 bg-rose-100 text-rose-700 px-2 py-1 rounded-lg text-xs font-bold">Chưa quét</span>
@@ -161,13 +179,26 @@ export function MobileAIInspection() {
                     </div>
                     <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
                       <span className="block text-slate-400 mb-0.5">Thực tế</span>
-                      <span className={`font-bold ${item.actualQty > 0 ? (item.actualQty === item.expectedQty ? "text-emerald-600" : "text-rose-600") : "text-slate-400"}`}>
-                        {item.actualQty > 0 ? `${item.actualQty} hộp` : "—"}
+                      <span className={`font-bold ${Number(item.actualQty) > 0 ? (item.actualQty === item.expectedQty ? "text-emerald-600" : "text-rose-600") : "text-slate-400"}`}>
+                        {Number(item.actualQty) > 0 ? `${item.actualQty} hộp` : "—"}
                       </span>
                     </div>
                   </div>
 
-                  {item.actualQty === 0 && (
+                  {isItemVerified(item) && (
+                    <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span className="block text-slate-400 mb-0.5">Số lô</span>
+                        <span className="font-bold text-slate-700">{item.batchNo}</span>
+                      </div>
+                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span className="block text-slate-400 mb-0.5">Hạn sử dụng</span>
+                        <span className="font-bold text-slate-700">{new Date(item.expDate).toLocaleDateString("vi-VN")}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isItemVerified(item) && (
                     <button onClick={() => handleScanAI(item)}
                       className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
                       <Camera size={16} /> Quét AI & Nhập số lượng
@@ -216,7 +247,12 @@ export function MobileAIInspection() {
               <div className="w-full p-4 absolute bottom-0 bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] pb-8">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-slate-800 text-lg">Kết quả phân tích AI</h3>
-                  <button onClick={() => setSelectedItem(null)} className="p-2 bg-slate-100 rounded-full text-slate-500"><X size={18} /></button>
+                  <button onClick={() => {
+                    setSelectedItem(null);
+                    setActualQty("");
+                    setBatchNo("");
+                    setExpDate("");
+                  }} className="p-2 bg-slate-100 rounded-full text-slate-500"><X size={18} /></button>
                 </div>
                 
                 <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 mb-4 flex items-center gap-4">
@@ -241,7 +277,29 @@ export function MobileAIInspection() {
                   )}
                 </div>
 
-                <button onClick={handleVerify} disabled={loading || actualQty === ""}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Số lô (Batch No.)</label>
+                    <input
+                      type="text"
+                      value={batchNo}
+                      onChange={(e) => setBatchNo(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder="VD: B007"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Hạn sử dụng</label>
+                    <input
+                      type="date"
+                      value={expDate}
+                      onChange={(e) => setExpDate(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <button onClick={handleVerify} disabled={loading || actualQty === "" || (Number(actualQty) > 0 && (!batchNo.trim() || !expDate))}
                   className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50">
                   {loading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                   Chốt Số Lượng

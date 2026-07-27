@@ -18,6 +18,12 @@ export class InspectionRecordItem {
   @Prop({ type: Number, default: 0, min: 0 })
   actualQty: number;
 
+  @Prop({ type: String })
+  batchNo?: string;
+
+  @Prop({ type: Date })
+  expDate?: Date;
+
   @Prop({ type: String, default: 'MATCH', enum: ['MATCH', 'WARNING', 'MISMATCH'] })
   label: string;
 

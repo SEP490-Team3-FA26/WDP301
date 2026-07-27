@@ -349,9 +349,9 @@ export class PurchaseController {
   }
 
   @MessagePattern('inventory.inspection.verify_item')
-  async verifyInspectionItem(@Payload() data: { recordId: string; itemId: string; actualQty: number }) {
+  async verifyInspectionItem(@Payload() data: { recordId: string; itemId: string; actualQty: number; batchNo?: string; expDate?: string }) {
     try {
-      return await this.purchaseService.verifyInspectionItem(data.recordId, data.itemId, data.actualQty);
+      return await this.purchaseService.verifyInspectionItem(data.recordId, data.itemId, data.actualQty, data.batchNo, data.expDate);
     } catch (error) {
       throw new RpcException(error.message || 'Lỗi xác nhận số lượng kiểm đếm');
     }

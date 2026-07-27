@@ -51,8 +51,8 @@ export const goodsReceiptService = {
     return response.data;
   },
 
-  async verifyInspectionItem(recordId: string, itemId: string, actualQty: number) {
-    const response = await api.post('/api/goods-receipts/inspections/verify', { recordId, itemId, actualQty });
+  async verifyInspectionItem(recordId: string, itemId: string, actualQty: number, batchNo?: string, expDate?: string) {
+    const response = await api.post('/api/goods-receipts/inspections/verify', { recordId, itemId, actualQty, batchNo, expDate });
     return response.data;
   },
 
