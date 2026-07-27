@@ -81,6 +81,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
   const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
   const [payosPolling, setPayosPolling] = useState(false);
   const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
+  const payosPaidHandledRef = useRef(false);
 
   const normalizeInvoiceResult = (result: any) => {
     const source = result?.saleResult || result;
@@ -174,10 +175,10 @@ export default function RetailView({ showToast }: RetailViewProps) {
       interval = setInterval(async () => {
         try {
           const data = await orderService.checkOrderStatus(payosOrderCode);
-          if (data.status === "PAID") {
+          if (data.status === "PAID" && !payosPaidHandledRef.current) {
+            payosPaidHandledRef.current = true;
             setPayosPolling(false);
             setShowPayOSModal(false);
-            showToast("Thanh toán PayOS thành công!", "success");
             setInvoiceData(normalizeInvoiceResult(data));
             setShowInvoiceModal(true);
             setCart([]); // Clear cart
@@ -194,10 +195,10 @@ export default function RetailView({ showToast }: RetailViewProps) {
     if (!payosOrderCode) return;
     try {
       const data = await orderService.checkOrderStatus(payosOrderCode);
-      if (data.status === "PAID") {
+      if (data.status === "PAID" && !payosPaidHandledRef.current) {
+        payosPaidHandledRef.current = true;
         setPayosPolling(false);
         setShowPayOSModal(false);
-        showToast("Thanh toán PayOS thành công!", "success");
         setInvoiceData(normalizeInvoiceResult(data));
         setShowInvoiceModal(true);
         setCart([]); // Clear cart
@@ -532,6 +533,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
         payload.orderCode = payosResult.orderCode;
 
+        payosPaidHandledRef.current = false;
         setPayosCheckoutUrl(payosResult.checkoutUrl);
         setPayosQrCode(payosResult.qrCode || "");
         setPayosOrderCode(payosResult.orderCode);
