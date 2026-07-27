@@ -126,6 +126,7 @@ export function DashboardHome() {
             { id: "UC-17", name: "Xuất kho nội bộ", icon: <ArrowRightLeft size={24} />, color: "bg-amber-50 text-amber-600 border-amber-200", link: "/warehouse/inventory/export" },
             { id: "UC-23", name: "Lot Tracking / Truy xuất", icon: <History size={24} />, color: "bg-indigo-50 text-indigo-600 border-indigo-200", link: "/warehouse/lot-tracking" },
             { id: "UC-38", name: "Cảnh báo Min Stock (AI)", icon: <Sparkles size={24} />, color: "bg-rose-50 text-rose-600 border-rose-200", link: "/warehouse/ai-forecast" },
+            { id: "UC-34", name: "Dự báo Nhu cầu (AI)", icon: <Sparkles size={24} />, color: "bg-emerald-50 text-emerald-600 border-emerald-200", link: "/warehouse/ai-forecast" },
           ]
         };
       case "head_branch":
