@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { stockTransferService } from "../../services/inventory/stockTransfer.service";
+import { useSocket } from "../../hooks/useSocket";
 
 function getBranchUserFromToken() {
   const token = localStorage.getItem("token");
@@ -42,6 +43,9 @@ export function BranchStockReceive() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const { onEvent, offEvent, isConnected } = useSocket();
 
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
@@ -64,6 +68,24 @@ export function BranchStockReceive() {
   useEffect(() => {
     void fetchTransfers();
   }, [fetchTransfers]);
+
+  useEffect(() => {
+    const handleInventoryUpdate = (data: any) => {
+      if (["TRANSFER_SHIPPED", "TRANSFER_DELIVERED", "STOCK_TRANSFER_CREATED", "STOCK_TRANSFER_RECEIVED"].includes(data?.event)) {
+        void fetchTransfers();
+      }
+    };
+
+    onEvent("inventory_updated", handleInventoryUpdate);
+    return () => offEvent("inventory_updated", handleInventoryUpdate);
+  }, [fetchTransfers, offEvent, onEvent]);
+
+  const totalPages = Math.max(1, Math.ceil(transfers.length / pageSize));
+  const paginatedTransfers = transfers.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const handleConfirmReceipt = async (transferId: string) => {
     setActionLoading(transferId);
@@ -152,17 +174,21 @@ export function BranchStockReceive() {
             Khi hàng đến nơi, vui lòng bấm <b>"Xác nhận nhận hàng"</b>. Thuốc sẽ tự động được thêm vào số lượng tồn kho của chi nhánh bạn và hoàn tất phiếu yêu cầu gốc.
           </p>
         </div>
+        <span className={`ml-auto shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black border ${isConnected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+          <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500" : "bg-slate-400"}`} />
+          {isConnected ? "Realtime" : "Offline"}
+        </span>
       </div>
 
       {/* Main List */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex-1">
-        <div className="p-4 border-b border-slate-200 bg-slate-50">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+        <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0">
           <h2 className="text-sm font-bold text-slate-700 flex items-center gap-2">
             <ClipboardCheck size={16} className="text-emerald-600" />
             Danh sách phiếu chuyển kho
           </h2>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto flex-1 min-h-0">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <Loader2 className="animate-spin text-emerald-600" size={28} />
@@ -174,8 +200,8 @@ export function BranchStockReceive() {
               <p className="text-sm font-semibold">Hiện chưa có phiếu chuyển kho nào gửi tới chi nhánh của bạn.</p>
             </div>
           ) : (
-            <table className="w-full text-sm text-left">
-              <thead className="text-[11px] text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 border-b border-slate-200">
+            <table className="w-full min-w-[920px] text-sm text-left">
+              <thead className="text-[11px] text-slate-500 font-bold uppercase tracking-wider bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="px-5 py-3">Mã phiếu chuyển</th>
                   <th className="px-5 py-3">Mã yêu cầu PR</th>
@@ -186,7 +212,7 @@ export function BranchStockReceive() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {transfers.map((tf) => (
+                {paginatedTransfers.map((tf) => (
                   <tr key={tf._id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-3.5 font-bold text-slate-900">{tf.transferCode}</td>
                     <td className="px-5 py-3.5 font-medium text-slate-600">{tf.prCode}</td>
@@ -232,6 +258,32 @@ export function BranchStockReceive() {
             </table>
           )}
         </div>
+        {!loading && transfers.length > 0 && (
+          <div className="shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <span className="text-xs font-bold text-slate-500">
+              Hiển thị {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, transfers.length)} / {transfers.length} phiếu
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100"
+              >
+                Trước
+              </button>
+              <span className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-black text-slate-700">
+                Trang {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100"
+              >
+                Sau
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Detail Modal */}

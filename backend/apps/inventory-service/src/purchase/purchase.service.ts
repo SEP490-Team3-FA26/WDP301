@@ -1391,6 +1391,15 @@ export class PurchaseService {
 
       await session.commitTransaction();
 
+      this.supplierClient.emit('broadcast.inventory_updated', {
+        event: 'TRANSFER_SHIPPED',
+        timestamp: new Date().toISOString(),
+        transferId: transfer._id.toString(),
+        transferCode,
+        fromBranchId,
+        toBranchId: pr.branchId,
+      });
+
       return {
         success: true,
         message: `Đã xuất kho tại ${sourceName} và tạo phiếu chuyển kho ${transferCode} thành công.`,
@@ -1545,6 +1554,15 @@ export class PurchaseService {
         toBranchId: transfer.toBranchId,
         status: transfer.status,
         totalQuantity: transfer.items.reduce((sum, item) => sum + item.quantity, 0),
+      });
+
+      this.supplierClient.emit('broadcast.inventory_updated', {
+        event: 'TRANSFER_DELIVERED',
+        timestamp: new Date().toISOString(),
+        transferId: transfer._id.toString(),
+        transferCode: transfer.transferCode,
+        fromBranchId: transfer.fromBranchId,
+        toBranchId: transfer.toBranchId,
       });
 
       return {
@@ -2059,6 +2077,15 @@ export class PurchaseService {
         status: transfer.status,
         itemCount: allocatedItems.length,
         totalQuantity: allocatedItems.reduce((sum, item) => sum + item.quantity, 0),
+      });
+
+      this.supplierClient.emit('broadcast.inventory_updated', {
+        event: 'TRANSFER_DELIVERED',
+        timestamp: new Date().toISOString(),
+        transferId: transfer._id.toString(),
+        transferCode,
+        fromBranchId,
+        toBranchId: data.toBranchId,
       });
 
       return {
