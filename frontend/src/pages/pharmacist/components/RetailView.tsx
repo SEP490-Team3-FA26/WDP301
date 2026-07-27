@@ -77,6 +77,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
   const [showPayOSModal, setShowPayOSModal] = useState(false);
   const [payosCheckoutUrl, setPayosCheckoutUrl] = useState("");
+  const [payosQrCode, setPayosQrCode] = useState("");
   const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
   const [payosPolling, setPayosPolling] = useState(false);
   const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
@@ -423,7 +424,6 @@ export default function RetailView({ showToast }: RetailViewProps) {
       setVoucherError("Vui lòng nhập mã giảm giá");
       return;
     }
-
     if (cart.length === 0 || subtotal <= 0) {
       setVoucherError("Vui lòng thêm sản phẩm trước khi áp dụng mã");
       return;
@@ -521,6 +521,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
         payload.orderCode = payosResult.orderCode;
 
         setPayosCheckoutUrl(payosResult.checkoutUrl);
+        setPayosQrCode(payosResult.qrCode || "");
         setPayosOrderCode(payosResult.orderCode);
         setPendingSalePayload(payload);
         setShowPayOSModal(true);
@@ -1180,7 +1181,11 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner flex items-center justify-center">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosCheckoutUrl)}`}
+                  src={
+                    payosQrCode.startsWith("http")
+                      ? payosQrCode
+                      : `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosQrCode || payosCheckoutUrl)}`
+                  }
                   alt="VietQR PayOS"
                   className="w-56 h-56 rounded-lg object-contain"
                 />
