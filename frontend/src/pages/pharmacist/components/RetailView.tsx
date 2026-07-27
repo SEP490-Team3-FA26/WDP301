@@ -415,10 +415,48 @@ export default function RetailView({ showToast }: RetailViewProps) {
     }
   };
 
-  const handleApplyVoucher = () => { };
+  const handleApplyVoucher = async () => {
+    const code = voucherCode.trim().toUpperCase();
+    setVoucherError("");
+
+    if (!code) {
+      setVoucherError("Vui lòng nhập mã giảm giá");
+      return;
+    }
+
+    if (cart.length === 0 || subtotal <= 0) {
+      setVoucherError("Vui lòng thêm sản phẩm trước khi áp dụng mã");
+      return;
+    }
+
+    setIsValidatingVoucher(true);
+    try {
+      const result = await voucherService.validateVoucher(code, subtotal);
+      if (result?.error) {
+        setVoucherError(result.message || "Mã giảm giá không hợp lệ");
+        setAppliedVoucher(null);
+        return;
+      }
+
+      setAppliedVoucher(result);
+      setVoucherCode("");
+      const maxRedeem = Math.floor(Math.max(0, subtotal - vipDiscount - result.discount) * 0.5);
+      if (redeemedPoints > maxRedeem) {
+        setRedeemedPoints(maxRedeem);
+      }
+      showToast(`Đã áp dụng mã ${result.code}`, "success");
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || "Không thể áp dụng mã giảm giá";
+      setVoucherError(msg);
+      setAppliedVoucher(null);
+    } finally {
+      setIsValidatingVoucher(false);
+    }
+  };
 
   const handleRemoveVoucher = () => {
     setAppliedVoucher(null);
+    setVoucherError("");
   };
 
   const updateQty = (id: string, change: number, maxStock: number) => {
