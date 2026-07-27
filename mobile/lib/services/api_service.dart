@@ -7,10 +7,17 @@ import 'env_service.dart';
 
 class ApiService {
   // Configurable base URL: dynamically falls back to localhost on Web
-  static const String baseUrl = kIsWeb
-      ? 'http://localhost:4000'
-      : '10.12.64.111'; // ae mô gặp vấn đề về khúc ni thì mở terminal ping cái lệnh này để lấy địa chỉ mạng nhé:  ipconfig getifaddr en0
-  static const String fallbackUrl = 'http://localhost:4000';
+  static String get baseUrl {
+    final envUrl = EnvService.get('API_URL');
+    if (envUrl != null && envUrl.isNotEmpty) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android && (envUrl.contains('localhost') || envUrl.contains('127.0.0.1'))) {
+        return envUrl.replaceAll('127.0.0.1', '10.0.2.2').replaceAll('localhost', '10.0.2.2');
+      }
+      return envUrl;
+    }
+    return kIsWeb ? 'http://localhost:4000' : 'http://10.0.2.2:4000';
+  }
+  static String get fallbackUrl => baseUrl;
 
   static String get aiBaseUrl {
     final envUrl = EnvService.get('AI_URL') ?? EnvService.get('AI_BASE_URL');
@@ -412,7 +419,7 @@ class ApiService {
       var request = http.MultipartRequest(
         'POST',
         Uri.parse(
-          '$baseUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection',
+          '$aiBaseUrl/api/ai/receipts/$receiptId/items/$receiptItemId/inspection',
         ),
       );
       request.headers.addAll(_authHeaders);

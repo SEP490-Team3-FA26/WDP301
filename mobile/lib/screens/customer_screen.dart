@@ -1094,7 +1094,7 @@ class _CustomerScreenState extends State<CustomerScreen>
                   ),
                   const Divider(),
                   Text(
-                    'Tổng cộng: ${_totalAmount.toString()} ₫',
+                    'Tổng cộng: ${result['totalAmount'] ?? result['finalAmount'] ?? result['order']?['totalAmount'] ?? result['order']?['finalAmount'] ?? 0} đ',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
