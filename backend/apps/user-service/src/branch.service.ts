@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Branch, BranchDocument } from './schemas/branch.schema';
@@ -6,7 +6,7 @@ import { User, UserDocument } from '../../auth-service/src/auth/user.schema';
 import { MedicineBatch } from '../../inventory-service/src/medicine/schemas/medicine-batch.schema';
 
 @Injectable()
-export class BranchService implements OnModuleInit {
+export class BranchService {
   private readonly logger = new Logger(BranchService.name);
 
   constructor(
@@ -17,66 +17,6 @@ export class BranchService implements OnModuleInit {
     @InjectModel(MedicineBatch.name)
     private readonly batchModel: Model<MedicineBatch>,
   ) {}
-
-  async onModuleInit() {
-    try {
-      const count = await this.branchModel.countDocuments().exec();
-      if (count === 0) {
-        this.logger.log('🌱 Bắt đầu seeding dữ liệu chi nhánh mẫu...');
-        const seedBranches = [
-          {
-            branchCode: 'BR-001',
-            name: 'Nhà thuốc ABC Pharmacy - CN1',
-            address: 'Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
-            image: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=500&auto=format&fit=crop&q=60',
-            status: 'active',
-            manager: 'Nguyễn Văn A',
-            contact: '0901234567',
-            stats: { employees: 0, totalStock: 0, lowStock: 0, expiring: 0 },
-            alerts: [],
-          },
-          {
-            branchCode: 'BR-002',
-            name: 'Nhà thuốc ABC Pharmacy - CN2',
-            address: 'Phường Thảo Điền, Quận 2, TP. Hồ Chí Minh',
-            image: 'https://images.unsplash.com/photo-1555636222-cae831e670b3?w=500&auto=format&fit=crop&q=60',
-            status: 'active',
-            manager: 'Trần Thị B',
-            contact: '0912345678',
-            stats: { employees: 0, totalStock: 0, lowStock: 0, expiring: 0 },
-            alerts: [],
-          },
-          {
-            branchCode: 'BR-003',
-            name: 'Nhà thuốc ABC Pharmacy - CN3',
-            address: 'Phường Hải Châu 1, Quận Hải Châu, Đà Nẵng',
-            image: 'https://images.unsplash.com/photo-1576602976047-174e57a47881?w=500&auto=format&fit=crop&q=60',
-            status: 'maintenance',
-            manager: 'Lê Văn C',
-            contact: '0923456789',
-            stats: { employees: 0, totalStock: 0, lowStock: 0, expiring: 0 },
-            alerts: [],
-          },
-          {
-            branchCode: 'BR-004',
-            name: 'Nhà thuốc ABC Pharmacy - CN4',
-            address: 'Phường Tràng Tiền, Quận Hoàn Kiếm, Hà Nội',
-            image: 'https://images.unsplash.com/photo-1563213126-a4273aedbc13?w=500&auto=format&fit=crop&q=60',
-            status: 'active',
-            manager: 'Phạm Thị D',
-            contact: '0934567890',
-            stats: { employees: 0, totalStock: 0, lowStock: 0, expiring: 0 },
-            alerts: [],
-          },
-        ];
-
-        await this.branchModel.insertMany(seedBranches);
-        this.logger.log('✅ Đã seed thành công 4 chi nhánh!');
-      }
-    } catch (error) {
-      this.logger.error('❌ Lỗi khi seeding chi nhánh:', error);
-    }
-  }
 
   async findAll(): Promise<any[]> {
     const branches = await this.branchModel.find().sort({ branchCode: 1 }).lean().exec();

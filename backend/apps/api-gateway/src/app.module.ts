@@ -42,6 +42,10 @@ import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
 import { RedactionService } from './services/redaction.service';
 import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
 
+import { randomUUID } from 'crypto';
+
+const gatewayInstanceId = randomUUID().substring(0, 8);
+
 /**
  * Root Module của API Gateway
  * Chỉ chứa các module để routing và caching — không kết nối trực tiếp Database
@@ -90,7 +94,7 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
             retry: { initialRetryTime: 1000, retries: 10 },
             logLevel: 0,
           },
-          consumer: { groupId: 'api-gw-supplier-group' },
+          consumer: { groupId: `api-gw-supplier-group-${gatewayInstanceId}` },
           producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
@@ -105,7 +109,7 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
             retry: { initialRetryTime: 1000, retries: 10 },
             logLevel: 0,
           },
-          consumer: { groupId: 'api-gw-inventory-group' },
+          consumer: { groupId: `api-gw-inventory-group-${gatewayInstanceId}` },
           producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
@@ -121,7 +125,7 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
             logLevel: 0,
           },
           consumer: {
-            groupId: 'api-gateway-user-group',
+            groupId: `api-gateway-user-group-${gatewayInstanceId}`,
           },
           producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
@@ -138,7 +142,7 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
             logLevel: 0,
           },
           consumer: {
-            groupId: 'api-gateway-group',
+            groupId: `api-gateway-group-${gatewayInstanceId}`,
           },
           producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
@@ -154,7 +158,7 @@ import { AuditFallbackProcessor } from './processors/audit-fallback.processor';
             retry: { initialRetryTime: 1000, retries: 10 },
             logLevel: 0,
           },
-          consumer: { groupId: 'api-gw-order-group' },
+          consumer: { groupId: `api-gw-order-group-${gatewayInstanceId}` },
           producer: { allowAutoTopicCreation: true, maxMessageBytes: 10485760 },
         },
       },
@@ -323,12 +327,19 @@ export class AppGatewayModule implements OnModuleInit {
       'auth.resend.verification',
     ];
 
+    for (const t of inventoryTopics) this.inventoryClient.subscribeToResponseOf(t);
+    for (const t of supplierTopics) this.supplierClient.subscribeToResponseOf(t);
+    for (const t of userTopics) this.userClient.subscribeToResponseOf(t);
+    for (const t of orderTopics) this.orderClient.subscribeToResponseOf(t);
+    for (const t of kafkaTopics) this.kafkaClient.subscribeToResponseOf(t);
+
+    const { connectKafkaClient } = require('./common/kafka.helper');
     await Promise.all([
-      subscribeToKafkaTopics(this.inventoryClient, inventoryTopics, 60, 3000),
-      subscribeToKafkaTopics(this.supplierClient, supplierTopics, 60, 3000),
-      subscribeToKafkaTopics(this.userClient, userTopics, 60, 3000),
-      subscribeToKafkaTopics(this.orderClient, orderTopics, 60, 3000),
-      subscribeToKafkaTopics(this.kafkaClient, kafkaTopics, 60, 3000),
+      connectKafkaClient(this.inventoryClient),
+      connectKafkaClient(this.supplierClient),
+      connectKafkaClient(this.userClient),
+      connectKafkaClient(this.orderClient),
+      connectKafkaClient(this.kafkaClient),
     ]);
 
     console.log('🏁 [API Gateway] All global Kafka reply topics pre-subscribed & connected successfully.');

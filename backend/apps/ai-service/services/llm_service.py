@@ -2,12 +2,41 @@ import os
 from groq import AsyncGroq
 import json
 import re
+import httpx
 
 def get_groq_client() -> AsyncGroq:
     key = os.getenv("GROQ_API_KEY") or os.getenv("EXPO_PUBLIC_GROQ_API_KEY")
     if not key:
         raise RuntimeError("GROQ_API_KEY is not configured")
     return AsyncGroq(api_key=key)
+
+def get_deepseek_api_key() -> str | None:
+    return os.getenv("PHUC_DEEPSEEK_V4_FLASH") or os.getenv("DEEPSEEK_API_KEY")
+
+async def call_deepseek_v4_flash(messages: list[dict], response_format: dict | None = None) -> str:
+    key = get_deepseek_api_key()
+    if not key:
+        raise RuntimeError("PHUC_DEEPSEEK_V4_FLASH is not configured")
+    
+    url = "https://api.deepseek.com/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "deepseek-v4-flash",
+        "messages": messages,
+    }
+    if response_format:
+        payload["response_format"] = response_format
+
+    print("🤖 [AI Service] Đang gọi trực tiếp DeepSeek API (model: deepseek-v4-flash)...")
+    async with httpx.AsyncClient(timeout=25.0) as client:
+        res = await client.post(url, headers=headers, json=payload)
+        res.raise_for_status()
+        data = res.json()
+        print("✅ [AI Service] DeepSeek API phản hồi thành công!")
+        return data["choices"][0]["message"]["content"]
 
 RETRIEVAL_NORMALIZATION_PROMPT = """Bạn làm nhiệm vụ làm sạch bản ghi âm tiếng Việt cho tìm kiếm y tế.
 Hãy sửa các lỗi nhận dạng giọng nói rõ ràng và rút gọn thành các triệu chứng/ngữ cảnh y tế có trong lời nói.
@@ -125,32 +154,44 @@ async def generate_prescription(transcript: str, context: str) -> dict:
     except json.JSONDecodeError:
         return {"error": "Lỗi phân tích JSON từ LLM", "raw_content": content}
 
-INTERACTION_SYSTEM_PROMPT = """Bạn là Dược sĩ lâm sàng AI chuyên nghiệp.
-Nhiệm vụ của bạn là phân tích tương tác giữa các loại thuốc dựa trên CƠ SỞ DỮ LIỆU được cung cấp.
+INTERACTION_SYSTEM_PROMPT = """Bạn là Dược sĩ lâm sàng AI chuyên nghiệp tại Việt Nam.
+Nhiệm vụ của bạn là phân tích tương tác giữa các loại thuốc dựa trên CƠ SỞ DỮ LIỆU ĐÃ ĐƯỢC XÁC THỰC được cung cấp dưới đây.
 
---- CƠ SỞ DỮ LIỆU THUỐC ---
+--- CƠ SỞ DỮ LIỆU THUỐC & HOẠT CHẤT ---
 {rag_context}
---------------------------
-Danh sách các thuốc được yêu cầu kiểm tra: {medicines_list}
+----------------------------------------
+Danh sách các thuốc/chất được yêu cầu kiểm tra: {medicines_list}
+
+NGUYÊN TẮC BẮT BUỘC KHÔNG ĐƯỢC VI PHẠM:
+1. Phân tích tương tác dựa trên HOẠT CHẤT DƯỢC LÝ (Active Ingredient) và cơ chế tác dụng thực tế.
+2. TUYỆT ĐỐI KHÔNG BỊA RA TÊN THUỐC KHÔNG TỒN TẠI VÀ KHÔNG TỰ BỊA TƯƠNG TÁC GIẢ.
+3. Người dùng chỉ nhập đúng các chất trong danh sách: {medicines_list}. TUYỆT ĐỐI KHÔNG COI TÊN THƯƠNG HIỆU THAM KHẢO LÀ MỘT THUỐC THỨ HẠI ĐỘC LẬP VỚI MỤC NGƯỜI DÙNG NHẬP (Ví dụ: Nếu người dùng nhập 'paracetamol', DB tham khảo là 'SaViMetoc', bạn PHẢI hiểu đó là thông tin ngữ cảnh của mục 'paracetamol', KHÔNG ĐƯỢC coi SaViMetoc và paracetamol là 2 thuốc riêng biệt gây quá liều với nhau!).
+4. Mảng `interactions` CHỈ ĐƯỢC CHỨA CÁC CẶP THUỐC CÓ TƯƠNG TÁC HOẶC NGUY CƠ NGUY HIỂM THỰC TẾ.
+   - TUYỆT ĐỐI KHÔNG đưa các cặp AN TOÀN / KHÔNG TƯƠNG TÁC (như Kẹo, Nước ngọt, Nước lọc, hoặc các thuốc an toàn khi dùng chung) vào mảng `interactions`.
+   - Nếu tất cả các thuốc trong danh sách đều an toàn và không tương tác với nhau, mảng `interactions` BẮT BUỘC PHẢI LÀ MẢNG RỖNG `[]`, `has_interactions = false`, và `severity = "An toàn"`.
+5. Nếu phát hiện chất cấm, ma túy, rượu cồn hoặc thuốc lá: Gán mức độ severity = "Cực kỳ nguy hiểm".
+6. Nếu phát hiện trùng lặp hoạt chất giữa 2 THUỐC KHÁC NHAU người dùng nhập (VD: Paracetamol + Panadol): Gán mức độ severity = "Cao" và cảnh báo nguy cơ ngộ độc/tổn thương cơ quan.
+7. Nếu danh sách chứa các từ vô nghĩa, từ cảm thán hoặc không phải tên thuốc/thực phẩm y tế (như 'ád', 'ds', 'ok', 'uh', 'test', 'abc'...): TUYỆT ĐỐI KHÔNG BỊA RA TÊN THUỐC Y TẾ KHÁC (như Sắt, Thuốc kháng acid...). Bắt buộc gán severity = "Không xác định", has_interactions = false, interactions = [] và general_advice nhắc người dùng cung cấp tên thuốc chính xác để phân tích.
 
 BẮT BUỘC TRẢ VỀ JSON HỢP LỆ THEO SCHEMA SAU (KHÔNG GIẢI THÍCH THÊM):
 {
   "has_interactions": true,
-  "severity": "Cao | Trung bình | Thấp | An toàn",
+  "severity": "Cực kỳ nguy hiểm | Cao | Trung bình | Thấp | An toàn | Không xác định",
   "interactions": [
     {
-      "drug_a": "Tên thuốc 1",
-      "drug_b": "Tên thuốc 2",
-      "description": "Mô tả tương tác và hậu quả",
-      "recommendation": "Khuyến nghị xử lý (VD: Giãn cách giờ uống, đổi thuốc)"
+      "drug_a": "Tên mục người dùng nhập 1",
+      "drug_b": "Tên mục người dùng nhập 2",
+      "description": "Mô tả tương tác và hậu quả dược lý",
+      "recommendation": "Khuyến nghị xử lý (VD: CHỐNG CHỈ ĐỊNH, giãn cách giờ uống 2h, đổi thuốc)"
     }
   ],
-  "general_advice": "Lời khuyên tổng quát cho Dược sĩ"
+  "general_advice": "Lời khuyên tổng quát dành cho Dược sĩ"
 }"""
 
 async def check_drug_interactions(medicines_list: list[str], context: str) -> dict:
     """
-    Tạo báo cáo tương tác thuốc JSON dựa trên danh sách thuốc và context từ RAG
+    Tạo báo cáo tương tác thuốc JSON dựa trên danh sách thuốc và context từ RAG & Database.
+    Ưu tiên sử dụng DeepSeek V4 Flash (PHUC_DEEPSEEK_V4_FLASH), fallback sang Groq Llama 3.
     """
     system_prompt = INTERACTION_SYSTEM_PROMPT.replace(
         "{rag_context}", context or "Không có dữ liệu ngữ cảnh."
@@ -158,21 +199,20 @@ async def check_drug_interactions(medicines_list: list[str], context: str) -> di
         "{medicines_list}", ", ".join(medicines_list)
     )
     
-    response = await get_groq_client().chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "Hãy phân tích tương tác giữa các loại thuốc trên."}
-        ],
-        temperature=0.1,
-        response_format={"type": "json_object"}
-    )
-    
-    content = response.choices[0].message.content
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": "Hãy phân tích chi tiết tương tác giữa các loại thuốc trên và xuất JSON chuẩn."}
+    ]
+
+    # Gọi trực tiếp DeepSeek V4 Flash API (PHUC_DEEPSEEK_V4_FLASH)
     try:
+        content = await call_deepseek_v4_flash(messages, response_format={"type": "json_object"})
         return json.loads(content)
     except json.JSONDecodeError:
-        return {"error": "Lỗi phân tích JSON từ LLM", "raw_content": content}
+        return {"error": "Lỗi phân tích JSON từ DeepSeek LLM", "raw_content": content}
+    except Exception as exc:
+        print(f"❌ DeepSeek V4 Flash API call failed: {exc}")
+        raise exc
 
 FORECAST_SYSTEM_PROMPT = """Bạn là Chuyên gia Kế hoạch & Phân tích Chuỗi cung ứng Dược phẩm bằng AI tại Việt Nam.
 Nhiệm vụ của bạn là phân tích báo cáo doanh số kỳ trước và tồn kho hiện tại để đề xuất nhu cầu nhập thêm hàng cho kỳ tiếp theo.

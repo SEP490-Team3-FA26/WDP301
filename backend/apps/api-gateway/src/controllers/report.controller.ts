@@ -23,16 +23,7 @@ export class ReportController implements OnModuleInit {
   ) { }
 
   async onModuleInit() {
-    await subscribeToKafkaTopics(this.inventoryClient, [
-      'inventory.sale.report',
-      'inventory.profit.report',
-      'inventory.report.create',
-      'inventory.report.list',
-      'inventory.sale.performance',
-      'inventory.reports.forecast_dataset',
-      'inventory.medicine.stats',
-      'inventory.reports.seasonal_trends',
-    ]);
+    // Topics are already subscribed globally in AppGatewayModule
   }
 
   @Get('history')
@@ -442,36 +433,43 @@ export class ReportController implements OnModuleInit {
 
         if (response.ok) {
           const aiResult = await response.json();
-          if (Array.isArray(aiResult.recommendations)) {
-            aiResult.recommendations = aiResult.recommendations.map((item: any) => {
-              const stock = item.currentStock || 0;
-              const sales = item.averageDailySales || 0;
-              const incoming = item.expectedIncoming || 0;
-              const unitStr = item.unit || 'Hộp';
-              const reorderPoint = item.minStock || item.reorderPoint || 30;
+          const targetArray = Array.isArray(aiResult.enriched_dataset) ? aiResult.enriched_dataset : 
+                              Array.isArray(aiResult.recommendations) ? aiResult.recommendations : 
+                              rawDataset;
+                              
+          aiResult.recommendations = targetArray.map((item: any) => {
+            const stock = item.currentStock || 0;
+            const sales = item.averageDailySales || 0;
+            const incoming = item.expectedIncoming || 0;
+            const unitStr = item.unit || 'Hộp';
+            const reorderPoint = item.minStock || item.reorderPoint || 30;
+            
+            // Ưu tiên lấy forecast từ AI nếu có, nếu không lấy trung bình tiêu thụ
+            const aiForecast = item.forecast_m1 || 0;
+            const expectedDemand = aiForecast > 0 ? aiForecast : sales * days;
 
-              const needed = Math.round(sales * days + reorderPoint);
-              const available = stock + incoming;
-              const suggestedRaw = Math.max(0, needed - available);
+            const needed = Math.round(expectedDemand + reorderPoint);
+            const available = stock + incoming;
+            const suggestedRaw = Math.max(0, needed - available);
 
-              if (suggestedRaw <= 0) {
-                return {
-                  ...item,
-                  suggestedOrderQty: 0,
-                  urgency: 'LOW',
-                  reason: `Tồn kho hiện tại (${stock} ${unitStr}) và hàng đang về (+${incoming}) đáp ứng đủ nhu cầu tiêu thụ trong ${days} ngày tới. Không cần nhập thêm.`,
-                };
-              } else {
-                const suggestedOrderQty = Math.max(10, Math.ceil(suggestedRaw / 10) * 10);
-                return {
-                  ...item,
-                  suggestedOrderQty,
-                  urgency: stock <= 10 ? 'HIGH' : 'MEDIUM',
-                  reason: `Tồn kho hiện tại (${stock} ${unitStr}) sắp chạm ngưỡng an toàn ROP (${reorderPoint}). Khuyên dùng nhập bổ sung ${suggestedOrderQty} ${unitStr}.`,
-                };
-              }
-            });
-          }
+            if (suggestedRaw <= 0) {
+              return {
+                ...item,
+                suggestedOrderQty: 0,
+                urgency: 'LOW',
+                reason: `Tồn kho hiện tại (${stock} ${unitStr}) và hàng đang về (+${incoming}) đáp ứng đủ nhu cầu tiêu thụ trong ${days} ngày tới. Không cần nhập thêm.`,
+              };
+            } else {
+              const suggestedOrderQty = Math.max(10, Math.ceil(suggestedRaw / 10) * 10);
+              return {
+                ...item,
+                suggestedOrderQty,
+                urgency: stock <= 10 ? 'HIGH' : 'MEDIUM',
+                reason: `Tồn kho hiện tại (${stock} ${unitStr}) sắp chạm ngưỡng an toàn ROP (${reorderPoint}). Khuyên dùng nhập bổ sung ${suggestedOrderQty} ${unitStr}.`,
+              };
+            }
+          });
+          
           return aiResult;
         }
       } catch (err) {
