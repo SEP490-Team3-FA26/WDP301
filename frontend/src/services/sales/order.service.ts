@@ -46,6 +46,7 @@ export interface PayOSLinkPayload {
   patientPhone: string;
   patientEmail?: string;
   totalAmount: number;
+  paymentMethod?: 'QR_PAY';
   voucherCode?: string;
   redeemedPoints?: number;
   items: {

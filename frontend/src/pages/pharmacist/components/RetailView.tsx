@@ -77,9 +77,23 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
   const [showPayOSModal, setShowPayOSModal] = useState(false);
   const [payosCheckoutUrl, setPayosCheckoutUrl] = useState("");
+  const [payosQrCode, setPayosQrCode] = useState("");
   const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
   const [payosPolling, setPayosPolling] = useState(false);
   const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
+  const payosPaidHandledRef = useRef(false);
+
+  const normalizeInvoiceResult = (result: any) => {
+    const source = result?.saleResult || result;
+    if (source?.data) return source;
+    const order = source?.order || result?.order || source;
+    return {
+      success: source?.success ?? result?.success ?? true,
+      message: source?.message || result?.message || "Thanh toán thành công!",
+      warnings: source?.warnings || result?.warnings || [],
+      data: order || {},
+    };
+  };
 
   // Alternatives Modal (UC-36)
   const [showAlternativesModal, setShowAlternativesModal] = useState(false);
@@ -134,20 +148,12 @@ export default function RetailView({ showToast }: RetailViewProps) {
     try {
       const result = await orderService.createSale(payload);
 
-      setInvoiceData(result);
+      setInvoiceData(normalizeInvoiceResult(result));
       setShowInvoiceModal(true);
       setCart([]); // Clear cart
 
       if (appliedVoucher) {
         setInvoiceVoucher(appliedVoucher);
-        try {
-          await voucherService.updateVoucher(appliedVoucher._id, {
-            // @ts-ignore
-            usedCount: (appliedVoucher.usedCount || 0) + 1
-          });
-        } catch (e) {
-          console.error("Lỗi cập nhật lượt sử dụng voucher:", e);
-        }
       } else {
         setInvoiceVoucher(null);
       }
@@ -169,11 +175,11 @@ export default function RetailView({ showToast }: RetailViewProps) {
       interval = setInterval(async () => {
         try {
           const data = await orderService.checkOrderStatus(payosOrderCode);
-          if (data.status === "PAID") {
+          if (data.status === "PAID" && !payosPaidHandledRef.current) {
+            payosPaidHandledRef.current = true;
             setPayosPolling(false);
             setShowPayOSModal(false);
-            showToast("Thanh toán PayOS thành công!", "success");
-            setInvoiceData(data.saleResult || data);
+            setInvoiceData(normalizeInvoiceResult(data));
             setShowInvoiceModal(true);
             setCart([]); // Clear cart
           }
@@ -189,11 +195,11 @@ export default function RetailView({ showToast }: RetailViewProps) {
     if (!payosOrderCode) return;
     try {
       const data = await orderService.checkOrderStatus(payosOrderCode);
-      if (data.status === "PAID") {
+      if (data.status === "PAID" && !payosPaidHandledRef.current) {
+        payosPaidHandledRef.current = true;
         setPayosPolling(false);
         setShowPayOSModal(false);
-        showToast("Thanh toán PayOS thành công!", "success");
-        setInvoiceData(data.saleResult || data);
+        setInvoiceData(normalizeInvoiceResult(data));
         setShowInvoiceModal(true);
         setCart([]); // Clear cart
       } else {
@@ -423,10 +429,47 @@ export default function RetailView({ showToast }: RetailViewProps) {
     }
   };
 
-  const handleApplyVoucher = () => { };
+  const handleApplyVoucher = async () => {
+    const code = voucherCode.trim().toUpperCase();
+    setVoucherError("");
+
+    if (!code) {
+      setVoucherError("Vui lòng nhập mã giảm giá");
+      return;
+    }
+    if (cart.length === 0 || subtotal <= 0) {
+      setVoucherError("Vui lòng thêm sản phẩm trước khi áp dụng mã");
+      return;
+    }
+
+    setIsValidatingVoucher(true);
+    try {
+      const result = await voucherService.validateVoucher(code, subtotal);
+      if (result?.error) {
+        setVoucherError(result.message || "Mã giảm giá không hợp lệ");
+        setAppliedVoucher(null);
+        return;
+      }
+
+      setAppliedVoucher(result);
+      setVoucherCode("");
+      const maxRedeem = Math.floor(Math.max(0, subtotal - vipDiscount - result.discount) * 0.5);
+      if (redeemedPoints > maxRedeem) {
+        setRedeemedPoints(maxRedeem);
+      }
+      showToast(`Đã áp dụng mã ${result.code}`, "success");
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || "Không thể áp dụng mã giảm giá";
+      setVoucherError(msg);
+      setAppliedVoucher(null);
+    } finally {
+      setIsValidatingVoucher(false);
+    }
+  };
 
   const handleRemoveVoucher = () => {
     setAppliedVoucher(null);
+    setVoucherError("");
   };
 
   const updateQty = (id: string, change: number, maxStock: number) => {
@@ -476,6 +519,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
           patientPhone,
           patientEmail: patientEmail || undefined,
           totalAmount: total,
+          paymentMethod: "QR_PAY",
           voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
           redeemedPoints: usePoints ? redeemedPoints : 0,
           items: cart.map(it => ({
@@ -489,7 +533,9 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
         payload.orderCode = payosResult.orderCode;
 
+        payosPaidHandledRef.current = false;
         setPayosCheckoutUrl(payosResult.checkoutUrl);
+        setPayosQrCode(payosResult.qrCode || "");
         setPayosOrderCode(payosResult.orderCode);
         setPendingSalePayload(payload);
         setShowPayOSModal(true);
@@ -1054,19 +1100,19 @@ export default function RetailView({ showToast }: RetailViewProps) {
                 <div className="flex flex-col gap-1 border-b border-slate-200 pb-3">
                   <div className="flex justify-between">
                     <span>Mã hóa đơn:</span>
-                    <span className="font-bold">{invoiceData.data._id}</span>
+                    <span className="font-bold">{invoiceData.data?._id || invoiceData.data?.orderCode || payosOrderCode || "N/A"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Ngày lập:</span>
-                    <span>{new Date(invoiceData.data.createdAt).toLocaleString()}</span>
+                    <span>{invoiceData.data?.createdAt ? new Date(invoiceData.data.createdAt).toLocaleString() : new Date().toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Kiểu bán:</span>
-                    <span className="font-bold uppercase text-[#0057cd]">{invoiceData.data.type}</span>
+                    <span className="font-bold uppercase text-[#0057cd]">{invoiceData.data?.type || "RETAIL"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Khách hàng:</span>
-                    <span>{invoiceData.data.patientName || "Khách lẻ vãng lai"}</span>
+                    <span>{invoiceData.data?.patientName || "Khách lẻ vãng lai"}</span>
                   </div>
                 </div>
 
@@ -1074,7 +1120,7 @@ export default function RetailView({ showToast }: RetailViewProps) {
                 <div>
                   <div className="font-bold border-b border-slate-200 pb-1.5 mb-2 uppercase">Chi tiết xuất kho (FIFO)</div>
                   <div className="space-y-3">
-                    {invoiceData.data.items.map((it: any) => (
+                    {(invoiceData.data?.items || []).map((it: any) => (
                       <div key={it.medicineId} className="flex flex-col">
                         <div className="flex justify-between font-bold text-slate-900">
                           <span>{it.name}</span>
@@ -1091,15 +1137,15 @@ export default function RetailView({ showToast }: RetailViewProps) {
                 <div className="border-t border-slate-200 pt-3 flex flex-col gap-1.5">
                   <div className="flex justify-between text-slate-600">
                     <span>Tổng tiền thanh toán:</span>
-                    <span className="font-bold">{invoiceData.data.totalAmount.toLocaleString()}₫</span>
+                    <span className="font-bold">{(invoiceData.data?.totalAmount || total).toLocaleString()}₫</span>
                   </div>
-                  {invoiceData.data.redeemedPoints > 0 && (
+                  {(invoiceData.data?.redeemedPoints || 0) > 0 && (
                     <div className="flex justify-between text-[#ba1a1a]">
                       <span>Tiêu điểm tích lũy:</span>
                       <span>-{invoiceData.data.redeemedPoints.toLocaleString()}₫</span>
                     </div>
                   )}
-                  {invoiceData.data.earnedPoints > 0 && (
+                  {(invoiceData.data?.earnedPoints || 0) > 0 && (
                     <div className="flex justify-between text-emerald-600 font-bold">
                       <span>Tích lũy từ đơn này:</span>
                       <span>+{invoiceData.data.earnedPoints.toLocaleString()} điểm</span>
@@ -1149,7 +1195,11 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner flex items-center justify-center">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosCheckoutUrl)}`}
+                  src={
+                    payosQrCode.startsWith("http")
+                      ? payosQrCode
+                      : `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosQrCode || payosCheckoutUrl)}`
+                  }
                   alt="VietQR PayOS"
                   className="w-56 h-56 rounded-lg object-contain"
                 />

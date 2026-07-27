@@ -1,12 +1,39 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Plus, X, AlertTriangle, Loader2, ClipboardList, Package, Trash2, Send, Search } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ShopFilterSidebar } from "./ShopFilterSidebar";
 import { MedicineCard } from "./MedicineCard";
 import { purchaseRequisitionService } from "../services/purchase/purchaseRequisition.service";
+import { branchService } from "../services/admin/branch.service";
+
+function getBranchIdFromToken() {
+  const token = localStorage.getItem("token");
+  if (!token) return localStorage.getItem("branchId") || "BR-001";
+
+  try {
+    const base64Url = token.split(".")[1];
+    if (!base64Url) return localStorage.getItem("branchId") || "BR-001";
+
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const paddedBase64 = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const jsonPayload = decodeURIComponent(
+      window.atob(paddedBase64)
+        .split("")
+        .map((char) => `%${(`00${char.charCodeAt(0).toString(16)}`).slice(-2)}`)
+        .join("")
+    );
+    const payload = JSON.parse(jsonPayload);
+    return payload.branchId || localStorage.getItem("branchId") || "BR-001";
+  } catch (error) {
+    console.error("Không thể đọc chi nhánh từ token:", error);
+    return localStorage.getItem("branchId") || "BR-001";
+  }
+}
 
 export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems, editPr }: { medicines: any[]; onClose: () => void; onSuccess: (msg: string) => void; prefillPrItems?: any[]; editPr?: any }) {
-  const [branchName, setBranchName] = useState(editPr?.branchName || "Chi nhánh Quận 1");
+  const currentBranchId = useMemo(() => editPr?.branchId || getBranchIdFromToken(), [editPr?.branchId]);
+  const [branchName, setBranchName] = useState(editPr?.branchName || currentBranchId);
+  const [branchLoading, setBranchLoading] = useState(!editPr?.branchName);
   const [reason, setReason] = useState(editPr?.reason || "");
   const [isUrgent, setIsUrgent] = useState(editPr?.isUrgent || false);
   const [items, setItems] = useState<{ medicineId: string; quantity: number }[]>(
@@ -14,6 +41,36 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems, e
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCurrentBranch = async () => {
+      setBranchLoading(true);
+      try {
+        const branches = await branchService.getBranches();
+        const currentBranch = (branches || []).find((branch: any) =>
+          branch.branchCode === currentBranchId ||
+          branch._id === currentBranchId ||
+          branch.id === currentBranchId
+        );
+
+        if (!cancelled) {
+          setBranchName(currentBranch?.name || editPr?.branchName || currentBranchId);
+        }
+      } catch (error) {
+        console.error("Không thể tải danh sách chi nhánh từ DB:", error);
+        if (!cancelled) setBranchName(editPr?.branchName || currentBranchId);
+      } finally {
+        if (!cancelled) setBranchLoading(false);
+      }
+    };
+
+    void loadCurrentBranch();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentBranchId, editPr?.branchName]);
 
   React.useEffect(() => {
     if (prefillPrItems && prefillPrItems.length > 0) {
@@ -128,6 +185,7 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems, e
       if (editPr) {
         const resData = await purchaseRequisitionService.updatePurchaseRequisition(editPr._id, {
           branchName,
+          branchId: currentBranchId,
           reason,
           isUrgent,
           items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity, unit: "Hộp" })),
@@ -140,6 +198,7 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems, e
       } else {
         const resData = await purchaseRequisitionService.createPurchaseRequisition({
           branchName,
+          branchId: currentBranchId,
           reason,
           isUrgent,
           items: items.map(i => ({ medicineId: i.medicineId, requestedQuantity: i.quantity, unit: "Hộp" })),
@@ -267,16 +326,12 @@ export function CreatePRModal({ medicines, onClose, onSuccess, prefillPrItems, e
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-500 block mb-1">CHI NHÁNH YÊU CẦU</label>
-                  <select
-                    value={branchName}
-                    onChange={e => setBranchName(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shadow-sm"
-                  >
-                    <option>Chi nhánh Quận 1</option>
-                    <option>Chi nhánh Quận 7</option>
-                    <option>Chi nhánh Thủ Đức</option>
-                    <option>Chi nhánh Bình Thạnh</option>
-                  </select>
+                  <div className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 shadow-sm flex items-center justify-between gap-2">
+                    <span className="truncate">
+                      {branchLoading ? "Đang tải chi nhánh..." : `${currentBranchId} - ${branchName}`}
+                    </span>
+                    {branchLoading && <Loader2 size={14} className="animate-spin text-blue-600 shrink-0" />}
+                  </div>
                 </div>
 
                 <div>

@@ -57,6 +57,9 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   const [selectedInspectionRecord, setSelectedInspectionRecord] = useState<any | null>(null);
   const [selectedMedicineNameForRecord, setSelectedMedicineNameForRecord] = useState("");
   const [recordLoading, setRecordLoading] = useState(false);
+  const [approvalNotice, setApprovalNotice] = useState<{ type: "warning" | "success" | "error"; title: string; message: string } | null>(null);
+  const [grnRejectAction, setGrnRejectAction] = useState<"reinspect" | "cancel" | null>(null);
+  const [grnRejectReason, setGrnRejectReason] = useState("");
 
   const handleViewInspectionRecord = async (grnId: string, itemId: string, medName: string) => {
     setRecordLoading(true);
@@ -67,10 +70,18 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
       if (body.success && body.data) {
         setSelectedInspectionRecord(body.data);
       } else {
-        alert("Không tìm thấy dữ liệu ảnh đếm AI của dòng sản phẩm này.");
+        setApprovalNotice({
+          type: "warning",
+          title: "Không có dữ liệu",
+          message: "Không tìm thấy dữ liệu ảnh đếm AI của dòng sản phẩm này.",
+        });
       }
     } catch (e) {
-      alert("Lỗi khi tải dữ liệu ảnh đếm AI từ máy chủ.");
+      setApprovalNotice({
+        type: "error",
+        title: "Không tải được ảnh AI",
+        message: "Lỗi khi tải dữ liệu ảnh đếm AI từ máy chủ.",
+      });
     } finally {
       setRecordLoading(false);
     }
@@ -210,17 +221,29 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
       // Validate
       for (const it of editGrnItems) {
         if (!it.batchNo || !it.batchNo.trim()) {
-          alert(`Số lô cho thuốc "${getMedicineName(it.medicineId)}" không được trống.`);
+          setApprovalNotice({
+            type: "warning",
+            title: "Thiếu số lô",
+            message: `Số lô cho thuốc "${getMedicineName(it.medicineId)}" không được trống.`,
+          });
           setEditLoading(false);
           return;
         }
         if (!it.expDate) {
-          alert(`Hạn sử dụng cho thuốc "${getMedicineName(it.medicineId)}" không được trống.`);
+          setApprovalNotice({
+            type: "warning",
+            title: "Thiếu hạn sử dụng",
+            message: `Hạn sử dụng cho thuốc "${getMedicineName(it.medicineId)}" không được trống.`,
+          });
           setEditLoading(false);
           return;
         }
         if (it.quantity <= 0) {
-          alert(`Số lượng dự kiến cho thuốc "${getMedicineName(it.medicineId)}" phải lớn hơn 0.`);
+          setApprovalNotice({
+            type: "warning",
+            title: "Số lượng không hợp lệ",
+            message: `Số lượng dự kiến cho thuốc "${getMedicineName(it.medicineId)}" phải lớn hơn 0.`,
+          });
           setEditLoading(false);
           return;
         }
@@ -236,11 +259,19 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
       };
       
       await goodsReceiptService.updateGoodsReceipt(selectedGrnDetails._id, payload);
-      alert("Cập nhật tài liệu tiếp nhận thành công.");
+      setApprovalNotice({
+        type: "success",
+        title: "Cập nhật thành công",
+        message: "Cập nhật tài liệu tiếp nhận thành công.",
+      });
       setSelectedGrnDetails(null);
       fetchData();
     } catch (err: any) {
-      alert("Lỗi khi cập nhật tài liệu tiếp nhận: " + (err.response?.data?.message || err.message));
+      setApprovalNotice({
+        type: "error",
+        title: "Không thể cập nhật",
+        message: err.response?.data?.message || err.message || "Lỗi khi cập nhật tài liệu tiếp nhận.",
+      });
     } finally {
       setEditLoading(false);
     }
@@ -258,41 +289,71 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
       }
     }
     if (hasDiscrepancy && !discrepancyReason.trim()) {
-      alert("Phát hiện chênh lệch số lượng kiểm nhận. Vui lòng điền lý do chênh lệch trước khi phê duyệt.");
+      setApprovalNotice({
+        type: "warning",
+        title: "Thiếu lý do chênh lệch",
+        message: "Phát hiện chênh lệch số lượng kiểm nhận. Vui lòng điền lý do chênh lệch trước khi phê duyệt.",
+      });
       return;
     }
     
     setApprovalLoading(true);
     try {
       await goodsReceiptService.approveGoodsReceipt(selectedGrnDetails._id, discrepancyReason);
-      alert("Phê duyệt nhập kho thành công. Tồn kho đã được cập nhật.");
+      setApprovalNotice({
+        type: "success",
+        title: "Phê duyệt thành công",
+        message: "Tồn kho đã được cập nhật.",
+      });
       setSelectedGrnDetails(null);
       setDiscrepancyReason("");
       fetchData();
     } catch (err: any) {
-      alert("Lỗi khi phê duyệt: " + (err.response?.data?.message || err.message));
+      setApprovalNotice({
+        type: "error",
+        title: "Không thể phê duyệt",
+        message: err.response?.data?.message || err.message || "Lỗi khi phê duyệt.",
+      });
     } finally {
       setApprovalLoading(false);
     }
   };
 
-  const handleRejectGRN = async (action: "reinspect" | "cancel") => {
+  const handleRejectGRN = (action: "reinspect" | "cancel") => {
     if (!selectedGrnDetails) return;
-    const rejectReasonPrompt = prompt("Vui lòng nhập lý do từ chối/yêu cầu hành động này:");
-    if (rejectReasonPrompt === null) return; // cancelled prompt
-    if (!rejectReasonPrompt.trim()) {
-      alert("Lý do không được để trống.");
+    setGrnRejectAction(action);
+    setGrnRejectReason("");
+  };
+
+  const confirmRejectGRN = async () => {
+    if (!selectedGrnDetails || !grnRejectAction) return;
+    if (!grnRejectReason.trim()) {
+      setApprovalNotice({
+        type: "warning",
+        title: "Thiếu lý do",
+        message: "Vui lòng nhập lý do từ chối/yêu cầu hành động này.",
+      });
       return;
     }
     
     setApprovalLoading(true);
     try {
-      await goodsReceiptService.rejectGoodsReceipt(selectedGrnDetails._id, action, rejectReasonPrompt);
-      alert(action === "reinspect" ? "Đã yêu cầu kiểm đếm lại." : "Đã hủy phiếu tiếp nhận.");
+      await goodsReceiptService.rejectGoodsReceipt(selectedGrnDetails._id, grnRejectAction, grnRejectReason.trim());
+      setApprovalNotice({
+        type: "success",
+        title: grnRejectAction === "reinspect" ? "Đã yêu cầu kiểm lại" : "Đã hủy phiếu",
+        message: grnRejectAction === "reinspect" ? "Phiếu đã được chuyển về trạng thái kiểm đếm lại." : "Phiếu tiếp nhận đã được hủy.",
+      });
+      setGrnRejectAction(null);
+      setGrnRejectReason("");
       setSelectedGrnDetails(null);
       fetchData();
     } catch (err: any) {
-      alert("Lỗi khi thực hiện từ chối: " + (err.response?.data?.message || err.message));
+      setApprovalNotice({
+        type: "error",
+        title: "Không thể xử lý",
+        message: err.response?.data?.message || err.message || "Lỗi khi thực hiện từ chối.",
+      });
     } finally {
       setApprovalLoading(false);
     }
@@ -312,6 +373,111 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
 
   return (
     <div className="flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-y-auto">
+      <AnimatePresence>
+        {approvalNotice && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setApprovalNotice(null)} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-100"
+            >
+              <div className={`p-5 border-b ${
+                approvalNotice.type === "success"
+                  ? "bg-emerald-50 border-emerald-100"
+                  : approvalNotice.type === "error"
+                    ? "bg-rose-50 border-rose-100"
+                    : "bg-amber-50 border-amber-100"
+              }`}>
+                <h3 className="font-black text-slate-900 flex items-center gap-2">
+                  {approvalNotice.type === "success" ? (
+                    <CheckCircle2 size={20} className="text-emerald-600" />
+                  ) : (
+                    <AlertTriangle size={20} className={approvalNotice.type === "error" ? "text-rose-600" : "text-amber-600"} />
+                  )}
+                  {approvalNotice.title}
+                </h3>
+              </div>
+              <div className="p-5">
+                <p className="text-sm font-semibold text-slate-700 leading-relaxed">{approvalNotice.message}</p>
+              </div>
+              <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setApprovalNotice(null)}
+                  className="px-5 py-2 bg-[#0057cd] hover:bg-[#00419e] text-white font-bold rounded-xl text-sm shadow-sm"
+                >
+                  Đã hiểu
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {grnRejectAction && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => {
+                if (!approvalLoading) {
+                  setGrnRejectAction(null);
+                  setGrnRejectReason("");
+                }
+              }}
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-100"
+            >
+              <div className={`p-5 border-b ${grnRejectAction === "reinspect" ? "bg-amber-50 border-amber-100" : "bg-rose-50 border-rose-100"}`}>
+                <h3 className="font-black text-slate-900 flex items-center gap-2">
+                  <AlertTriangle size={20} className={grnRejectAction === "reinspect" ? "text-amber-600" : "text-rose-600"} />
+                  {grnRejectAction === "reinspect" ? "Yêu cầu kiểm đếm lại" : "Từ chối/Hủy phiếu tiếp nhận"}
+                </h3>
+                <p className={`mt-1 text-xs font-bold ${grnRejectAction === "reinspect" ? "text-amber-700" : "text-rose-700"}`}>
+                  Vui lòng nhập lý do để ghi nhận lịch sử xử lý phiếu.
+                </p>
+              </div>
+              <div className="p-5 space-y-2">
+                <label className="text-[11px] font-black uppercase text-slate-500">Lý do xử lý</label>
+                <textarea
+                  value={grnRejectReason}
+                  onChange={(event) => setGrnRejectReason(event.target.value)}
+                  rows={4}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-[#0057cd] focus:ring-2 focus:ring-blue-100 resize-none"
+                  placeholder={grnRejectAction === "reinspect" ? "VD: Số lượng thực nhận chưa khớp, yêu cầu thủ kho kiểm lại..." : "VD: Chứng từ không hợp lệ hoặc hàng không đạt yêu cầu..."}
+                  autoFocus
+                />
+              </div>
+              <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setGrnRejectAction(null);
+                    setGrnRejectReason("");
+                  }}
+                  disabled={approvalLoading}
+                  className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-100 rounded-xl text-sm disabled:opacity-50"
+                >
+                  Đóng
+                </button>
+                <button
+                  onClick={confirmRejectGRN}
+                  disabled={approvalLoading || !grnRejectReason.trim()}
+                  className={`px-5 py-2 text-white font-bold rounded-xl text-sm shadow-sm disabled:opacity-50 flex items-center gap-2 ${grnRejectAction === "reinspect" ? "bg-amber-600 hover:bg-amber-700" : "bg-rose-600 hover:bg-rose-700"}`}
+                >
+                  {approvalLoading && <Loader2 size={16} className="animate-spin" />}
+                  Xác nhận
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <div className="flex items-center gap-3">

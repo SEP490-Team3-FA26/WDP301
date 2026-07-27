@@ -32,6 +32,7 @@ export function BranchRequestsTab({
   const [actionLoading, setActionLoading] = useState(false);
   const [fromBranchId, setFromBranchId] = useState("CENTRAL_WH");
   const [outOfStockPrId, setOutOfStockPrId] = useState<string | null>(null);
+  const [shipError, setShipError] = useState<{ prId: string; message: string } | null>(null);
 
   const STATUS_TABS = [
     { key: "SUBMITTED", label: "Chờ xử lý", color: "blue" },
@@ -81,7 +82,9 @@ export function BranchRequestsTab({
       setDetailPr(null);
       fetchData();
     } catch (e: any) {
-      onMsg({ type: "error", text: e.response?.data?.message || e.message || "Lỗi xuất kho" });
+      const message = e.response?.data?.message || e.message || "Lỗi xuất kho";
+      setShipError({ prId, message });
+      onMsg({ type: "error", text: message });
     } finally { setActionLoading(false); }
   };
 
@@ -237,6 +240,54 @@ export function BranchRequestsTab({
       </div>
 
       {/* Out of stock confirm */}
+      <AnimatePresence>
+        {shipError && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShipError(null)} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-orange-100"
+            >
+              <div className="p-5 bg-orange-50 border-b border-orange-100">
+                <h3 className="font-black text-slate-900 flex items-center gap-2">
+                  <PackageX size={20} className="text-orange-600" />
+                  Không thể xuất kho
+                </h3>
+                <p className="text-xs font-bold text-orange-700 mt-1">Kho xuất hiện không đủ tồn để giao phiếu này.</p>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 leading-relaxed">
+                  {shipError.message}
+                </div>
+                <div className="text-xs font-bold text-slate-500 leading-relaxed">
+                  Bạn có thể chọn kho xuất khác còn hàng, hoặc báo hết hàng để chuyển sang luồng tạo yêu cầu mua bổ sung.
+                </div>
+              </div>
+              <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                <button
+                  onClick={() => setShipError(null)}
+                  className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-100 rounded-xl text-sm"
+                >
+                  Chọn kho khác
+                </button>
+                <button
+                  onClick={() => {
+                    setOutOfStockPrId(shipError.prId);
+                    setShipError(null);
+                  }}
+                  className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5"
+                >
+                  <PackageX size={14} />
+                  Báo hết hàng
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {outOfStockPrId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

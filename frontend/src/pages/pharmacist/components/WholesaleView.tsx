@@ -304,6 +304,7 @@ export default function WholesaleView() {
           patientName: agentName,
           patientPhone: agentPhone || "0900000000",
           totalAmount: total,
+          paymentMethod: "QR_PAY",
           items: cart.map(it => ({
             medicineId: it.medicineId,
             name: it.name,

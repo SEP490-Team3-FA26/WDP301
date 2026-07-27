@@ -369,14 +369,6 @@ export class OrdersServiceService implements OnModuleInit {
     newOrder.paymentStatus = 'PAID';
     await newOrder.save();
 
-    // Increment voucher usage on successful payment
-    if (newOrder.voucherCode) {
-      await this.voucherModel.updateOne(
-        { code: newOrder.voucherCode },
-        { $inc: { usedCount: 1 } }
-      ).exec();
-    }
-
     // Deduct inventory and record sale
     try {
       const saleRes = await this.deductInventory(newOrder);
@@ -445,14 +437,6 @@ export class OrdersServiceService implements OnModuleInit {
       if (paymentInfo.status === 'PAID') {
         order.paymentStatus = 'PAID';
         await order.save();
-
-        // Increment voucher usage on successful payment
-        if (order.voucherCode) {
-          await this.voucherModel.updateOne(
-            { code: order.voucherCode },
-            { $inc: { usedCount: 1 } }
-          ).exec();
-        }
 
         // Deduct inventory
         const saleRes = await this.deductInventory(order);

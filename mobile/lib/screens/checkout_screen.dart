@@ -59,11 +59,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   double get _discountAmount {
     if (_appliedVoucher == null) return 0.0;
+    if (_appliedVoucher!['discount'] != null) {
+      return (_appliedVoucher!['discount']).toDouble();
+    }
     final val = (_appliedVoucher!['discountValue'] ?? 0).toDouble();
-    final type = _appliedVoucher!['discountType'] ?? 'FIXED';
-    if (type == 'PERCENT') {
+    final type = _appliedVoucher!['discountType'] ?? 'FIXED_AMOUNT';
+    if (type == 'PERCENT' || type == 'PERCENTAGE') {
       double discount = widget.subtotal * (val / 100.0);
-      final maxDisc = (_appliedVoucher!['maxDiscount'] ?? 0).toDouble();
+      final maxDisc = (_appliedVoucher!['maxDiscountValue'] ?? _appliedVoucher!['maxDiscount'] ?? 0).toDouble();
       if (maxDisc > 0 && discount > maxDisc) discount = maxDisc;
       return discount;
     }
@@ -85,15 +88,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     setState(() => _isValidatingVoucher = false);
 
-    if (res['valid'] == true && res['voucher'] != null) {
+    if (res['success'] == true) {
       setState(() {
-        _appliedVoucher = res['voucher'];
+        _appliedVoucher = res;
         _voucherErrorMsg = null;
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Đã áp dụng mã voucher ${res['voucher']['code']} thành công!'),
+          content: Text('Đã áp dụng mã voucher ${res['code']} thành công!'),
           backgroundColor: const Color(0xFF2E7D32),
         ),
       );

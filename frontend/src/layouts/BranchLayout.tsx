@@ -4,11 +4,11 @@ import { LayoutDashboard, ShoppingCart, Banknote, BarChart3, ClipboardList, Tag,
 export function BranchLayout() {
   const branchNavItems = [
     { name: "Tổng quan Chi nhánh", href: "/branch", icon: <LayoutDashboard size={20} /> },
-    { name: "Bán hàng (POS)", href: "/branch/sales", icon: <ShoppingCart size={20} /> },
+    // { name: "Bán hàng (POS)", href: "/branch/sales", icon: <ShoppingCart size={20} /> },
     { name: "Quản lý nhân sự", href: "/branch/employees", icon: <Users size={20} /> },
     { name: "Kho hàng chi nhánh", href: "/branch/inventory", icon: <Package size={20} /> },
     { name: "Chuyển kho liên chi nhánh", href: "/branch/transfers", icon: <ArrowRightLeft size={20} /> },
-    { name: "Nhận hàng chuyển kho", href: "/branch/receive-transfers", icon: <PackageCheck size={20} /> },
+    { name: "Nhận hàng về kho chi nhánh", href: "/branch/receive-transfers", icon: <PackageCheck size={20} /> },
     { name: "Yêu cầu nhập thuốc", href: "/branch/requisitions", icon: <ClipboardList size={20} /> },
     { name: "Bảng giá bán", href: "/branch/pricing", icon: <Tag size={20} /> },
     { name: "Tài chính", href: "/branch/finance", icon: <Banknote size={20} /> },

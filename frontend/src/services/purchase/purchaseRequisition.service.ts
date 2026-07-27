@@ -10,6 +10,7 @@ export interface PurchaseRequisitionPayload {
   reason: string;
   items: PurchaseRequisitionItem[];
   branchName: string;
+  branchId?: string;
   isUrgent?: boolean;
   isAiGenerated?: boolean;
   aiConfidence?: number;

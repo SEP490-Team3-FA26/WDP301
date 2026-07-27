@@ -87,3 +87,63 @@ export class CreateOrderDto {
   @IsOptional()
   cancelUrl?: string;
 }
+
+export class CreatePayOSLinkDto {
+  @IsString()
+  @IsOptional()
+  patientName?: string;
+
+  @IsString()
+  @IsOptional()
+  patientPhone?: string;
+
+  @IsString()
+  @IsOptional()
+  patientEmail?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingAddress?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemDto)
+  items: OrderItemDto[];
+
+  @IsNumber()
+  totalAmount: number;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['QR_PAY'])
+  paymentMethod?: string;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['ONLINE', 'RETAIL', 'POS_SALE'])
+  type?: string;
+
+  @IsString()
+  @IsOptional()
+  voucherCode?: string;
+
+  @IsNumber()
+  @IsOptional()
+  redeemedPoints?: number;
+
+  @IsString()
+  @IsOptional()
+  userId?: string;
+
+  @IsString()
+  @IsOptional()
+  branchId?: string;
+
+  @IsString()
+  @IsOptional()
+  returnUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  cancelUrl?: string;
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect, ChangeEvent } from "react";
+import { useState, useEffect, useRef, ChangeEvent } from "react";
 
 import {
   XCircle, AlertTriangle, CheckCircle2, QrCode, FileText, Stethoscope,
@@ -8,6 +8,7 @@ import {
 import { medicineService } from "../../../services/inventory/medicine.service";
 import { prescriptionService } from "../../../services/sales/prescription.service";
 import { orderService } from "../../../services/sales/order.service";
+import { voucherService } from "../../../services/sales/voucher.service";
 
 // Helper to decode JWT token to extract branchId and user info
 function getBranchInfoFromToken() {
@@ -112,6 +113,10 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceData, setInvoiceData] = useState<any>(null);
+  const [voucherCode, setVoucherCode] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+  const [voucherError, setVoucherError] = useState("");
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
 
   // Scan simulation states
   const [isScanning, setIsScanning] = useState(false);
@@ -411,6 +416,19 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
   const [payosOrderCode, setPayosOrderCode] = useState<number | null>(null);
   const [payosPolling, setPayosPolling] = useState(false);
   const [pendingSalePayload, setPendingSalePayload] = useState<any>(null);
+  const payosPaidHandledRef = useRef(false);
+
+  const normalizeInvoiceResult = (result: any) => {
+    const source = result?.saleResult || result;
+    if (source?.data) return source;
+    const order = source?.order || result?.order || source;
+    return {
+      success: source?.success ?? result?.success ?? true,
+      message: source?.message || result?.message || "Thanh toán thành công!",
+      warnings: source?.warnings || result?.warnings || [],
+      data: order || {},
+    };
+  };
 
   const finalizeSalesOrder = async (payload: any) => {
     setLoading(true);
@@ -418,7 +436,7 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
     try {
       const result = await orderService.createSale(payload);
 
-      setInvoiceData(result);
+      setInvoiceData(normalizeInvoiceResult(result));
       setShowInvoiceModal(true);
 
       // Clear forms
@@ -431,6 +449,9 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
       setHospitalName("");
       setHospitalCode("");
       setPrescriptionCode("");
+      setAppliedVoucher(null);
+      setVoucherCode("");
+      setVoucherError("");
       fetchDbPrescriptions();
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || "Lỗi thanh toán");
@@ -445,11 +466,11 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
       interval = setInterval(async () => {
         try {
           const data = await orderService.checkOrderStatus(payosOrderCode);
-          if (data.status === "PAID") {
+          if (data.status === "PAID" && !payosPaidHandledRef.current) {
+            payosPaidHandledRef.current = true;
             setPayosPolling(false);
             setShowPayOSModal(false);
-            showToast("Thanh toán PayOS thành công!", "success");
-            setInvoiceData(data.saleResult || data);
+            setInvoiceData(normalizeInvoiceResult(data));
             setShowInvoiceModal(true);
             
             // Clear forms
@@ -462,6 +483,9 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
             setHospitalName("");
             setHospitalCode("");
             setPrescriptionCode("");
+            setAppliedVoucher(null);
+            setVoucherCode("");
+            setVoucherError("");
             fetchDbPrescriptions();
           }
         } catch (err) {
@@ -476,11 +500,11 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
     if (!payosOrderCode) return;
     try {
       const data = await orderService.checkOrderStatus(payosOrderCode);
-      if (data.status === "PAID") {
+      if (data.status === "PAID" && !payosPaidHandledRef.current) {
+        payosPaidHandledRef.current = true;
         setPayosPolling(false);
         setShowPayOSModal(false);
-        showToast("Thanh toán PayOS thành công!", "success");
-        setInvoiceData(data.saleResult || data);
+        setInvoiceData(normalizeInvoiceResult(data));
         setShowInvoiceModal(true);
         
         // Clear forms
@@ -493,6 +517,9 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
         setHospitalName("");
         setHospitalCode("");
         setPrescriptionCode("");
+        setAppliedVoucher(null);
+        setVoucherCode("");
+        setVoucherError("");
         fetchDbPrescriptions();
       } else {
         showToast("Hệ thống chưa ghi nhận được thanh toán. Vui lòng chuyển khoản lại hoặc đợi vài giây.", "warning");
@@ -547,6 +574,8 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
           patientName,
           patientPhone: patientPhone || "0900000000",
           totalAmount: total,
+          paymentMethod: "QR_PAY",
+          voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
           items: prescriptionItems.map(it => ({
             medicineId: it.medicineId,
             name: it.name,
@@ -558,6 +587,7 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
 
         payload.orderCode = payosResult.orderCode;
 
+        payosPaidHandledRef.current = false;
         setPayosCheckoutUrl(payosResult.checkoutUrl);
         setPayosQrCode(payosResult.qrCode || "");
         setPayosOrderCode(payosResult.orderCode);
@@ -577,8 +607,49 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
   // Tính toán tiền đơn thuốc
   const subtotal = prescriptionItems.reduce((sum: number, it: any) => sum + (it.price * it.quantity), 0);
   const vipDiscount = Math.round(subtotal * 0.05); // 5% discount
-  const vat = Math.round((subtotal - vipDiscount) * 0.08); // 8% VAT
-  const total = subtotal - vipDiscount + vat;
+  const voucherDiscount = appliedVoucher ? appliedVoucher.discount : 0;
+  const vat = Math.round(Math.max(0, subtotal - vipDiscount - voucherDiscount) * 0.08); // 8% VAT
+  const total = Math.max(0, subtotal - vipDiscount - voucherDiscount + vat);
+
+  const handleApplyVoucher = async () => {
+    const code = voucherCode.trim().toUpperCase();
+    setVoucherError("");
+
+    if (!code) {
+      setVoucherError("Vui lòng nhập mã giảm giá");
+      return;
+    }
+
+    if (prescriptionItems.length === 0 || subtotal <= 0) {
+      setVoucherError("Vui lòng thêm thuốc trước khi áp dụng mã");
+      return;
+    }
+
+    setIsValidatingVoucher(true);
+    try {
+      const result = await voucherService.validateVoucher(code, subtotal);
+      if (result?.error) {
+        setVoucherError(result.message || "Mã giảm giá không hợp lệ");
+        setAppliedVoucher(null);
+        return;
+      }
+
+      setAppliedVoucher(result);
+      setVoucherCode("");
+      showToast(`Đã áp dụng mã ${result.code}`, "success");
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || "Không thể áp dụng mã giảm giá";
+      setVoucherError(msg);
+      setAppliedVoucher(null);
+    } finally {
+      setIsValidatingVoucher(false);
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setVoucherError("");
+  };
 
   // Kiểm tra tương tác thuốc nguy hiểm (Clopidogrel + Omeprazole)
   const hasClopidogrel = prescriptionItems.some((it: any) => it.active_ingredient.toLowerCase().includes("clopidogrel") || it.name.toLowerCase().includes("plavix") || it.name.toLowerCase().includes("platarex"));
@@ -1112,6 +1183,12 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
               <span className="text-slate-600">Giảm giá VIP (5%)</span>
               <span className="font-bold text-[#ba1a1a]">-{vipDiscount.toLocaleString()}₫</span>
             </div>
+            {appliedVoucher && (
+              <div className="flex justify-between items-center font-medium">
+                <span className="text-slate-600">Mã giảm giá ({appliedVoucher.code})</span>
+                <span className="font-bold text-[#ba1a1a]">-{voucherDiscount.toLocaleString()}₫</span>
+              </div>
+            )}
             <div className="flex justify-between items-center text-slate-600 font-medium">
               <span>Thuế VAT (8%)</span>
               <span className="font-bold text-slate-900">{vat.toLocaleString()}₫</span>
@@ -1124,6 +1201,47 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
               <div className="text-[28px] font-black text-[#0057cd] tracking-tighter">{total.toLocaleString()}₫</div>
             </div>
           </div>
+        </div>
+
+        {/* Voucher */}
+        <div className="bg-white rounded-[16px] border border-slate-200 p-6 shadow-sm">
+          <h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-4">Áp dụng mã giảm giá</h3>
+          {appliedVoucher ? (
+            <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-xs font-semibold text-emerald-800">
+              <div>
+                Mã đã dùng: <span className="font-extrabold uppercase">{appliedVoucher.code}</span>
+                <span className="block text-[10px] text-emerald-600 mt-0.5">Giảm -{voucherDiscount.toLocaleString()}₫</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveVoucher}
+                className="text-emerald-500 hover:text-emerald-800 font-bold ml-2 text-md"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Nhập mã voucher..."
+                value={voucherCode}
+                onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#0057cd] focus:bg-white transition-all uppercase"
+              />
+              <button
+                type="button"
+                onClick={handleApplyVoucher}
+                disabled={isValidatingVoucher}
+                className="px-4 py-2 bg-[#0057cd] hover:bg-[#00419e] disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
+              >
+                {isValidatingVoucher ? "..." : "Áp dụng"}
+              </button>
+            </div>
+          )}
+          {voucherError && (
+            <span className="block text-[10px] font-bold text-rose-600 uppercase mt-2">{voucherError}</span>
+          )}
         </div>
 
         {/* Phương thức thanh toán */}
@@ -1388,17 +1506,17 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
                 <div className="flex flex-col gap-1 border-b border-slate-200 pb-3">
                   <div className="flex justify-between">
                     <span>Mã hóa đơn:</span>
-                    <span className="font-bold">{invoiceData.data._id}</span>
+                    <span className="font-bold">{invoiceData.data?._id || invoiceData.data?.orderCode || payosOrderCode || "N/A"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Ngày lập:</span>
-                    <span>{new Date(invoiceData.data.createdAt).toLocaleString()}</span>
+                    <span>{invoiceData.data?.createdAt ? new Date(invoiceData.data.createdAt).toLocaleString() : new Date().toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Kiểu bán:</span>
-                    <span className="font-bold uppercase text-[#0057cd]">{invoiceData.data.type}</span>
+                    <span className="font-bold uppercase text-[#0057cd]">{invoiceData.data?.type || "PRESCRIPTION"}</span>
                   </div>
-                  {invoiceData.data.prescriptionCode && (
+                  {invoiceData.data?.prescriptionCode && (
                     <div className="flex justify-between">
                       <span>Mã đơn gốc:</span>
                       <span className="font-bold">{invoiceData.data.prescriptionCode}</span>
@@ -1406,7 +1524,7 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
                   )}
                   <div className="flex justify-between flex-wrap gap-x-4">
                     <span>Khách hàng:</span>
-                    <span>{invoiceData.data.patientName || "Khách lẻ"}</span>
+                    <span>{invoiceData.data?.patientName || "Khách lẻ"}</span>
                   </div>
                   {doctorName && (
                     <div className="flex justify-between flex-wrap gap-x-4">
@@ -1426,14 +1544,14 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
                 <div>
                   <div className="font-bold border-b border-slate-200 pb-1.5 mb-2 uppercase">Chi tiết xuất kho (FIFO)</div>
                   <div className="space-y-3">
-                    {invoiceData.data.items.map((it: any) => (
+                    {(invoiceData.data?.items || []).map((it: any) => (
                       <div key={it.medicineId} className="flex flex-col">
                         <div className="flex justify-between font-bold text-slate-900">
                           <span>{it.name}</span>
                           <span>{it.quantity} {it.unit}</span>
                         </div>
                         <div className="text-[11px] text-slate-500 italic mt-0.5 pl-2">
-                          Lô xuất: {it.batches.map((b: any) => `${b.batchNo} (${b.quantity} ${it.unit})`).join(", ")}
+                          Lô xuất: {it.batches?.map((b: any) => `${b.batchNo} (${b.quantity} ${it.unit})`).join(", ") || "Kho quầy"}
                         </div>
                       </div>
                     ))}
@@ -1443,20 +1561,20 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
                 <div className="border-t border-slate-200 pt-3 flex flex-col gap-1.5">
                   <div className="flex justify-between text-slate-600">
                     <span>Tổng tiền hàng:</span>
-                    <span>{invoiceData.data.totalAmount.toLocaleString()}₫</span>
+                    <span>{(invoiceData.data?.totalAmount || total).toLocaleString()}₫</span>
                   </div>
                   <div className="flex justify-between text-[#ba1a1a]">
                     <span>Ưu đãi thành viên (5%):</span>
-                    <span>-{Math.round(invoiceData.data.totalAmount * 0.05).toLocaleString()}₫</span>
+                    <span>-{Math.round((invoiceData.data?.totalAmount || total) * 0.05).toLocaleString()}₫</span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>Thuế VAT (8%):</span>
-                    <span>{Math.round(invoiceData.data.totalAmount * 0.95 * 0.08).toLocaleString()}₫</span>
+                    <span>{Math.round((invoiceData.data?.totalAmount || total) * 0.95 * 0.08).toLocaleString()}₫</span>
                   </div>
                   <div className="flex justify-between font-black text-slate-900 text-[16px] border-t border-slate-200 pt-2.5">
                     <span>TỔNG THÀNH TIỀN:</span>
                     <span className="text-[#0057cd]">
-                      {Math.round(invoiceData.data.totalAmount * 0.95 * 1.08).toLocaleString()}₫
+                      {Math.round((invoiceData.data?.totalAmount || total) * 0.95 * 1.08).toLocaleString()}₫
                     </span>
                   </div>
                 </div>
@@ -1770,4 +1888,3 @@ export default function PrescriptionView({ showToast }: PrescriptionViewProps) {
     </div>
   );
 }
-

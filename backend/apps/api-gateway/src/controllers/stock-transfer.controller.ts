@@ -111,7 +111,7 @@ export class StockTransferController implements OnModuleInit {
   @Post(':id/receive')
   async confirmStockTransferReceipt(
     @Param('id') id: string,
-    @Body() body: { receivedBy: string },
+    @Body() body: { receivedBy: string; inspectionItems?: { medicineId: string; batchNo: string; actualQuantity: number }[]; inspectionNote?: string },
   ) {
     const traceId = randomUUID();
     const context = {
@@ -127,6 +127,8 @@ export class StockTransferController implements OnModuleInit {
       const result = await sendKafkaMessage(this.inventoryClient, 'inventory.transfer.receive', {
         transferId: id,
         receivedBy: body.receivedBy,
+        inspectionItems: body.inspectionItems,
+        inspectionNote: body.inspectionNote,
         traceId,
       });
       this.logTransfer('RECEIVE_RESPONSE', {
