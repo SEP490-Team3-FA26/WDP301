@@ -15,6 +15,12 @@ export class StockTransferItem {
   @Prop({ type: Number, required: true, min: 1 })
   quantity: number;
 
+  @Prop({ type: Number, default: 0, min: 0 })
+  receivedQuantity: number;
+
+  @Prop({ type: Number, default: 0 })
+  discrepancyQuantity: number;
+
   @Prop({ type: String, default: 'Hộp' })
   unit: string;
 }

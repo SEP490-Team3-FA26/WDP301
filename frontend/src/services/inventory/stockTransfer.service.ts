@@ -5,6 +5,8 @@ export interface StockTransferItem {
   medicineName?: string;
   batchNo: string;
   quantity: number;
+  receivedQuantity?: number;
+  discrepancyQuantity?: number;
   unit: string;
 }
 
@@ -47,8 +49,13 @@ export const stockTransferService = {
     return response.data;
   },
 
-  async confirmStockTransferReceipt(id: string, receivedBy: string): Promise<any> {
-    const response = await api.post(`/api/stock-transfers/${id}/receive`, { receivedBy });
+  async confirmStockTransferReceipt(
+    id: string,
+    receivedBy: string,
+    inspectionItems: { medicineId: string; batchNo: string; actualQuantity: number }[],
+    inspectionNote?: string
+  ): Promise<any> {
+    const response = await api.post(`/api/stock-transfers/${id}/receive`, { receivedBy, inspectionItems, inspectionNote });
     return response.data;
   }
 };

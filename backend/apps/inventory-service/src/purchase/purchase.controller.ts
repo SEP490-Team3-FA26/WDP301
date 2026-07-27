@@ -298,7 +298,13 @@ export class PurchaseController {
 
   @MessagePattern('inventory.transfer.receive')
   async confirmStockTransferReceipt(
-    @Payload() data: { transferId: string; receivedBy: string; traceId?: string },
+    @Payload() data: {
+      transferId: string;
+      receivedBy: string;
+      traceId?: string;
+      inspectionItems?: { medicineId: string; batchNo: string; actualQuantity: number }[];
+      inspectionNote?: string;
+    },
   ) {
     try {
       return await this.purchaseService.confirmStockTransferReceipt(data);

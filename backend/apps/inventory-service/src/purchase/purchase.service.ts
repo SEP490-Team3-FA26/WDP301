@@ -1418,7 +1418,13 @@ export class PurchaseService {
   /**
    * Chi nhánh xác nhận đã nhận hàng (Nhập kho chi nhánh)
    */
-  async confirmStockTransferReceipt(data: { transferId: string; receivedBy: string; traceId?: string }) {
+  async confirmStockTransferReceipt(data: {
+    transferId: string;
+    receivedBy: string;
+    traceId?: string;
+    inspectionItems?: { medicineId: string; batchNo: string; actualQuantity: number }[];
+    inspectionNote?: string;
+  }) {
     const traceId = data.traceId || 'no-trace-id';
     this.logStockTransfer('RECEIVE_START', {
       traceId,
@@ -1452,8 +1458,45 @@ export class PurchaseService {
         totalQuantity: transfer.items.reduce((sum, item) => sum + item.quantity, 0),
       });
 
-      // Nhập hàng vào kho chi nhánh nhận
+      const inspectionByItem = new Map(
+        (data.inspectionItems || []).map(item => [
+          `${item.medicineId}:${item.batchNo}`,
+          Number(item.actualQuantity),
+        ]),
+      );
+      const hasInspection = inspectionByItem.size > 0;
+
+      // Nhập hàng vào kho chi nhánh nhận theo số lượng đã kiểm thực tế.
       for (const item of transfer.items) {
+        const inspectionKey = `${item.medicineId}:${item.batchNo}`;
+        const receivedQuantity = hasInspection ? inspectionByItem.get(inspectionKey) : item.quantity;
+
+        if (receivedQuantity === undefined || Number.isNaN(receivedQuantity)) {
+          throw new RpcException({ message: `Thiếu số lượng kiểm hàng cho thuốc ${item.medicineName || item.medicineId}, lô ${item.batchNo}.` });
+        }
+        if (receivedQuantity < 0 || receivedQuantity > item.quantity) {
+          throw new RpcException({
+            message: `Số lượng thực nhận của thuốc ${item.medicineName || item.medicineId}, lô ${item.batchNo} không hợp lệ (0-${item.quantity}).`,
+          });
+        }
+
+        item.receivedQuantity = receivedQuantity;
+        item.discrepancyQuantity = receivedQuantity - item.quantity;
+
+        if (receivedQuantity === 0) {
+          this.logStockTransfer('TRANSFER_IN_SKIPPED_EMPTY_RECEIPT', {
+            traceId,
+            transferId: transfer._id.toString(),
+            transferCode: transfer.transferCode,
+            branchId: transfer.toBranchId,
+            medicineId: item.medicineId,
+            batchNo: item.batchNo,
+            shippedQuantity: item.quantity,
+            receivedQuantity,
+          });
+          continue;
+        }
+
         let branchBatch = await this.batchModel.findOne({
           medicineId: item.medicineId,
           branchId: transfer.toBranchId,
@@ -1470,7 +1513,7 @@ export class PurchaseService {
               _id: branchBatch._id
             },
             {
-              $inc: { stock: item.quantity }
+              $inc: { stock: receivedQuantity }
             },
             { new: true, session }
           ).exec();
@@ -1486,9 +1529,11 @@ export class PurchaseService {
             branchId: transfer.toBranchId,
             medicineId: item.medicineId,
             batchNo: item.batchNo,
-            quantityChange: item.quantity,
+            quantityChange: receivedQuantity,
             stockBefore,
             stockAfter: updatedBranchBatch.stock,
+            shippedQuantity: item.quantity,
+            receivedQuantity,
             batchCreated: false,
           });
         } else {
@@ -1503,7 +1548,7 @@ export class PurchaseService {
             branchId: transfer.toBranchId,
             batchNo: item.batchNo,
             expDate: origBatch ? origBatch.expDate : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            stock: item.quantity,
+            stock: receivedQuantity,
             status: 'ACTIVE',
           });
           await newBatchObj.save({ session });
@@ -1515,9 +1560,11 @@ export class PurchaseService {
             branchId: transfer.toBranchId,
             medicineId: item.medicineId,
             batchNo: item.batchNo,
-            quantityChange: item.quantity,
+            quantityChange: receivedQuantity,
             stockBefore: 0,
-            stockAfter: item.quantity,
+            stockAfter: receivedQuantity,
+            shippedQuantity: item.quantity,
+            receivedQuantity,
             batchCreated: true,
           });
         }
@@ -1528,13 +1575,13 @@ export class PurchaseService {
           medicineId: item.medicineId,
           medicineName: item.medicineName,
           batchNo: item.batchNo,
-          quantityChange: item.quantity,
+          quantityChange: receivedQuantity,
           stockBefore,
-          stockAfter: stockBefore + item.quantity,
+          stockAfter: stockBefore + receivedQuantity,
           referenceId: transfer._id.toString(),
           referenceType: 'TRANSFER_IN',
           performedBy: data.receivedBy || 'Quản lý Chi Nhánh',
-          notes: `Nhập kho chuyển nội bộ nhận từ ${transfer.fromBranchId === 'CENTRAL_WH' ? 'Kho Tổng' : `Chi nhánh ${transfer.fromBranchId}`} (Phiếu chuyển: ${transfer.transferCode})`,
+          notes: `Nhập kho chuyển nội bộ nhận từ ${transfer.fromBranchId === 'CENTRAL_WH' ? 'Kho Tổng' : `Chi nhánh ${transfer.fromBranchId}`} (Phiếu chuyển: ${transfer.transferCode}, thực nhận: ${receivedQuantity}/${item.quantity})`,
         }).save({ session });
       }
 
@@ -1542,6 +1589,10 @@ export class PurchaseService {
       transfer.status = 'DELIVERED';
       transfer.receivedBy = data.receivedBy;
       transfer.receivedAt = new Date();
+      transfer.notes = [
+        transfer.notes,
+        data.inspectionNote ? `Kiểm hàng: ${data.inspectionNote}` : undefined,
+      ].filter(Boolean).join('\n');
       await transfer.save({ session });
 
       await session.commitTransaction();
@@ -1553,7 +1604,7 @@ export class PurchaseService {
         fromBranchId: transfer.fromBranchId,
         toBranchId: transfer.toBranchId,
         status: transfer.status,
-        totalQuantity: transfer.items.reduce((sum, item) => sum + item.quantity, 0),
+        totalQuantity: transfer.items.reduce((sum, item) => sum + (item.receivedQuantity ?? item.quantity), 0),
       });
 
       this.supplierClient.emit('broadcast.inventory_updated', {
@@ -1979,86 +2030,11 @@ export class PurchaseService {
         toBranchId: data.toBranchId,
         toBranchName: data.toBranchName,
         items: allocatedItems,
-        status: 'DELIVERED',
+        status: 'SHIPPING',
         shippedBy: data.shippedBy || sourceName,
         shippedAt: new Date(),
-        receivedBy: data.shippedBy || 'Hệ thống chuyển kho trực tiếp',
-        receivedAt: new Date(),
       });
       await transfer.save({ session });
-
-      // Chuyển kho trực tiếp: cộng tồn kho đích ngay trong cùng transaction.
-      for (const item of allocatedItems) {
-        const destinationBatch = await this.batchModel.findOne({
-          medicineId: item.medicineId,
-          branchId: data.toBranchId,
-          batchNo: item.batchNo,
-        }).session(session).exec();
-
-        let stockBefore = 0;
-        let stockAfter = item.quantity;
-        let batchCreated = false;
-
-        if (destinationBatch) {
-          stockBefore = destinationBatch.stock;
-          const updatedDestinationBatch = await this.batchModel.findOneAndUpdate(
-            { _id: destinationBatch._id },
-            { $inc: { stock: item.quantity } },
-            { new: true, session },
-          ).exec();
-
-          if (!updatedDestinationBatch) {
-            throw new RpcException({
-              message: `Không thể cộng tồn kho đích cho thuốc "${item.medicineName || item.medicineId}" tại lô ${item.batchNo}.`,
-            });
-          }
-          stockAfter = updatedDestinationBatch.stock;
-        } else {
-          const sourceBatch = await this.batchModel.findOne({
-            medicineId: item.medicineId,
-            branchId: fromBranchId,
-            batchNo: item.batchNo,
-          }).session(session).exec();
-
-          await new this.batchModel({
-            medicineId: item.medicineId,
-            branchId: data.toBranchId,
-            batchNo: item.batchNo,
-            expDate: sourceBatch?.expDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            importPrice: sourceBatch?.importPrice || 0,
-            stock: item.quantity,
-            status: 'ACTIVE',
-          }).save({ session });
-          batchCreated = true;
-        }
-
-        this.logStockTransfer('TRANSFER_IN_STAGED', {
-          traceId,
-          transferId: transfer._id.toString(),
-          transferCode,
-          branchId: data.toBranchId,
-          medicineId: item.medicineId,
-          batchNo: item.batchNo,
-          quantityChange: item.quantity,
-          stockBefore,
-          stockAfter,
-          batchCreated,
-          mode: 'DIRECT_IMMEDIATE',
-        });
-
-        transactionsToSave.push({
-          type: 'TRANSFER',
-          medicineId: item.medicineId,
-          medicineName: item.medicineName || '',
-          batchNo: item.batchNo,
-          quantityChange: item.quantity,
-          stockBefore,
-          stockAfter,
-          referenceType: 'TRANSFER_IN',
-          performedBy: data.shippedBy || 'Hệ thống chuyển kho trực tiếp',
-          notes: `Nhập chuyển kho tức thời từ ${sourceName} đến chi nhánh ${data.toBranchName}`,
-        });
-      }
 
       // Lưu các transaction logs với referenceId chính xác
       for (const txn of transactionsToSave) {
@@ -2080,7 +2056,7 @@ export class PurchaseService {
       });
 
       this.supplierClient.emit('broadcast.inventory_updated', {
-        event: 'TRANSFER_DELIVERED',
+        event: 'TRANSFER_SHIPPED',
         timestamp: new Date().toISOString(),
         transferId: transfer._id.toString(),
         transferCode,
@@ -2090,7 +2066,7 @@ export class PurchaseService {
 
       return {
         success: true,
-        message: `Đã chuyển kho tức thời từ ${sourceName} đến ${data.toBranchName}, cập nhật tồn kho hai bên và hoàn tất phiếu ${transferCode}.`,
+        message: `Đã xuất chuyển kho từ ${sourceName} đến ${data.toBranchName}. Chi nhánh nhận cần kiểm hàng trước khi nhập kho phiếu ${transferCode}.`,
         data: transfer,
       };
     } catch (error) {
