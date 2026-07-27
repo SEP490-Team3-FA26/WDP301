@@ -43,7 +43,7 @@ export class PurchaseRequisition extends Document {
   @Prop({
     type: String,
     default: 'SUBMITTED',
-    enum: ['DRAFT', 'SUBMITTED', 'WAREHOUSE_SUBMITTED', 'CONSOLIDATED', 'URGENT_PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'],
+    enum: ['DRAFT', 'SUBMITTED', 'WAREHOUSE_SUBMITTED', 'CONSOLIDATED', 'URGENT_PENDING', 'APPROVED', 'SHIPPING', 'COMPLETED', 'OUT_OF_STOCK', 'REJECTED', 'CANCELLED'],
   })
   status: string;
 
