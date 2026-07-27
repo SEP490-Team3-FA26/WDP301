@@ -38,21 +38,23 @@ export async function ensureKafkaTopicsExist(topics: string[]) {
   }
 }
 
-/**
- * Subscribes to an array of topics and connects the Kafka client.
- * @param client The ClientKafka instance
- * @param topics Array of topic names
- */
-export async function subscribeToKafkaTopics(client: ClientKafka, topics: string[], retries = 20, delay = 3000) {
-  // Đảm bảo topic và reply topic đã tồn tại trên Kafka trước khi Client đăng ký
-  await ensureKafkaTopicsExist(topics);
+const subscribedReplyTopics = new Set<string>();
 
-  for (const topic of topics) {
-    try {
-      client.subscribeToResponseOf(topic);
-    } catch (e: any) {
-      // Ignore if topic response subscription already registered or client connected
-    }
+function getReplyPattern(client: ClientKafka, topic: string): string {
+  if (typeof (client as any).getResponsePatternName === 'function') {
+    return (client as any).getResponsePatternName(topic);
+  }
+  return `${topic}.reply`;
+}
+
+/**
+ * Connects the ClientKafka instance with retry logic if not already connected.
+ * Should be called once after all topics have been pre-subscribed via subscribeToKafkaTopics.
+ */
+export async function connectKafkaClient(client: ClientKafka, retries = 20, delay = 3000) {
+  const rawClient = client as any;
+  if (rawClient.client) {
+    return;
   }
 
   for (let i = 0; i < retries; i++) {
@@ -62,14 +64,48 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
     } catch (error: any) {
       const isLastAttempt = i === retries - 1;
       if (isLastAttempt) {
-        console.error(`❌ Kafka client failed to connect to topics: ${topics.join(', ')} after ${retries} attempts.`, error);
+        console.error(`❌ Kafka client failed to connect after ${retries} attempts.`, error);
         throw error;
       }
       try {
         await client.close();
       } catch (e) {}
       await new Promise(resolve => setTimeout(resolve, delay));
-      await ensureKafkaTopicsExist(topics);
+    }
+  }
+}
+
+/**
+ * Subscribes to an array of topics for a Kafka client.
+ * Registers topics into ClientKafka responsePatterns before connect() is called.
+ * @param client The ClientKafka instance
+ * @param topics Array of topic names
+ */
+export async function subscribeToKafkaTopics(client: ClientKafka, topics: string[], retries = 20, delay = 3000) {
+  // Đảm bảo topic và reply topic đã tồn tại trên Kafka trước khi Client đăng ký
+  await ensureKafkaTopicsExist(topics);
+
+  const rawClient = client as any;
+
+  for (const topic of topics) {
+    const replyPattern = getReplyPattern(client, topic);
+    try {
+      if (!rawClient.client) {
+        client.subscribeToResponseOf(topic);
+      }
+      if (rawClient.responsePatterns && !rawClient.responsePatterns.includes(replyPattern)) {
+        rawClient.responsePatterns.push(replyPattern);
+      }
+      if (rawClient.consumerAssignments && rawClient.consumerAssignments[replyPattern] === undefined) {
+        rawClient.consumerAssignments[replyPattern] = 0;
+      }
+    } catch (e: any) {
+      if (rawClient.responsePatterns && !rawClient.responsePatterns.includes(replyPattern)) {
+        rawClient.responsePatterns.push(replyPattern);
+      }
+      if (rawClient.consumerAssignments && rawClient.consumerAssignments[replyPattern] === undefined) {
+        rawClient.consumerAssignments[replyPattern] = 0;
+      }
     }
   }
 }
@@ -84,10 +120,30 @@ export async function subscribeToKafkaTopics(client: ClientKafka, topics: string
  */
 export async function sendKafkaMessage(client: ClientKafka, topic: string, data: any) {
   try {
+    const rawClient = client as any;
+    const replyPattern = getReplyPattern(client, topic);
+
+    if (rawClient && Array.isArray(rawClient.responsePatterns)) {
+      if (!rawClient.responsePatterns.includes(replyPattern)) {
+        rawClient.responsePatterns.push(replyPattern);
+      }
+    }
+
+    if (rawClient && rawClient.consumerAssignments) {
+      if (rawClient.consumerAssignments[replyPattern] === undefined) {
+        rawClient.consumerAssignments[replyPattern] = 0;
+      }
+    }
+
+    console.log(`[API-Gateway][sendKafkaMessage] Diagnostics - topic: "${topic}", client patterns:`, rawClient?.responsePatterns, 'assignments:', Object.keys(rawClient?.consumerAssignments || {}));
+
     const payload = (data && typeof data === 'object') ? JSON.parse(JSON.stringify(data)) : data;
     console.log(`[API-Gateway][sendKafkaMessage] Sending to topic "${topic}"`);
     const result: any = await lastValueFrom(
-      client.send(topic, payload).pipe(timeout(30000))
+      client.send(topic, payload).pipe(
+        require('rxjs').timeout(30000),
+        require('rxjs').retry(1)
+      )
     );
     console.log(`[API-Gateway][sendKafkaMessage] Received response from topic "${topic}"`);
     if (result?.error) {

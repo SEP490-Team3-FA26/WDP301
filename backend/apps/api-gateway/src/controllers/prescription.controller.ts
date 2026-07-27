@@ -12,15 +12,7 @@ export class PrescriptionController implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    const topics = [
-      'inventory.prescription.get',
-      'inventory.prescription.get_by_code',
-      'inventory.prescription.list',
-    ];
-    for (const topic of topics) {
-      this.inventoryClient.subscribeToResponseOf(topic);
-    }
-    await this.inventoryClient.connect();
+    // Topics are already subscribed globally in AppGatewayModule
   }
 
   private getAiServiceHost(): string {
