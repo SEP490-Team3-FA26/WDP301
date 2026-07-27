@@ -57,6 +57,7 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
   const [selectedInspectionRecord, setSelectedInspectionRecord] = useState<any | null>(null);
   const [selectedMedicineNameForRecord, setSelectedMedicineNameForRecord] = useState("");
   const [recordLoading, setRecordLoading] = useState(false);
+  const [approvalNotice, setApprovalNotice] = useState<{ type: "warning" | "success" | "error"; title: string; message: string } | null>(null);
 
   const handleViewInspectionRecord = async (grnId: string, itemId: string, medName: string) => {
     setRecordLoading(true);
@@ -258,19 +259,31 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
       }
     }
     if (hasDiscrepancy && !discrepancyReason.trim()) {
-      alert("Phát hiện chênh lệch số lượng kiểm nhận. Vui lòng điền lý do chênh lệch trước khi phê duyệt.");
+      setApprovalNotice({
+        type: "warning",
+        title: "Thiếu lý do chênh lệch",
+        message: "Phát hiện chênh lệch số lượng kiểm nhận. Vui lòng điền lý do chênh lệch trước khi phê duyệt.",
+      });
       return;
     }
     
     setApprovalLoading(true);
     try {
       await goodsReceiptService.approveGoodsReceipt(selectedGrnDetails._id, discrepancyReason);
-      alert("Phê duyệt nhập kho thành công. Tồn kho đã được cập nhật.");
+      setApprovalNotice({
+        type: "success",
+        title: "Phê duyệt thành công",
+        message: "Tồn kho đã được cập nhật.",
+      });
       setSelectedGrnDetails(null);
       setDiscrepancyReason("");
       fetchData();
     } catch (err: any) {
-      alert("Lỗi khi phê duyệt: " + (err.response?.data?.message || err.message));
+      setApprovalNotice({
+        type: "error",
+        title: "Không thể phê duyệt",
+        message: err.response?.data?.message || err.message || "Lỗi khi phê duyệt.",
+      });
     } finally {
       setApprovalLoading(false);
     }
@@ -312,6 +325,48 @@ export function InventoryHistory({ type }: InventoryHistoryProps) {
 
   return (
     <div className="flex flex-col h-full bg-[#faf8ff] p-6 lg:p-8 overflow-y-auto">
+      <AnimatePresence>
+        {approvalNotice && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setApprovalNotice(null)} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-100"
+            >
+              <div className={`p-5 border-b ${
+                approvalNotice.type === "success"
+                  ? "bg-emerald-50 border-emerald-100"
+                  : approvalNotice.type === "error"
+                    ? "bg-rose-50 border-rose-100"
+                    : "bg-amber-50 border-amber-100"
+              }`}>
+                <h3 className="font-black text-slate-900 flex items-center gap-2">
+                  {approvalNotice.type === "success" ? (
+                    <CheckCircle2 size={20} className="text-emerald-600" />
+                  ) : (
+                    <AlertTriangle size={20} className={approvalNotice.type === "error" ? "text-rose-600" : "text-amber-600"} />
+                  )}
+                  {approvalNotice.title}
+                </h3>
+              </div>
+              <div className="p-5">
+                <p className="text-sm font-semibold text-slate-700 leading-relaxed">{approvalNotice.message}</p>
+              </div>
+              <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setApprovalNotice(null)}
+                  className="px-5 py-2 bg-[#0057cd] hover:bg-[#00419e] text-white font-bold rounded-xl text-sm shadow-sm"
+                >
+                  Đã hiểu
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <div className="flex items-center gap-3">
