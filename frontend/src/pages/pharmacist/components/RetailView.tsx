@@ -140,14 +140,6 @@ export default function RetailView({ showToast }: RetailViewProps) {
 
       if (appliedVoucher) {
         setInvoiceVoucher(appliedVoucher);
-        try {
-          await voucherService.updateVoucher(appliedVoucher._id, {
-            // @ts-ignore
-            usedCount: (appliedVoucher.usedCount || 0) + 1
-          });
-        } catch (e) {
-          console.error("Lỗi cập nhật lượt sử dụng voucher:", e);
-        }
       } else {
         setInvoiceVoucher(null);
       }
