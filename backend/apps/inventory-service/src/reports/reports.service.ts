@@ -35,7 +35,7 @@ export class ReportsService {
 
       // Execute all 4 MongoDB queries concurrently for maximum speed
       const [medicines, salesAggregation, activePos, activeBatches] = await Promise.all([
-        this.medicineModel.find({ status: { $ne: 'INACTIVE' } }).lean().exec(),
+        this.medicineModel.find({ status: { $ne: 'INACTIVE' } }, '_id name category unit price safetyStock reorderPoint stock').lean().exec(),
         this.saleModel.aggregate([
           { $match: salesQuery },
           { $unwind: "$items" },

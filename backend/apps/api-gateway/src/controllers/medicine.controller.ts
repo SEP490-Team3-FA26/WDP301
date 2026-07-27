@@ -16,29 +16,7 @@ export class MedicineController implements OnModuleInit {
   ) { }
 
   async onModuleInit() {
-    const topics = [
-      'inventory.medicine.list',
-      'inventory.medicine.get_by_id',
-      'inventory.medicine.update_status',
-      'inventory.medicine.update_price_tiers',
-      'inventory.medicine.get_filters',
-      'inventory.medicine.stats',
-      'inventory.medicine.expiration_report',
-      'inventory.medicine.handle_expiration_action',
-      'inventory.medicine.low_stock_report',
-      'inventory.medicine.dropdown_list',
-      'inventory.medicine.get_alternatives',
-      'inventory.medicine.update_price',
-      'inventory.medicine.safe_stock_chain',
-      'inventory.medicine.detect_anomalies',
-      'inventory.medicine.branch_list',
-      'inventory.medicine.create',
-      'inventory.medicine.update',
-    ];
-    for (const topic of topics) {
-      this.inventoryClient.subscribeToResponseOf(topic);
-    }
-    await this.inventoryClient.connect();
+    // Topics are already subscribed globally in AppGatewayModule
   }
 
   @Get('filters')
