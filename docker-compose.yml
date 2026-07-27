@@ -107,6 +107,7 @@
         - ./backend/apps/ai-service:/app
       env_file:
         - ./backend/.env
+        - ./backend/apps/ai-service/.env
       ports:
         - "8000:8000"
         - "6006:6006"

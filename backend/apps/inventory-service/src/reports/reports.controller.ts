@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern, Payload, RpcException } from '@nestjs/microservices';
+import { MessagePattern, Payload, RpcException, Ctx, KafkaContext } from '@nestjs/microservices';
 import { ReportsService } from './reports.service';
 
 @Controller()
@@ -27,10 +27,18 @@ export class ReportsController {
   }
 
   @MessagePattern('inventory.reports.forecast_dataset')
-  async getForecastDataset(@Payload() data: { periodDays?: number; branchId?: string }) {
+  async getForecastDataset(
+    @Payload() data: { periodDays?: number; branchId?: string },
+    @Ctx() ctx: KafkaContext
+  ) {
+    console.log(`[Inventory-Service][getForecastDataset] Received request! Headers:`, JSON.stringify(ctx.getMessage().headers));
+    const startTime = Date.now();
     try {
-      return await this.reportsService.getForecastDataset(data?.periodDays, data?.branchId);
+      const result = await this.reportsService.getForecastDataset(data?.periodDays, data?.branchId);
+      console.log(`[Inventory-Service][getForecastDataset] Finished successfully in ${Date.now() - startTime}ms. Sent ${result?.length} records.`);
+      return result;
     } catch (error: any) {
+      console.error(`[Inventory-Service][getForecastDataset] Failed after ${Date.now() - startTime}ms:`, error);
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message || 'Lỗi lấy dữ liệu dự báo AI');
     }
